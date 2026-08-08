@@ -3,6 +3,7 @@ import { useOMS } from '../lib/store';
 import { Order, DeliveryPartner } from '../types';
 import { compressImage } from '../lib/imageCompressor';
 import { sortOrdersByDeliveryPriority, getCountdownInfo } from '../lib/timeUtils';
+import { matchesOutlet, formatOutletDisplayName, isOrderForToday } from '../lib/outletUtils';
 import {
   Truck,
   Phone,
@@ -86,7 +87,18 @@ export const DeliveryDashboard: React.FC = () => {
   const [selectedDateScope, setSelectedDateScope] = useState<'today' | 'all'>('today');
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const mainOutlets = ['ALL', 'Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
+
+  const mainOutlets = useMemo(() => {
+    const base = ['ALL', 'Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
+    const found = new Set<string>(base);
+    safeOrders.forEach((o) => {
+      if (o.outlet) {
+        const formatted = formatOutletDisplayName(o.outlet);
+        if (formatted) found.add(formatted);
+      }
+    });
+    return Array.from(found);
+  }, [safeOrders]);
 
   // Search Autocomplete Suggestions for Riders
   const searchSuggestions = useMemo(() => {
@@ -126,14 +138,13 @@ export const DeliveryDashboard: React.FC = () => {
       if (isConfirmedDelivered(o) || o.status === 'cancelled') return false;
 
       // 1. Outlet Tab Filter
-      if (selectedOutlet !== 'ALL' && o.outlet !== selectedOutlet) {
+      if (selectedOutlet !== 'ALL' && !matchesOutlet(o.outlet, selectedOutlet)) {
         return false;
       }
 
       // 2. Date Scope Filter (Today vs All Dates)
       if (selectedDateScope === 'today') {
-        const isToday = o.delivery_date === todayStr || o.order_date === todayStr;
-        if (!isToday) return false;
+        if (!isOrderForToday(o, todayStr)) return false;
       }
 
       // 3. Scope filter: My Assigned vs All Deliveries
@@ -392,10 +403,9 @@ export const DeliveryDashboard: React.FC = () => {
               {mainOutlets.map((outlet) => {
                 const count = safeOrders.filter((o) => {
                   if (isConfirmedDelivered(o) || o.status === 'cancelled') return false;
-                  if (outlet !== 'ALL' && o.outlet !== outlet) return false;
+                  if (outlet !== 'ALL' && !matchesOutlet(o.outlet, outlet)) return false;
                   if (selectedDateScope === 'today') {
-                    const isToday = o.delivery_date === todayStr || o.order_date === todayStr;
-                    if (!isToday) return false;
+                    if (!isOrderForToday(o, todayStr)) return false;
                   }
                   if (queueScope === 'my' && activePartner?.name && o.delivery_partner !== activePartner.name) return false;
                   return true;
@@ -621,13 +631,13 @@ export const DeliveryDashboard: React.FC = () => {
 
                     <div className="text-slate-300 flex items-start gap-1.5 pt-1 border-t border-indigo-950">
                       <MapPin className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                      <span>{order.address || 'Store Pickup at ' + order.outlet}</span>
+                      <span>{order.address || 'Store Pickup at ' + formatOutletDisplayName(order.outlet)}</span>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-[#070913] border border-indigo-950 flex items-center justify-between">
                       <div>
                         <div className="text-slate-300 font-bold">{order.item_type}</div>
-                        <div className="text-[10px] text-slate-500">Qty: x{order.quantity} • Outlet: {order.outlet}</div>
+                        <div className="text-[10px] text-slate-500">Qty: x{order.quantity} • Outlet: {formatOutletDisplayName(order.outlet)}</div>
                       </div>
                       <span className="text-emerald-400 font-extrabold text-sm">
                         ₹{(order.total_amount ?? 0).toLocaleString()}

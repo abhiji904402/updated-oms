@@ -69,24 +69,34 @@ function OMSAppContent() {
 
           {/* Page Routing based on activeTab */}
           <main className="flex-1 pb-12">
-            {(activeTab === 'dashboard' || activeTab === 'admin') && (
+            <div style={{ display: (activeTab === 'dashboard' || activeTab === 'admin') ? 'block' : 'none' }}>
               <AdminDashboard
                 onOpenAddModal={() => setIsAddModalOpen(true)}
                 onOpenThermalModal={() => setIsThermalModalOpen(true)}
                 onOpenDeliveryModal={handleOpenDeliveryModal}
                 onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
               />
-            )}
+            </div>
 
-            {activeTab === 'outlet' && <OutletDashboard />}
+            <div style={{ display: activeTab === 'outlet' ? 'block' : 'none' }}>
+              <OutletDashboard />
+            </div>
 
-            {activeTab === 'delivery' && <DeliveryDashboard />}
+            <div style={{ display: activeTab === 'delivery' ? 'block' : 'none' }}>
+              <DeliveryDashboard />
+            </div>
 
-            {activeTab === 'analytics' && <AnalyticsPage />}
+            <div style={{ display: activeTab === 'analytics' ? 'block' : 'none' }}>
+              <AnalyticsPage />
+            </div>
 
-            {activeTab === 'alerts' && <AlertsPage />}
+            <div style={{ display: activeTab === 'alerts' ? 'block' : 'none' }}>
+              <AlertsPage />
+            </div>
 
-            {activeTab === 'sheets' && <GoogleSheetsPage />}
+            <div style={{ display: activeTab === 'sheets' ? 'block' : 'none' }}>
+              <GoogleSheetsPage />
+            </div>
           </main>
         </div>
       </div>

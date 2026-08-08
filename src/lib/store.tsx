@@ -212,17 +212,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (snapshot) => {
         const list: Order[] = [];
         snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as Order);
+          list.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
         if (list.length > 0) {
           list.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
           setOrders(list);
-        } else if (!snapshot.metadata.fromCache) {
-          // Seed initial orders if Firestore is completely empty
-          INITIAL_ORDERS.forEach((ord) => {
-            setDoc(doc(db, 'orders', ord.id), ord).catch(() => {});
-          });
+        } else {
+          setOrders([]);
         }
       },
       (err) => {
@@ -239,15 +236,23 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (snapshot) => {
         const list: DeliveryPartner[] = [];
         snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as DeliveryPartner);
+          list.push({ ...docSnap.data(), id: docSnap.id } as DeliveryPartner);
         });
 
         if (list.length > 0) {
           setPartners(list);
         } else if (!snapshot.metadata.fromCache) {
-          INITIAL_DELIVERY_PARTNERS.forEach((p) => {
-            setDoc(doc(db, 'delivery_partners', p.id), p).catch(() => {});
-          });
+          const seeded = localStorage.getItem('delivery_partners_seeded');
+          if (!seeded) {
+            localStorage.setItem('delivery_partners_seeded', 'true');
+            INITIAL_DELIVERY_PARTNERS.forEach((p) => {
+              setDoc(doc(db, 'delivery_partners', p.id), p).catch(() => {});
+            });
+          } else {
+            setPartners([]);
+          }
+        } else {
+          setPartners([]);
         }
       },
       (err) => {
@@ -816,7 +821,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updatePartnerStatus = useCallback((id: string, status: DeliveryPartner['status']) => {
     setPartners((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          const updated = { ...p, status };
+          setDoc(doc(db, 'delivery_partners', id), { status }, { merge: true }).catch(() => {});
+          return updated;
+        }
+        return p;
+      })
     );
   }, []);
 

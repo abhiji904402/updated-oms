@@ -1,6 +1,7 @@
 import React from 'react';
 import { useOMS } from '../lib/store';
 import { exportToCSV, printPDFReport } from '../lib/exportUtils';
+import { matchesOutlet } from '../lib/outletUtils';
 import {
   Search,
   Download,
@@ -52,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
       // 1. Outlet Filter
       const activeOutlet = session.role === 'outlet' ? session.outlet : selectedOutletFilter;
       if (activeOutlet && activeOutlet !== 'ALL') {
-        if (o.outlet !== activeOutlet) return false;
+        if (!matchesOutlet(o.outlet, activeOutlet)) return false;
       }
 
       // 2. Status Filter

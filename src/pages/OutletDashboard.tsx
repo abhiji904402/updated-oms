@@ -5,6 +5,7 @@ import { EditOrderModal } from '../components/EditOrderModal';
 import { ViewOrderModal } from '../components/ViewOrderModal';
 import { getDeliveryTimeInfo, sortOrdersByDeliveryPriority } from '../lib/timeUtils';
 import { printThermalReceipts } from '../lib/thermalPrint';
+import { matchesOutlet } from '../lib/outletUtils';
 import { OutletName, OrderStatus, Order, DeliveryType, PaymentType } from '../types';
 import {
   Store,
@@ -113,7 +114,7 @@ export const OutletDashboard: React.FC = () => {
   const filteredOrders = useMemo(() => {
     const raw = safeOrders.filter((o) => {
       // 1. Outlet Filter
-      if (selectedOutlet !== 'ALL' && o.outlet !== selectedOutlet) {
+      if (selectedOutlet !== 'ALL' && !matchesOutlet(o.outlet, selectedOutlet)) {
         return false;
       }
 

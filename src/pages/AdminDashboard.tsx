@@ -5,6 +5,7 @@ import { EditOrderModal } from '../components/EditOrderModal';
 import { ViewOrderModal } from '../components/ViewOrderModal';
 import { printThermalReceipts } from '../lib/thermalPrint';
 import { sortOrdersByDeliveryPriority } from '../lib/timeUtils';
+import { matchesOutlet, isOrderForToday } from '../lib/outletUtils';
 import { Order, OrderStatus } from '../types';
 import {
   DollarSign,
@@ -161,7 +162,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
 
       // 2. Outlet filter
-      if (selectedOutletFilter !== 'ALL' && o.outlet !== selectedOutletFilter) {
+      if (selectedOutletFilter !== 'ALL' && !matchesOutlet(o.outlet, selectedOutletFilter)) {
         return false;
       }
 
@@ -172,7 +173,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       // 4. Tab Specific Filter
       if (activeTab === 'today') {
-        const isToday = o.delivery_date === todayStr || o.order_date === todayStr;
+        const isToday = isOrderForToday(o, todayStr);
         return (
           isToday &&
           o.status !== 'cancelled' &&
