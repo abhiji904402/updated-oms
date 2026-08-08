@@ -425,6 +425,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification(`Switched role to ${role.toUpperCase()} (${name})`);
   };
 
+  // Helper function to sanitize order payload for webhook (strips huge base64 images so sync is instant)
+  const sanitizeOrderForSync = (order: Order): Partial<Order> => {
+    const { item_image_url, delivery_photo_url, ...rest } = order;
+    return {
+      ...rest,
+      item_image_url: item_image_url ? (item_image_url.startsWith('data:') ? '[image]' : item_image_url) : '',
+      delivery_photo_url: delivery_photo_url ? (delivery_photo_url.startsWith('data:') ? '[photo]' : delivery_photo_url) : ''
+    };
+  };
+
   // Helper function to log sheet sync
   const logSync = useCallback((orderNumber: number, event: 'create' | 'update' | 'delete' | 'manual_sync', success = true) => {
     const newLog: SyncLog = {
@@ -446,61 +456,45 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   }, []);
 
-  // pushToSheet function for Google Sheet webhook
-  const pushToSheet = useCallback(async (order: Order, action: 'create' | 'update' | 'delete') => {
+  // Fast, non-blocking pushToSheet function for Google Sheet webhook
+  const pushToSheet = useCallback((order: Order, action: 'create' | 'update' | 'delete') => {
     if (!sheetConfig.auto_sync) return;
-    try {
-      if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
-        await fetch(sheetConfig.sheet_url, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action, order })
-        }).catch(() => {});
-      }
-      logSync(order.order_number, action, true);
-    } catch (err) {
-      console.error('pushToSheet error:', err);
+    
+    // Log sync immediately for instant UI responsiveness
+    logSync(order.order_number, action, true);
+
+    if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2500);
+
+      fetch(sheetConfig.sheet_url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action, order: sanitizeOrderForSync(order) }),
+        signal: controller.signal
+      }).catch(() => {}).finally(() => clearTimeout(timer));
     }
   }, [sheetConfig.auto_sync, sheetConfig.sheet_url, logSync]);
 
-  // Real-time subscription simulation timer
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Simulate real-time background pulse
-      setOrders((prev) => {
-        // Find an out_for_delivery order and simulate location or status check
-        return prev.map((o) => {
-          if (o.status === 'out_for_delivery' && Math.random() > 0.85) {
-            return {
-              ...o,
-              updated_at: new Date().toISOString()
-            };
-          }
-          return o;
-        });
-      });
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Webhook / API sync function
+  // Fast Webhook / API sync function
   const triggerGoogleSheetSync = useCallback(async () => {
-    if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
-      try {
-        await fetch(sheetConfig.sheet_url, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(orders)
-        }).catch(() => {});
-      } catch (err) {
-        console.error('Sheet sync webhook error:', err);
-      }
-    }
     logSync(0, 'manual_sync', true);
-    showNotification('Successfully synchronized all orders with Google Sheets!');
+    showNotification('⚡ Successfully synchronized all orders with Google Sheets!');
+
+    if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
+      const sanitizedOrders = orders.map(sanitizeOrderForSync);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3500);
+
+      fetch(sheetConfig.sheet_url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(sanitizedOrders),
+        signal: controller.signal
+      }).catch(() => {}).finally(() => clearTimeout(timer));
+    }
   }, [orders, sheetConfig.sheet_url, logSync, showNotification]);
 
   const addOrder = useCallback((orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'updated_at'>): Order => {
