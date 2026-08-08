@@ -85,4 +85,7 @@ async function createOptimizedIcons() {
   console.log('✅ All icons generated perfectly in /public!');
 }
 
-createOptimizedIcons().catch(console.error);
+createOptimizedIcons().catch((err) => {
+  console.warn('Icon generation skipped/warning:', err?.message || err);
+  process.exit(0);
+});
