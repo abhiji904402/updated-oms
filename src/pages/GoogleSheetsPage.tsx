@@ -551,8 +551,13 @@ export const GoogleSheetsPage: React.FC = () => {
 
   const handleSaveUrl = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSheetConfig({ sheet_url: urlInput });
-    alert('Web App URL updated & saved successfully!');
+    updateSheetConfig({ sheet_url: urlInput, auto_sync: true, is_active: true });
+    alert('⚡ Web App URL saved & Auto-Sync activated!');
+  };
+
+  const handleToggleAutoSync = () => {
+    const nextState = !sheetConfig.auto_sync;
+    updateSheetConfig({ auto_sync: nextState });
   };
 
   const handleEditClick = (order: Order) => {
@@ -623,18 +628,39 @@ export const GoogleSheetsPage: React.FC = () => {
         </button>
       </div>
 
-      {/* 2. Sync Active Banner */}
+      {/* 2. Sync Active Banner & Controls */}
       <div className="bg-[#121d22]/90 border border-emerald-900/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner">
         <div className="flex items-center gap-3">
           <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold px-3 py-1 rounded-full">
             Active
           </span>
-          <span className="text-emerald-300 text-xs sm:text-sm font-medium">
-            Sync is configured and active
-          </span>
+          <div>
+            <span className="text-emerald-300 text-xs sm:text-sm font-semibold block">
+              Google Sheet Webhook Sync Active
+            </span>
+            <span className="text-slate-400 text-[11px]">
+              Orders automatically push to Google Sheets on create, update & status change.
+            </span>
+          </div>
         </div>
-        <div className="text-xs text-emerald-400/90 font-mono">
-          Last synced: {new Date(sheetConfig.last_synced_at || Date.now()).toLocaleString('en-IN')}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleToggleAutoSync}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
+              sheetConfig.auto_sync
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}
+          >
+            <div className={`w-2.5 h-2.5 rounded-full ${sheetConfig.auto_sync ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span>Auto-Sync: {sheetConfig.auto_sync ? 'ENABLED (ON)' : 'DISABLED'}</span>
+          </button>
+
+          <div className="text-xs text-emerald-400/90 font-mono">
+            Last synced: {new Date(sheetConfig.last_synced_at || Date.now()).toLocaleString('en-IN')}
+          </div>
         </div>
       </div>
 
