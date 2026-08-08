@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Order, DeliveryPartner, DeliveryPartnerLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
+import { idbSet, idbGet } from './idb';
+import { db } from './firebase';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 
 export interface AuthPasswords {
   admin: string;
@@ -202,9 +205,80 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Notifications
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
 
-  // Save changes to localStorage
+  // 1. Real-time Firestore Sync for Orders
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(orders));
+    const unsub = onSnapshot(
+      collection(db, 'orders'),
+      (snapshot) => {
+        const list: Order[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as Order);
+        });
+
+        if (list.length > 0) {
+          list.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
+          setOrders(list);
+        } else if (!snapshot.metadata.fromCache) {
+          // Seed initial orders if Firestore is completely empty
+          INITIAL_ORDERS.forEach((ord) => {
+            setDoc(doc(db, 'orders', ord.id), ord).catch(() => {});
+          });
+        }
+      },
+      (err) => {
+        console.warn('Firestore orders sync error:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // 2. Real-time Firestore Sync for Delivery Partners
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'delivery_partners'),
+      (snapshot) => {
+        const list: DeliveryPartner[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as DeliveryPartner);
+        });
+
+        if (list.length > 0) {
+          setPartners(list);
+        } else if (!snapshot.metadata.fromCache) {
+          INITIAL_DELIVERY_PARTNERS.forEach((p) => {
+            setDoc(doc(db, 'delivery_partners', p.id), p).catch(() => {});
+          });
+        }
+      },
+      (err) => {
+        console.warn('Firestore partners sync error:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Save changes to IndexedDB (unlimited) and localStorage (quota-safe)
+  useEffect(() => {
+    // 1. Always save full dataset to IndexedDB
+    idbSet(LOCAL_STORAGE_KEY_ORDERS, orders);
+
+    // 2. Save to localStorage with quota-exceeded fallback
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(orders));
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded! Stripping large image payloads for localStorage fallback:', e);
+      try {
+        const lightweightOrders = orders.map((o) => {
+          if (o.item_image_url && o.item_image_url.length > 300) {
+            return { ...o, item_image_url: '' };
+          }
+          return o;
+        });
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(lightweightOrders));
+      } catch (e2) {
+        console.error('Failed to write to localStorage even after image stripping:', e2);
+      }
+    }
   }, [orders]);
 
   useEffect(() => {
@@ -442,6 +516,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setOrders((prev) => [newOrder, ...prev]);
+    setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
+      console.warn('Firestore setDoc failed:', err);
+    });
+
     showNotification(`✨ New Order #${newOrderNumber} created at ${newOrder.outlet}!`);
 
     // Auto-sync via pushToSheet
@@ -502,11 +580,24 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (overwrite) {
       setOrders(formattedOrders);
+      // Clear Firestore existing orders
+      getDocs(collection(db, 'orders')).then((snap) => {
+        snap.forEach((docSnap) => {
+          deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
+        });
+      }).catch(() => {});
       showNotification(`Replaced all orders with ${formattedOrders.length} imported orders!`);
     } else {
       setOrders((prev) => [...formattedOrders, ...prev]);
       showNotification(`Successfully imported ${formattedOrders.length} new orders!`);
     }
+
+    // Persist all imported orders to Firestore
+    formattedOrders.forEach((ord) => {
+      setDoc(doc(db, 'orders', ord.id), ord).catch((err) => {
+        console.warn('Firestore import setDoc error:', err);
+      });
+    });
 
     if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
       triggerGoogleSheetSync();
@@ -536,6 +627,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               : {})
           };
 
+          setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
           pushToSheet(updated, 'update');
           return updated;
         }
@@ -553,6 +645,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev.filter((o) => o.id !== id);
     });
+    deleteDoc(doc(db, 'orders', id)).catch(() => {});
     setSelectedOrderIds((prev) => prev.filter((item) => item !== id));
   }, [showNotification, pushToSheet]);
 
@@ -560,6 +653,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders([]);
     setSelectedOrderIds([]);
     localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, '[]');
+    getDocs(collection(db, 'orders')).then((snap) => {
+      snap.forEach((docSnap) => {
+        deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
+      });
+    }).catch(() => {});
     showNotification('All orders cleared! Ready for fresh data.');
   }, [showNotification]);
 
@@ -582,6 +680,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
 
           const updated = { ...ord, ...updates };
+          setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
           showNotification(`Order #${ord.order_number} status changed to ${status.toUpperCase()}`);
           pushToSheet(updated, 'update');
           return updated;
@@ -631,6 +730,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) =>
       prev.map((o) => (o.id === id ? updatedOrder : o))
     );
+    setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch(() => {});
 
     pushToSheet(updatedOrder, 'update');
 
@@ -639,7 +739,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPartners((prev) =>
         prev.map((p) => {
           if (p.name === targetOrder.delivery_partner || p.id === session.deliveryPartnerId) {
-            return { ...p, total_deliveries: p.total_deliveries + 1, status: 'available' };
+            const updatedP = { ...p, total_deliveries: p.total_deliveries + 1, status: 'available' };
+            setDoc(doc(db, 'delivery_partners', p.id), updatedP, { merge: true }).catch(() => {});
+            return updatedP;
           }
           return p;
         })
@@ -659,6 +761,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             delivery_confirmation_pending: false,
             updated_at: new Date().toISOString()
           };
+          setDoc(doc(db, 'orders', id), { delivery_confirmation_pending: false, updated_at: updated.updated_at }, { merge: true }).catch(() => {});
           showNotification(`✅ Order #${ord.order_number} delivery confirmed by Outlet!`);
           pushToSheet(updated, 'update');
           return updated;
@@ -669,17 +772,20 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showNotification, pushToSheet]);
 
   const updatePartnerLocation = useCallback((partnerId: string, location: Omit<DeliveryPartnerLocation, 'updated_at'>) => {
+    const updatedAt = new Date().toISOString();
     setPartners((prev) =>
       prev.map((p) => {
         if (p.id === partnerId) {
-          return {
+          const updatedP = {
             ...p,
             is_tracking_active: true,
             location: {
               ...location,
-              updated_at: new Date().toISOString()
+              updated_at: updatedAt
             }
           };
+          setDoc(doc(db, 'delivery_partners', partnerId), updatedP, { merge: true }).catch(() => {});
+          return updatedP;
         }
         return p;
       })
@@ -693,6 +799,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total_deliveries: 0
     };
     setPartners((prev) => [...prev, newPartner]);
+    setDoc(doc(db, 'delivery_partners', newPartner.id), newPartner).catch(() => {});
     showNotification(`Added new delivery partner: ${newPartner.name}`);
   }, [showNotification]);
 
@@ -704,6 +811,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev.filter((p) => p.id !== id);
     });
+    deleteDoc(doc(db, 'delivery_partners', id)).catch(() => {});
   }, [showNotification]);
 
   const updatePartnerStatus = useCallback((id: string, status: DeliveryPartner['status']) => {

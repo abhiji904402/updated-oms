@@ -264,7 +264,7 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
     if (parsedOrders.length === 0) return;
     setIsProcessing(true);
     setTimeout(() => {
-      onImport(parsedOrders, importMode === 'overwrite');
+      onImport(parsedOrders, false);
       setSuccessMessage(`✅ Successfully ${parsedOrders.length} orders store me load ho gaye!`);
       setIsProcessing(false);
       setParsedOrders([]);
@@ -453,28 +453,10 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
               </div>
             </div>
 
-            {/* Mode selection radio */}
-            <div className="flex items-center gap-4 bg-[#0b0e1b] border border-indigo-950 px-3 py-1.5 rounded-xl text-xs">
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-300">
-                <input
-                  type="radio"
-                  name="importMode"
-                  checked={importMode === 'append'}
-                  onChange={() => setImportMode('append')}
-                  className="accent-purple-500"
-                />
-                <span>Append to existing</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-rose-300">
-                <input
-                  type="radio"
-                  name="importMode"
-                  checked={importMode === 'overwrite'}
-                  onChange={() => setImportMode('overwrite')}
-                  className="accent-rose-500"
-                />
-                <span>Replace all</span>
-              </label>
+            {/* Safe import badge */}
+            <div className="flex items-center gap-2 bg-[#0b0e1b] border border-emerald-900/60 px-3 py-1.5 rounded-xl text-xs text-emerald-300 font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Safe Import Mode (All existing orders preserved)</span>
             </div>
           </div>
 

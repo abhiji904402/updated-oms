@@ -59,8 +59,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     selectedOutletFilter,
     selectedStatusFilter,
     selectedOrderIds = [],
-    clearOrderSelection,
-    clearAllOrders
+    clearOrderSelection
   } = useOMS();
 
   const safeOrders = orders || [];
@@ -296,21 +295,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               List View
             </button>
           </div>
-
-          {safeOrders.length > 0 && (
-            <button
-              onClick={() => {
-                if (window.confirm('Kya aap sabhi orders delete karna chahte hain? Naya fresh data upload/import karne ke liye saara purana data saaf kar diya jayega.')) {
-                  clearAllOrders();
-                }
-              }}
-              className="px-3.5 py-2 rounded-xl bg-red-950/80 hover:bg-red-900/90 text-red-200 border border-red-700/60 font-bold text-xs shadow-lg flex items-center gap-1.5 transition active:scale-95"
-              title="Delete all current orders to start fresh"
-            >
-              <Trash2 className="w-4 h-4 text-red-400" />
-              <span className="hidden sm:inline">Clear All Orders ({safeOrders.length})</span>
-            </button>
-          )}
 
           <button
             onClick={onOpenAddModal}
