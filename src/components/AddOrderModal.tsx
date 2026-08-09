@@ -72,16 +72,47 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
 
   // Suggestions state
   const [showItemSuggestions, setShowItemSuggestions] = useState<boolean>(false);
-  const [itemHighlightIndex, setItemHighlightIndex] = useState<number>(0);
+  const [itemHighlightIndex, setItemHighlightIndex] = useState<number>(-1);
 
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState<boolean>(false);
-  const [customerHighlightIndex, setCustomerHighlightIndex] = useState<number>(0);
+  const [customerHighlightIndex, setCustomerHighlightIndex] = useState<number>(-1);
 
-  // Focus Refs
+  // Focus & Container Refs
   const mobileInputRef = useRef<HTMLInputElement>(null);
   const customerNameInputRef = useRef<HTMLInputElement>(null);
   const itemInputRef = useRef<HTMLInputElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
+
+  const itemContainerRef = useRef<HTMLDivElement>(null);
+  const customerMobileContainerRef = useRef<HTMLDivElement>(null);
+  const customerNameContainerRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to close suggestion dropdowns immediately
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (itemContainerRef.current && !itemContainerRef.current.contains(target)) {
+        setShowItemSuggestions(false);
+        setItemHighlightIndex(-1);
+      }
+      if (
+        customerMobileContainerRef.current &&
+        !customerMobileContainerRef.current.contains(target) &&
+        customerNameContainerRef.current &&
+        !customerNameContainerRef.current.contains(target)
+      ) {
+        setShowCustomerSuggestions(false);
+        setCustomerHighlightIndex(-1);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Item Suggestions list computation
   const itemSuggestions = useMemo(() => {
@@ -152,6 +183,8 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     const multiplier = getQuantityMultiplier(quantity);
     const calculatedTotal = preset.price * multiplier;
     setTotalAmountStr(calculatedTotal.toString());
+    setShowItemSuggestions(false);
+    setItemHighlightIndex(-1);
   };
 
   // Handle Customer Select
@@ -189,21 +222,26 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       return;
     }
 
-    if ((e.key === 'Tab' || e.key === 'Enter') && showItemSuggestions && itemSuggestions.length > 0) {
-      if (itemHighlightIndex >= 0 && itemHighlightIndex < itemSuggestions.length) {
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      if (showItemSuggestions && itemSuggestions.length > 0 && itemHighlightIndex >= 0 && itemHighlightIndex < itemSuggestions.length) {
         e.preventDefault();
         const selected = itemSuggestions[itemHighlightIndex];
         handleSelectPreset(selected);
         setShowItemSuggestions(false);
+        setItemHighlightIndex(-1);
         setTimeout(() => {
           quantityInputRef.current?.focus();
         }, 50);
         return;
+      } else {
+        setShowItemSuggestions(false);
+        setItemHighlightIndex(-1);
       }
     }
 
     if (e.key === 'Escape') {
       setShowItemSuggestions(false);
+      setItemHighlightIndex(-1);
     }
   };
 
@@ -228,16 +266,22 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       return;
     }
 
-    if ((e.key === 'Tab' || e.key === 'Enter') && showCustomerSuggestions && matchedCustomers.length > 0) {
-      if (customerHighlightIndex >= 0 && customerHighlightIndex < matchedCustomers.length) {
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      if (showCustomerSuggestions && matchedCustomers.length > 0 && customerHighlightIndex >= 0 && customerHighlightIndex < matchedCustomers.length) {
         e.preventDefault();
         handleSelectCustomer(matchedCustomers[customerHighlightIndex]);
+        setShowCustomerSuggestions(false);
+        setCustomerHighlightIndex(-1);
         return;
+      } else {
+        setShowCustomerSuggestions(false);
+        setCustomerHighlightIndex(-1);
       }
     }
 
     if (e.key === 'Escape') {
       setShowCustomerSuggestions(false);
+      setCustomerHighlightIndex(-1);
     }
   };
 
@@ -314,6 +358,11 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
         const htmlEl = el as HTMLElement;
         return !htmlEl.hasAttribute('disabled') && htmlEl.tabIndex !== -1;
       }) as HTMLElement[];
+
+      setShowCustomerSuggestions(false);
+      setShowItemSuggestions(false);
+      setCustomerHighlightIndex(-1);
+      setItemHighlightIndex(-1);
 
       const index = focusable.indexOf(e.target as HTMLElement);
       if (index > -1 && index < focusable.length - 1) {
@@ -544,7 +593,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
             </div>
 
             {/* Mobile / Phone Number * */}
-            <div className="relative">
+            <div ref={customerMobileContainerRef} className="relative">
               <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">
                 <span>Mobile / Phone Number <span className="text-purple-400">*</span></span>
                 <span className="text-[10px] text-amber-400 font-normal">Mandatory (जरूरी)</span>
@@ -557,7 +606,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 onChange={(e) => {
                   setMobileNumber(e.target.value);
                   setShowCustomerSuggestions(true);
-                  setCustomerHighlightIndex(0);
+                  setCustomerHighlightIndex(-1);
                 }}
                 onFocus={() => setShowCustomerSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
@@ -571,7 +620,16 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 <div className="absolute left-0 right-0 top-full mt-1 bg-[#0f1222] border border-indigo-500/50 rounded-xl shadow-2xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-xl">
                   <div className="px-3 py-1.5 bg-indigo-950/60 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center justify-between border-b border-indigo-900/40">
                     <span>Past Customers ({matchedCustomers.length})</span>
-                    <span className="text-slate-400 font-normal">↑↓ navigate • Tab/Enter select</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 font-normal hidden sm:inline">↑↓ navigate • Tab/Enter select</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomerSuggestions(false)}
+                        className="text-indigo-400 hover:text-white text-[10px] font-bold underline cursor-pointer px-1 py-0.5 rounded bg-indigo-900/50"
+                      >
+                        ✕ Close
+                      </button>
+                    </div>
                   </div>
                   {matchedCustomers.map((c, idx) => {
                     const isHighlighted = idx === customerHighlightIndex;
@@ -606,7 +664,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
             </div>
 
             {/* Customer Name (Optional) */}
-            <div className="relative">
+            <div ref={customerNameContainerRef} className="relative">
               <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">
                 <span>Customer Name</span>
                 <span className="text-[10px] text-slate-400 font-normal">(Optional / ऐच्छिक)</span>
@@ -619,7 +677,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 onChange={(e) => {
                   setCustomerName(e.target.value);
                   setShowCustomerSuggestions(true);
-                  setCustomerHighlightIndex(0);
+                  setCustomerHighlightIndex(-1);
                 }}
                 onFocus={() => setShowCustomerSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
@@ -629,7 +687,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
             </div>
 
             {/* Item Type * */}
-            <div className="relative">
+            <div ref={itemContainerRef} className="relative">
               <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">
                 <span>Item Type <span className="text-purple-400">*</span></span>
                 <span className="text-[10px] text-purple-400 font-normal">Type to auto-suggest</span>
@@ -642,7 +700,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 onChange={(e) => {
                   setItemType(e.target.value);
                   setShowItemSuggestions(true);
-                  setItemHighlightIndex(0);
+                  setItemHighlightIndex(-1);
                 }}
                 onFocus={() => setShowItemSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
@@ -656,7 +714,16 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 <div className="absolute left-0 right-0 top-full mt-1 bg-[#0f1222] border border-purple-500/60 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-xl">
                   <div className="px-3 py-1.5 bg-purple-950/60 text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center justify-between border-b border-purple-900/40">
                     <span>Suggestions ({itemSuggestions.length})</span>
-                    <span className="text-slate-400 font-normal">↑↓ navigate • Tab/Enter select</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 font-normal hidden sm:inline">↑↓ navigate • Tab/Enter select</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowItemSuggestions(false)}
+                        className="text-purple-300 hover:text-white text-[10px] font-bold underline cursor-pointer px-1 py-0.5 rounded bg-purple-900/50"
+                      >
+                        ✕ Close
+                      </button>
+                    </div>
                   </div>
                   {itemSuggestions.map((s, idx) => {
                     const isHighlighted = idx === itemHighlightIndex;

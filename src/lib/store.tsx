@@ -550,36 +550,55 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logSync(order.order_number, action, true);
 
     if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2500);
-
       fetch(sheetConfig.sheet_url, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action, order: sanitizeOrderForSync(order) }),
-        signal: controller.signal
-      }).catch(() => {}).finally(() => clearTimeout(timer));
+        body: JSON.stringify({ action, order: sanitizeOrderForSync(order) })
+      }).catch((err) => console.warn('Push to sheet error:', err));
     }
   }, [sheetConfig.auto_sync, sheetConfig.sheet_url, logSync]);
 
-  // Fast Webhook / API sync function
+  // Fast Webhook / API sync function - sends ALL orders starting from order #1 ascending
   const triggerGoogleSheetSync = useCallback(async () => {
+    if (!sheetConfig.sheet_url || !sheetConfig.sheet_url.startsWith('http')) {
+      showNotification('⚠️ Please enter a valid Google Sheet Webhook URL first in Settings');
+      return;
+    }
+
+    if (orders.length === 0) {
+      showNotification('ℹ️ No orders in system to synchronize.');
+      return;
+    }
+
+    // 1. Sort orders strictly in ascending order by order_number (Order #1, #2, #3...)
+    const sortedOrders = [...orders].sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
+    const sanitizedOrders = sortedOrders.map(sanitizeOrderForSync);
+
+    const firstNum = sortedOrders[0]?.order_number || 1;
+    const lastNum = sortedOrders[sortedOrders.length - 1]?.order_number || sortedOrders.length;
+
     logSync(0, 'manual_sync', true);
-    showNotification('⚡ Successfully synchronized all orders with Google Sheets!');
+    showNotification(`⚡ Syncing all ${sanitizedOrders.length} orders (#${firstNum} to #${lastNum}) to Google Sheets...`);
 
-    if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
-      const sanitizedOrders = orders.map(sanitizeOrderForSync);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3500);
+    try {
+      // Chunk payload into batches of 35 orders to avoid Apps Script HTTP timeout limits
+      const CHUNK_SIZE = 35;
+      for (let i = 0; i < sanitizedOrders.length; i += CHUNK_SIZE) {
+        const chunk = sanitizedOrders.slice(i, i + CHUNK_SIZE);
+        await fetch(sheetConfig.sheet_url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(chunk)
+        });
+      }
 
-      fetch(sheetConfig.sheet_url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(sanitizedOrders),
-        signal: controller.signal
-      }).catch(() => {}).finally(() => clearTimeout(timer));
+      logSync(sanitizedOrders.length, 'manual_sync', true);
+      showNotification(`✅ Successfully synced all ${sanitizedOrders.length} orders (#${firstNum}–#${lastNum}) with Google Sheets!`);
+    } catch (err) {
+      console.error('Sheet sync error:', err);
+      showNotification('⚠️ Sync error. Please verify Google Sheet Webhook URL.');
     }
   }, [orders, sheetConfig.sheet_url, logSync, showNotification]);
 

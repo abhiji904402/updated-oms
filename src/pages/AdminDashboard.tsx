@@ -120,8 +120,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           o.status !== 'on_hold' &&
           !isDeliveredMarked(o)
       ).length,
-      delivered_history: safeOrders.filter((o) => isDeliveredMarked(o) && !isPaymentPending(o)).length,
-      pending_payment: safeOrders.filter((o) => isDeliveredMarked(o) && isPaymentPending(o)).length,
+      delivered_history: safeOrders.filter((o) => isDeliveredMarked(o)).length,
+      pending_payment: safeOrders.filter((o) => isPaymentPending(o) && o.status !== 'cancelled').length,
+      pending_payment_amount: safeOrders
+        .filter((o) => isPaymentPending(o) && o.status !== 'cancelled')
+        .reduce((sum, o) => sum + (o.remaining_balance || 0), 0),
       cancelled: safeOrders.filter((o) => o.status === 'cancelled').length,
       missed: safeOrders.filter(
         (o) =>
@@ -133,12 +136,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [safeOrders, todayStr, tomorrowStr]);
 
   // Tab definitions
-  const tabs: { id: DashboardTab; label: string; icon: React.FC<{ className?: string }>; count: number; color: string }[] = [
+  const tabs: { id: DashboardTab; label: string; icon: React.FC<{ className?: string }>; count: number | string; color: string }[] = [
     { id: 'today', label: 'TODAY ORDERS', icon: Calendar, count: counts.today, color: 'text-purple-400' },
     { id: 'tomorrow', label: 'TOMORROW ORDERS', icon: CalendarDays, count: counts.tomorrow, color: 'text-indigo-400' },
     { id: 'future', label: 'FUTURE ORDERS', icon: Clock3, count: counts.future, color: 'text-blue-400' },
     { id: 'delivered_history', label: 'DELIVERED HISTORY', icon: History, count: counts.delivered_history, color: 'text-emerald-400' },
-    { id: 'pending_payment', label: 'PENDING PAYMENT', icon: CreditCard, count: counts.pending_payment, color: 'text-amber-400' },
+    {
+      id: 'pending_payment',
+      label: 'PENDING PAYMENT',
+      icon: CreditCard,
+      count: counts.pending_payment_amount > 0 ? `₹${counts.pending_payment_amount.toLocaleString()}` : counts.pending_payment,
+      color: 'text-amber-400'
+    },
     { id: 'cancelled', label: 'CANCELLED', icon: Ban, count: counts.cancelled, color: 'text-rose-400' },
     { id: 'missed', label: 'MISSED', icon: AlertTriangle, count: counts.missed, color: 'text-orange-400' },
     { id: 'on_hold', label: 'ON HOLD', icon: PauseCircle, count: counts.on_hold, color: 'text-slate-400' }
@@ -201,11 +210,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
 
       if (activeTab === 'delivered_history') {
-        return isDeliveredMarked(o) && !isPaymentPending(o);
+        return isDeliveredMarked(o);
       }
 
       if (activeTab === 'pending_payment') {
-        return isDeliveredMarked(o) && isPaymentPending(o);
+        return isPaymentPending(o) && o.status !== 'cancelled';
       }
 
       if (activeTab === 'cancelled') {
