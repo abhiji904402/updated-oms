@@ -50,7 +50,26 @@ export const ViewOrderModal: React.FC<ViewOrderModalProps> = ({
   const advanceVal = order.advance_amount ?? 0;
   const remainingVal = order.remaining_balance ?? 0;
 
-  const confirmMsg = `Hi ${order.customer_name}, your Broomies Bakery order #${order.order_number} for ${order.item_type} is confirmed! Total: ₹${totalVal.toLocaleString()}, Advance: ₹${advanceVal.toLocaleString()}, Balance: ₹${remainingVal.toLocaleString()}. Expected delivery: ${order.delivery_time_expected || 'Soon'}. Thank you!`;
+  const itemDetails = `${order.item_type}${order.quantity ? ` (${order.quantity})` : ''}`;
+  const delDate = order.delivery_date || 'Today';
+  const delTime = order.delivery_time_expected || '11:00 am';
+
+  const confirmMsg = `Thank you so much for your recent order from Broomies! Your order number is (${order.order_number}).
+
+We're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.
+
+Order Details:
+Item: ${itemDetails}
+Delivery Date: ${delDate}
+Delivery Time: ${delTime}
+
+If you have any queries or need further assistance, please feel free to get in touch with us at:
+9266424088
+
+If still query not solved call 9971860845
+
+Best wishes,
+The Broomies Team`;
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">

@@ -591,7 +591,7 @@ export const DeliveryDashboard: React.FC = () => {
                       <a
                         href={formattedWhatsAppUrl(
                           order.mobile_number,
-                          `Hi ${order.customer_name}, I am ${activePartner?.name} from Broomies Bakery bringing your order #${order.order_number}!`
+                          `Hi ${order.customer_name},\n\nI am ${activePartner?.name || 'your rider'} from Broomies Bakery bringing your order #${order.order_number}!\n\nDelivery Date: ${order.delivery_date}\nDelivery Time: ${order.delivery_time_expected || '11:00 am'}\n\nThank you!`
                         )}
                         target="_blank"
                         rel="noreferrer"

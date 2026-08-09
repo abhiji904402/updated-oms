@@ -110,9 +110,46 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, compact = false, on
   const remainingVal = order.remaining_balance ?? 0;
 
   // WhatsApp Templates
-  const confirmMsg = `Hi ${order.customer_name}, your Broomies Bakery order #${order.order_number} for ${order.item_type} is confirmed! Total: ₹${totalVal.toLocaleString()}, Advance: ₹${advanceVal.toLocaleString()}, Balance: ₹${remainingVal.toLocaleString()}. Expected delivery: ${order.delivery_time_expected || 'Soon'}. Thank you!`;
-  const dispatchMsg = `Hi ${order.customer_name}, your order #${order.order_number} is out for delivery with rider ${order.delivery_partner || 'Broomies Express'}. OTP for verification: ${order.otp || 'N/A'}.`;
-  const reminderMsg = `Hi ${order.customer_name}, friendly reminder for Broomies Bakery order #${order.order_number}. Remaining due amount: ₹${remainingVal.toLocaleString()}. Please pay via UPI/Cash on delivery.`;
+  const itemDetails = `${order.item_type}${order.quantity ? ` (${order.quantity})` : ''}`;
+  const delDate = order.delivery_date || 'Today';
+  const delTime = order.delivery_time_expected || '11:00 am';
+
+  const confirmMsg = `Thank you so much for your recent order from Broomies! Your order number is (${order.order_number}).
+
+We're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.
+
+Order Details:
+Item: ${itemDetails}
+Delivery Date: ${delDate}
+Delivery Time: ${delTime}
+
+If you have any queries or need further assistance, please feel free to get in touch with us at:
+9266424088
+
+If still query not solved call 9971860845
+
+Best wishes,
+The Broomies Team`;
+
+  const dispatchMsg = `Hi ${order.customer_name},
+
+Your order #${order.order_number} is out for delivery with rider ${order.delivery_partner || 'Broomies Express'}.
+
+OTP for verification: ${order.otp || 'N/A'}
+
+Thank you!
+Broomies Team`;
+
+  const reminderMsg = `Hi ${order.customer_name},
+
+Friendly reminder for your Broomies Bakery order #${order.order_number}.
+
+Remaining due amount: ₹${remainingVal.toLocaleString()}
+
+Please pay via UPI/Cash on delivery.
+
+Thank you!
+Broomies Team`;
 
   return (
     <>
