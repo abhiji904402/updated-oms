@@ -259,6 +259,17 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Notifications
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
 
+  // Helper to strip out undefined values so Firestore setDoc never fails
+  const sanitizeOrderForFirestore = (order: Record<string, any>): Order => {
+    const clean: Record<string, any> = {};
+    for (const [key, val] of Object.entries(order)) {
+      if (val !== undefined) {
+        clean[key] = val;
+      }
+    }
+    return clean as Order;
+  };
+
   // 1. Real-time Firestore Sync for Orders
   useEffect(() => {
     const unsub = onSnapshot(
@@ -272,8 +283,21 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (list.length > 0) {
           list.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
           setOrders(list);
-        } else {
-          setOrders([]);
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(list));
+            idbSet(LOCAL_STORAGE_KEY_ORDERS, list);
+          } catch (e) {}
+        } else if (!snapshot.metadata.fromCache) {
+          // If Firestore collection is empty, preserve local orders and seed them to Firestore
+          setOrders((currentLocal) => {
+            if (currentLocal && currentLocal.length > 0) {
+              currentLocal.forEach((ord) => {
+                const clean = sanitizeOrderForFirestore(ord);
+                setDoc(doc(db, 'orders', clean.id), clean).catch(() => {});
+              });
+            }
+            return currentLocal;
+          });
         }
       },
       (err) => {
@@ -560,12 +584,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [orders, sheetConfig.sheet_url, logSync, showNotification]);
 
   const addOrder = useCallback((orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'updated_at'>): Order => {
-    const maxOrderNum = orders.length > 0 ? orders.reduce((max, o) => Math.max(max, o.order_number || 0), 0) : 0;
-    const newOrderNumber = maxOrderNum + 1;
+    const maxOrderNum = orders.length > 0 ? orders.reduce((max, o) => Math.max(max, o.order_number || 0), 0) : 2159;
+    const newOrderNumber = maxOrderNum > 0 ? maxOrderNum + 1 : 2160;
     const now = new Date().toISOString();
     const randomOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    const newOrder: Order = {
+    const rawOrder: Order = {
       ...orderData,
       id: `ord-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_number: newOrderNumber,
@@ -576,7 +600,21 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: now
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    const newOrder = sanitizeOrderForFirestore(rawOrder);
+
+    // Instant local state + synchronous local storage / IDB update to prevent data loss
+    setOrders((prev) => {
+      const updated = [newOrder, ...prev.filter((o) => o.id !== newOrder.id)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(updated));
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, updated);
+      } catch (e) {
+        console.warn('Sync storage failed:', e);
+      }
+      return updated;
+    });
+
+    // Write to Firestore
     setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
       console.warn('Firestore setDoc failed:', err);
     });
@@ -696,7 +734,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updates.remaining_balance !== undefined ||
       updates.due_amount !== undefined;
 
-    const updated: Order = {
+    const rawUpdated: Order = {
       ...target,
       ...updates,
       updated_at: now,
@@ -708,7 +746,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : {})
     };
 
-    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
+    const updated = sanitizeOrderForFirestore(rawUpdated);
+
+    setOrders((prev) => {
+      const newList = prev.map((ord) => (ord.id === id ? updated : ord));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
+      } catch (e) {}
+      return newList;
+    });
 
     setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
     pushToSheet(updated, 'update');
