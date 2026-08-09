@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useOMS } from '../lib/store';
-import { OutletName, DeliveryType, PaymentType } from '../types';
+import { Order, OutletName, DeliveryType, PaymentType } from '../types';
 import { ITEM_PRESETS } from '../data/mockData';
 import { compressImage } from '../lib/imageCompressor';
 import {
@@ -10,7 +10,9 @@ import {
   ImageIcon,
   Sparkles,
   Check,
-  UserCheck
+  UserCheck,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 
 interface AddOrderModalProps {
@@ -63,6 +65,10 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
   const [remarks, setRemarks] = useState<string>('');
   const [itemImageUrl, setItemImageUrl] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
+
+  // WhatsApp Confirmation Modal State
+  const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
+  const [confirmationMsgText, setConfirmationMsgText] = useState<string>('');
 
   // Suggestions state
   const [showItemSuggestions, setShowItemSuggestions] = useState<boolean>(false);
@@ -338,7 +344,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     // Derive final customer name from informedBy or customerName or phone
     const finalCustomerName = customerName.trim() || informedBy.trim() || `Customer #${nextOrderNumber}`;
 
-    addOrder({
+    const newOrder = addOrder({
       outlet,
       order_date: orderDate || todayStr,
       order_time: orderTime || currentTimeStr,
@@ -359,14 +365,56 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       remarks: remarks || '',
       status: 'pending',
       delivery_date: deliveryDate || todayStr,
-      delivery_time_expected: expectedDeliveryTime || '06:00 PM',
+      delivery_time_expected: expectedDeliveryTime || '11:00 am',
       item_image_url: itemImageUrl || undefined
     });
 
+    // Format WhatsApp confirmation text template
+    const itemDetails = `${newOrder.item_type}${newOrder.quantity ? ` (${newOrder.quantity})` : ''}`;
+    const delDate = newOrder.delivery_date || todayStr;
+    const delTime = newOrder.delivery_time_expected || '11:00 am';
+
+    const msg = `Thank you so much for your recent order from Broomies! Your order number is (${newOrder.order_number}).
+
+We're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.
+
+Order Details:
+Item: ${itemDetails}
+Delivery Date: ${delDate}
+Delivery Time: ${delTime}
+
+If you have any queries or need further assistance, please feel free to get in touch with us at:
+9266424088
+
+If still query not solved call 9971860845
+
+Best wishes,
+The Broomies Team`;
+
+    setConfirmationMsgText(msg);
+    setConfirmationOrder(newOrder);
+  };
+
+  const handleSendWhatsAppConfirmation = () => {
+    if (!confirmationOrder) return;
+    const rawPhone = confirmationOrder.mobile_number || '';
+    let cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length === 10) {
+      cleanPhone = '91' + cleanPhone;
+    }
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(confirmationMsgText)}`;
+    window.open(url, '_blank');
+
+    setConfirmationOrder(null);
     onClose();
   };
 
-  if (!isOpen) return null;
+  const handleCloseConfirmation = () => {
+    setConfirmationOrder(null);
+    onClose();
+  };
+
+  if (!isOpen && !confirmationOrder) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -954,6 +1002,74 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
 
         </form>
       </div>
+
+      {/* WhatsApp Confirmation Popup Modal */}
+      {confirmationOrder && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[70] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-[#0c0f1a] border border-emerald-500/50 rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl text-slate-200 my-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-indigo-950 pb-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                    Send Confirmation Message
+                  </h3>
+                  <p className="text-xs text-emerald-400 font-semibold">
+                    Order #{confirmationOrder.order_number} saved successfully!
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseConfirmation}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-5">
+              <div className="bg-indigo-950/40 border border-indigo-900/40 rounded-xl p-3 text-xs space-y-1">
+                <p><strong className="text-slate-300">Customer:</strong> {confirmationOrder.customer_name} ({confirmationOrder.mobile_number})</p>
+                <p><strong className="text-slate-300">Item:</strong> {confirmationOrder.item_type} ({confirmationOrder.quantity})</p>
+                <p><strong className="text-slate-300">Delivery:</strong> {confirmationOrder.delivery_date} at {confirmationOrder.delivery_time_expected}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  WhatsApp Confirmation Message:
+                </label>
+                <textarea
+                  value={confirmationMsgText}
+                  onChange={(e) => setConfirmationMsgText(e.target.value)}
+                  rows={9}
+                  className="w-full bg-[#080910] border border-emerald-900/60 rounded-xl p-3 text-xs text-emerald-200 font-mono leading-relaxed focus:outline-none focus:border-emerald-500 transition resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-indigo-950">
+              <button
+                type="button"
+                onClick={handleCloseConfirmation}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition cursor-pointer"
+              >
+                Skip / Close
+              </button>
+              <button
+                type="button"
+                onClick={handleSendWhatsAppConfirmation}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-950/60 flex items-center gap-2 transition cursor-pointer active:scale-95"
+              >
+                <Send className="w-4 h-4 text-white" />
+                <span>OK (Send on WhatsApp)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

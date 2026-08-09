@@ -81,8 +81,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return d.toISOString().split('T')[0];
   }, []);
 
-  // Helper: check if order is fully delivered & confirmed by outlet/admin
-  const isFullyDelivered = (o: Order) => o.status === 'delivered' && !o.delivery_confirmation_pending;
+  // Helper logic for order filtering across tabs
+  const isPaymentPending = (o: Order) => {
+    return (
+      o.payment_type === 'due' ||
+      (typeof o.remaining_balance === 'number' && o.remaining_balance > 0) ||
+      (typeof o.due_amount === 'number' && o.due_amount > 0)
+    );
+  };
+
+  const isDeliveredMarked = (o: Order) => {
+    return o.status === 'delivered';
+  };
 
   // Compute Badge Counts for all 8 Tabs
   const counts = useMemo(() => {
@@ -91,7 +101,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         (o) =>
           (o.delivery_date === todayStr || o.order_date === todayStr) &&
           o.status !== 'cancelled' &&
-          !isFullyDelivered(o) &&
+          o.status !== 'on_hold' &&
+          !isDeliveredMarked(o) &&
           o.status !== 'missed' &&
           o.delivery_date >= todayStr
       ).length,
@@ -99,23 +110,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         (o) =>
           (o.delivery_date === tomorrowStr || o.order_date === tomorrowStr) &&
           o.status !== 'cancelled' &&
-          !isFullyDelivered(o)
+          o.status !== 'on_hold' &&
+          !isDeliveredMarked(o)
       ).length,
       future: safeOrders.filter(
         (o) =>
           (o.delivery_date > tomorrowStr || o.order_date > tomorrowStr) &&
           o.status !== 'cancelled' &&
-          !isFullyDelivered(o)
+          o.status !== 'on_hold' &&
+          !isDeliveredMarked(o)
       ).length,
-      delivered_history: safeOrders.filter((o) => isFullyDelivered(o)).length,
-      pending_payment: safeOrders.filter(
-        (o) => o.payment_type === 'due' || (o.remaining_balance && o.remaining_balance > 0) || o.payment_status === 'pending' || o.payment_status === 'due'
-      ).length,
+      delivered_history: safeOrders.filter((o) => isDeliveredMarked(o) && !isPaymentPending(o)).length,
+      pending_payment: safeOrders.filter((o) => isDeliveredMarked(o) && isPaymentPending(o)).length,
       cancelled: safeOrders.filter((o) => o.status === 'cancelled').length,
       missed: safeOrders.filter(
         (o) =>
           o.status === 'missed' ||
-          (o.delivery_date < todayStr && !isFullyDelivered(o) && o.status !== 'cancelled')
+          (o.delivery_date < todayStr && !isDeliveredMarked(o) && o.status !== 'cancelled')
       ).length,
       on_hold: safeOrders.filter((o) => o.status === 'on_hold').length
     };
@@ -162,7 +173,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         return (
           isToday &&
           o.status !== 'cancelled' &&
-          !isFullyDelivered(o) &&
+          o.status !== 'on_hold' &&
+          !isDeliveredMarked(o) &&
           o.status !== 'missed' &&
           o.delivery_date >= todayStr
         );
@@ -170,25 +182,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       if (activeTab === 'tomorrow') {
         const isTomorrow = o.delivery_date === tomorrowStr || o.order_date === tomorrowStr;
-        return isTomorrow && o.status !== 'cancelled' && !isFullyDelivered(o);
+        return (
+          isTomorrow &&
+          o.status !== 'cancelled' &&
+          o.status !== 'on_hold' &&
+          !isDeliveredMarked(o)
+        );
       }
 
       if (activeTab === 'future') {
         const isFuture = o.delivery_date > tomorrowStr || o.order_date > tomorrowStr;
-        return isFuture && o.status !== 'cancelled' && !isFullyDelivered(o);
+        return (
+          isFuture &&
+          o.status !== 'cancelled' &&
+          o.status !== 'on_hold' &&
+          !isDeliveredMarked(o)
+        );
       }
 
       if (activeTab === 'delivered_history') {
-        return isFullyDelivered(o);
+        return isDeliveredMarked(o) && !isPaymentPending(o);
       }
 
       if (activeTab === 'pending_payment') {
-        return (
-          o.payment_type === 'due' ||
-          (o.remaining_balance && o.remaining_balance > 0) ||
-          o.payment_status === 'pending' ||
-          o.payment_status === 'due'
-        );
+        return isDeliveredMarked(o) && isPaymentPending(o);
       }
 
       if (activeTab === 'cancelled') {
@@ -198,7 +215,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (activeTab === 'missed') {
         return (
           o.status === 'missed' ||
-          (o.delivery_date < todayStr && o.status !== 'delivered' && o.status !== 'cancelled')
+          (o.delivery_date < todayStr && !isDeliveredMarked(o) && o.status !== 'cancelled')
         );
       }
 
