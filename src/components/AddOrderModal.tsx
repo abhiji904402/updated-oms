@@ -322,6 +322,32 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     }
   };
 
+  const resetForm = () => {
+    setMobileNumber('');
+    setCustomerName('');
+    setItemType('');
+    setQuantity('1 kg');
+    setDeliveryType('pickup');
+    setInformedBy('');
+    setDeliveryDate(todayStr);
+    setExpectedDeliveryTime('');
+    setTotalAmountStr('');
+    setPaymentType('full');
+    setAdvanceAmountStr('');
+    setAdvanceBillNumber('');
+    setFinalBillNumber('');
+    setDeliveryAddress('');
+    setRemarks('');
+    setItemImageUrl(null);
+    setShowItemSuggestions(false);
+    setShowCustomerSuggestions(false);
+  };
+
+  const handleCloseDataEntryCard = () => {
+    resetForm();
+    onClose();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -369,30 +395,19 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       item_image_url: itemImageUrl || undefined
     });
 
-    // Format WhatsApp confirmation text template
+    // Format WhatsApp confirmation text template with explicit multi-line spacing
     const itemDetails = `${newOrder.item_type}${newOrder.quantity ? ` (${newOrder.quantity})` : ''}`;
     const delDate = newOrder.delivery_date || todayStr;
     const delTime = newOrder.delivery_time_expected || '11:00 am';
 
-    const msg = `Thank you so much for your recent order from Broomies! Your order number is (${newOrder.order_number}).
-
-We're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.
-
-Order Details:
-Item: ${itemDetails}
-Delivery Date: ${delDate}
-Delivery Time: ${delTime}
-
-If you have any queries or need further assistance, please feel free to get in touch with us at:
-9266424088
-
-If still query not solved call 9971860845
-
-Best wishes,
-The Broomies Team`;
+    const msg = `Thank you so much for your recent order from Broomies! Your order number is (${newOrder.order_number}).\n\nWe're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.\n\nOrder Details:\nItem: ${itemDetails}\nDelivery Date: ${delDate}\nDelivery Time: ${delTime}\n\nIf you have any queries or need further assistance, please feel free to get in touch with us at:\n9266424088\n\nIf still query not solved call 9971860845\n\nBest wishes,\nThe Broomies Team`;
 
     setConfirmationMsgText(msg);
     setConfirmationOrder(newOrder);
+
+    // Instant save: reset form & close data entry card immediately
+    resetForm();
+    onClose();
   };
 
   const handleSendWhatsAppConfirmation = () => {
@@ -406,45 +421,59 @@ The Broomies Team`;
     window.open(url, '_blank');
 
     setConfirmationOrder(null);
-    onClose();
   };
 
   const handleCloseConfirmation = () => {
     setConfirmationOrder(null);
-    onClose();
   };
 
   if (!isOpen && !confirmationOrder) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-[#0b0d14] border border-indigo-900/50 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl my-auto text-slate-200">
-        
-        {/* Header */}
-        <div className="p-5 border-b border-indigo-950/80 flex items-start justify-between gap-4 bg-[#0e101a]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-              <Package className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                Add New Order
-              </h2>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">
-                Press Enter to move to next field • Ctrl+Enter to save
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            type="button"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <>
+      {/* Data Entry Card Modal */}
+      {isOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-[#0b0d14] border border-indigo-900/50 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl my-auto text-slate-200">
+            
+            {/* Header */}
+            <div className="p-5 border-b border-indigo-950/80 flex items-start justify-between gap-4 bg-[#0e101a]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                    <span>Create New Order</span>
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800/50">
+                      OMS
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Fill order details below to save into system
+                  </p>
+                </div>
+              </div>
 
-        {/* Form Body */}
+              <div className="flex items-center gap-2">
+                <div className="bg-purple-950/80 border border-purple-500/30 rounded-xl px-3 py-1 text-right">
+                  <div className="text-[10px] text-purple-300 font-bold uppercase tracking-wider">Order No.</div>
+                  <div className="text-base font-black text-white font-mono leading-none">
+                    #{nextOrderNumber}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseDataEntryCard}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Form Body */}
         <form
           ref={formRef}
           onKeyDown={handleKeyDown}
@@ -531,6 +560,7 @@ The Broomies Team`;
                   setCustomerHighlightIndex(0);
                 }}
                 onFocus={() => setShowCustomerSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
                 onKeyDown={handleCustomerKeyDown}
                 className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
                 required
@@ -592,6 +622,7 @@ The Broomies Team`;
                   setCustomerHighlightIndex(0);
                 }}
                 onFocus={() => setShowCustomerSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
                 onKeyDown={handleCustomerKeyDown}
                 className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
               />
@@ -614,6 +645,7 @@ The Broomies Team`;
                   setItemHighlightIndex(0);
                 }}
                 onFocus={() => setShowItemSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
                 onKeyDown={handleItemKeyDown}
                 className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
                 required
@@ -1002,6 +1034,8 @@ The Broomies Team`;
 
         </form>
       </div>
+    </div>
+  )}
 
       {/* WhatsApp Confirmation Popup Modal */}
       {confirmationOrder && (
@@ -1070,6 +1104,6 @@ The Broomies Team`;
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
