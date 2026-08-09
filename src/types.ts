@@ -70,6 +70,15 @@ export interface DeliveryPartnerLocation {
   updated_at: string;
 }
 
+export interface OutletLocation {
+  id: string; // 'Sector 31', 'Sector 35', etc.
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  color?: string;
+}
+
 export interface DeliveryPartner {
   id: string;
   name: string;

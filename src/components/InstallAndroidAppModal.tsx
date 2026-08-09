@@ -184,7 +184,7 @@ export const InstallAndroidAppModal: React.FC<InstallAndroidAppModalProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Fast home screen icon launcher & live GPS tracking</span>
+                <span>Fast home screen icon launcher & quick app access</span>
               </div>
             </div>
           </div>

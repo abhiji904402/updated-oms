@@ -35,8 +35,7 @@ export const DeliveryDashboard: React.FC = () => {
     switchRole,
     markDelivered,
     addPartner,
-    deletePartner,
-    updatePartnerLocation
+    deletePartner
   } = useOMS();
 
   const safeOrders = orders || [];
@@ -49,94 +48,6 @@ export const DeliveryDashboard: React.FC = () => {
   const activePartner = useMemo(() => {
     return safePartners.find((p) => p.id === activePartnerId) || safePartners[0];
   }, [safePartners, activePartnerId]);
-
-  const [gpsMode, setGpsMode] = useState<'real' | 'simulated'>('simulated');
-  const [isGpsTrackingActive, setIsGpsTrackingActive] = useState<boolean>(true);
-  const [lastGpsSyncTime, setLastGpsSyncTime] = useState<string>(new Date().toLocaleTimeString());
-
-  // Trigger manual GPS sync step
-  const triggerManualGpsSync = () => {
-    if (!activePartner?.id || !updatePartnerLocation) return;
-    const currentLoc = activePartner.location || { lat: 28.4520, lng: 77.3180, address: 'Faridabad Base' };
-    const deltaLat = (Math.random() - 0.5) * 0.004;
-    const deltaLng = (Math.random() - 0.5) * 0.004;
-    const newSpeed = Math.floor(18 + Math.random() * 25);
-    const newLat = Number((currentLoc.lat + deltaLat).toFixed(6));
-    const newLng = Number((currentLoc.lng + deltaLng).toFixed(6));
-
-    updatePartnerLocation(activePartner.id, {
-      lat: newLat,
-      lng: newLng,
-      speed: newSpeed,
-      address: `Live Location (${newLat.toFixed(4)}, ${newLng.toFixed(4)})`
-    });
-    setLastGpsSyncTime(new Date().toLocaleTimeString());
-  };
-
-  // Realtime GPS & Live Motion Tracker Effect
-  useEffect(() => {
-    if (!activePartner?.id || !isGpsTrackingActive) return;
-
-    let watchId: number | null = null;
-    let fallbackInterval: NodeJS.Timeout | null = null;
-
-    const runSimulationStep = () => {
-      const currentLoc = activePartner.location || { lat: 28.4520, lng: 77.3180, address: 'Faridabad Base' };
-      const deltaLat = (Math.random() - 0.5) * 0.003;
-      const deltaLng = (Math.random() - 0.5) * 0.003;
-      const speed = Math.floor(15 + Math.random() * 28);
-      const newLat = Number((currentLoc.lat + deltaLat).toFixed(6));
-      const newLng = Number((currentLoc.lng + deltaLng).toFixed(6));
-
-      if (updatePartnerLocation) {
-        updatePartnerLocation(activePartner.id, {
-          lat: newLat,
-          lng: newLng,
-          speed: speed,
-          address: `En route delivery (${newLat.toFixed(4)}, ${newLng.toFixed(4)})`
-        });
-      }
-      setLastGpsSyncTime(new Date().toLocaleTimeString());
-    };
-
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          setGpsMode('real');
-          if (updatePartnerLocation && activePartner.id) {
-            updatePartnerLocation(activePartner.id, {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 22,
-              address: `Live Device GPS (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`
-            });
-          }
-          setLastGpsSyncTime(new Date().toLocaleTimeString());
-        },
-        (err) => {
-          console.warn('Geolocation fallback activated:', err.message);
-          setGpsMode('simulated');
-          if (!fallbackInterval) {
-            runSimulationStep();
-            fallbackInterval = setInterval(runSimulationStep, 3500);
-          }
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 3000 }
-      );
-    } else {
-      setGpsMode('simulated');
-      fallbackInterval = setInterval(runSimulationStep, 3500);
-    }
-
-    return () => {
-      if (watchId !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-      if (fallbackInterval) {
-        clearInterval(fallbackInterval);
-      }
-    };
-  }, [activePartner?.id, isGpsTrackingActive, updatePartnerLocation]);
 
   const [activeTab, setActiveTab] = useState<'queue' | 'delivered_products' | 'manage_partners'>('queue');
   const [partnerFilter, setPartnerFilter] = useState<string>('ALL');
@@ -407,58 +318,6 @@ export const DeliveryDashboard: React.FC = () => {
             >
               <Plus className="w-4 h-4" />
               + Add Delivery Partner
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Realtime GPS Status & Radar Bar */}
-      {activePartner && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/80 via-[#0a0d1f] to-indigo-950/80 border border-purple-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
-                <MapPin className="w-5 h-5 text-purple-400 animate-bounce" />
-              </div>
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-              </span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-black text-white">
-                  Rider GPS Tracking: <span className="text-emerald-400">{activePartner.name}</span>
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  {gpsMode === 'real' ? 'LIVE DEVICE GPS' : 'REALTIME GPS ACTIVE'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                📍 {activePartner.location?.address || 'Faridabad NCR'} • Speed: <strong className="text-amber-300 font-mono">{activePartner.location?.speed || 0} km/h</strong> • Lat: <span className="font-mono text-purple-300">{activePartner.location?.lat?.toFixed(4) || '28.4520'}</span>, Lng: <span className="font-mono text-purple-300">{activePartner.location?.lng?.toFixed(4) || '77.3180'}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={triggerManualGpsSync}
-              className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg flex items-center gap-1.5 transition cursor-pointer active:scale-95"
-            >
-              <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
-              <span>Update GPS Location Now</span>
-            </button>
-
-            <button
-              onClick={() => setIsGpsTrackingActive(!isGpsTrackingActive)}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition ${
-                isGpsTrackingActive
-                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60'
-                  : 'bg-rose-950/60 text-rose-300 border-rose-700/60'
-              }`}
-            >
-              {isGpsTrackingActive ? '🟢 Live Sync ON' : '🔴 Sync Paused'}
             </button>
           </div>
         </div>

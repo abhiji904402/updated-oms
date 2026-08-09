@@ -17,6 +17,8 @@ import {
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { DeliveryPartner } from '../types';
+import { useOMS } from '../lib/store';
+import { SetOutletLocationModal } from './SetOutletLocationModal';
 
 interface RiderLocationMapModalProps {
   isOpen: boolean;
@@ -115,10 +117,12 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
   partners,
   onSimulateMovement
 }) => {
+  const { outletLocations } = useOMS();
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(partners[0]?.id || null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [activeStyle, setActiveStyle] = useState<StyleType>('carto_dark');
+  const [isSetOutletModalOpen, setIsSetOutletModalOpen] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -223,7 +227,7 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
     markersRef.current = {};
 
     // 1. Add / Update Outlet Markers
-    OUTLET_LOCATIONS.forEach((outlet) => {
+    (outletLocations || OUTLET_LOCATIONS).forEach((outlet) => {
       const outletKey = `outlet-${outlet.name}`;
       const el = document.createElement('div');
       el.className = 'outlet-marker-container cursor-pointer transform -translate-x-1/2 -translate-y-1/2';
@@ -302,7 +306,7 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
 
       markersRef.current[riderKey] = marker;
     });
-  }, [partners, selectedPartnerId, isOpen, mapLoaded, activeStyle]);
+  }, [partners, selectedPartnerId, isOpen, mapLoaded, activeStyle, outletLocations]);
 
   if (!isOpen) return null;
 
@@ -493,8 +497,17 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={() => setIsSetOutletModalOpen(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-[11px] shadow-lg flex items-center gap-1 transition cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-amber-300" />
+                  Set Outlet Location
+                </button>
+
+                <button
                   onClick={handleCenterMap}
-                  className="px-2.5 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800 border border-purple-600/50 text-purple-200 text-[11px] font-bold flex items-center gap-1 transition"
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800 border border-purple-600/50 text-purple-200 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
                 >
                   <Navigation className="w-3.5 h-3.5" />
                   Center Rider
@@ -548,6 +561,11 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
           </div>
         </div>
       </div>
+
+      <SetOutletLocationModal
+        isOpen={isSetOutletModalOpen}
+        onClose={() => setIsSetOutletModalOpen(false)}
+      />
     </div>
   );
 };

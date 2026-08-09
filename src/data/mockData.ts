@@ -11,9 +11,9 @@ export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = [
     vehicle: 'Honda Activa (HR 51 AB 1234)',
     is_tracking_active: true,
     location: {
-      lat: 28.4682,
-      lng: 77.3060,
-      address: 'Sector 31 Market, Faridabad',
+      lat: 28.4446,
+      lng: 77.3138,
+      address: 'Shop no. 4, Ch. Hetram Complex, near Anupam Sweets, Sector 31, Faridabad',
       speed: 0,
       updated_at: new Date().toISOString()
     }
@@ -28,9 +28,9 @@ export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = [
     vehicle: 'TVS Jupiter (HR 51 XY 5678)',
     is_tracking_active: true,
     location: {
-      lat: 28.4520,
-      lng: 77.3180,
-      address: 'En route Sector 35 Main Rd',
+      lat: 28.4727,
+      lng: 77.3057,
+      address: 'Shop No.9, Ashoka Enclave Part 3, Sector 35, Faridabad',
       speed: 22,
       updated_at: new Date().toISOString()
     }
@@ -45,9 +45,9 @@ export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = [
     vehicle: 'Hero Splendor (HR 51 C 9988)',
     is_tracking_active: true,
     location: {
-      lat: 28.4350,
-      lng: 77.3320,
-      address: 'Near Sector 42 Bakery Hub',
+      lat: 28.4622,
+      lng: 77.2963,
+      address: 'B-107, Greenfield Colony, Sector 42, Faridabad',
       speed: 35,
       updated_at: new Date().toISOString()
     }
@@ -62,9 +62,9 @@ export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = [
     vehicle: 'Bajaj Pulsar (HR 51 D 4433)',
     is_tracking_active: true,
     location: {
-      lat: 28.4120,
-      lng: 77.3450,
-      address: 'Sector 88 Outlet Parking',
+      lat: 28.4197,
+      lng: 77.3556,
+      address: 'Shop 112, RPS Savana Rd, Sector 88, Faridabad',
       speed: 0,
       updated_at: new Date().toISOString()
     }

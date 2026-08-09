@@ -1,5 +1,40 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Order, DeliveryPartner, DeliveryPartnerLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
+import { Order, DeliveryPartner, DeliveryPartnerLocation, OutletLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
+
+export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
+  {
+    id: 'Sector 31',
+    name: 'Sector 31 Outlet',
+    address: 'Shop no. 4, Ch. Hetram Complex, near Anupam Sweets, Sector 31, Faridabad, Haryana 121003',
+    lat: 28.4446,
+    lng: 77.3138,
+    color: '#10b981'
+  },
+  {
+    id: 'Sector 35',
+    name: 'Sector 35 Outlet',
+    address: 'Shop No.9, Ground Floor, Shopping Center In, Ashoka Enclave Part 3, Subash Nagar, Sector 35, Faridabad, Haryana 121003',
+    lat: 28.4727,
+    lng: 77.3057,
+    color: '#f59e0b'
+  },
+  {
+    id: 'Sector 42',
+    name: 'Sector 42 Outlet',
+    address: 'B-107, Greenfield Colony, Mall Road, Sector 42, Faridabad',
+    lat: 28.4622,
+    lng: 77.2963,
+    color: '#3b82f6'
+  },
+  {
+    id: 'Sector 88',
+    name: 'Sector 88 Outlet',
+    address: 'Shop 112, RPS Savana Rd, RPS City, Sector 88, Faridabad, Haryana 121002',
+    lat: 28.4197,
+    lng: 77.3556,
+    color: '#8b5cf6'
+  }
+];
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
 import { db } from './firebase';
@@ -51,6 +86,10 @@ interface OMSContextType {
   updatePartnerStatus: (id: string, status: DeliveryPartner['status']) => void;
   updatePartnerLocation: (id: string, location: DeliveryPartnerLocation) => void;
 
+  // Outlets Locations
+  outletLocations: OutletLocation[];
+  updateOutletLocation: (id: string, updates: Partial<OutletLocation>) => void;
+
   // Alerts
   alerts: Alert[];
   triggerSheetSync: () => Promise<void>;
@@ -86,6 +125,7 @@ const OMSContext = createContext<OMSContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY_ORDERS = 'broomies_oms_orders_v7';
 const LOCAL_STORAGE_KEY_PARTNERS = 'broomies_oms_partners_v3';
+const LOCAL_STORAGE_KEY_OUTLETS = 'broomies_oms_outlets_v1';
 const LOCAL_STORAGE_KEY_SHEET = 'broomies_oms_sheet_v3';
 const LOCAL_STORAGE_KEY_SESSION = 'broomies_oms_session_v3';
 const LOCAL_STORAGE_KEY_AUTH = 'broomies_oms_auth_v1';
@@ -171,6 +211,19 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     return INITIAL_DELIVERY_PARTNERS;
+  });
+
+  // Outlet Locations State
+  const [outletLocations, setOutletLocations] = useState<OutletLocation[]>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY_OUTLETS);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved outlets', e);
+      }
+    }
+    return DEFAULT_OUTLET_LOCATIONS;
   });
 
   // Google Sheet Config State
@@ -863,6 +916,38 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, []);
 
+  const updateOutletLocation = useCallback((id: string, updates: Partial<OutletLocation>) => {
+    setOutletLocations((prev) => {
+      const exists = prev.some((o) => o.id === id);
+      let updatedList: OutletLocation[];
+      if (exists) {
+        updatedList = prev.map((o) => (o.id === id ? { ...o, ...updates } : o));
+      } else {
+        const newOutlet: OutletLocation = {
+          id,
+          name: updates.name || `${id} Outlet`,
+          address: updates.address || 'Faridabad, Haryana',
+          lat: updates.lat || 28.4520,
+          lng: updates.lng || 77.3180,
+          color: updates.color || '#3b82f6'
+        };
+        updatedList = [...prev, newOutlet];
+      }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY_OUTLETS, JSON.stringify(updatedList));
+      } catch (e) {
+        console.warn('Failed to save outletLocations to localStorage:', e);
+      }
+      return updatedList;
+    });
+
+    const targetDoc = doc(db, 'outlet_locations', id);
+    setDoc(targetDoc, updates, { merge: true }).catch((err) => {
+      console.warn('Failed to sync outlet location to Firestore:', err);
+    });
+    showNotification(`Outlet location updated for ${id}`);
+  }, [showNotification]);
+
   const updateSheetConfig = useCallback((updates: Partial<SheetConfig>) => {
     setSheetConfig((prev) => ({ ...prev, ...updates }));
     showNotification('Updated Google Sheets Integration configuration.');
@@ -910,6 +995,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deletePartner,
       updatePartnerStatus,
       updatePartnerLocation,
+      outletLocations: outletLocations || DEFAULT_OUTLET_LOCATIONS,
+      updateOutletLocation,
       alerts: alerts || [],
       triggerSheetSync: triggerGoogleSheetSync,
       sheetConfig,
@@ -954,6 +1041,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addPartner,
       deletePartner,
       updatePartnerStatus,
+      updatePartnerLocation,
+      outletLocations,
+      updateOutletLocation,
       alerts,
       sheetConfig,
       updateSheetConfig,

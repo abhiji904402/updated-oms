@@ -31,7 +31,6 @@ import {
   MapPin,
   Map as MapIcon
 } from 'lucide-react';
-import { RiderLocationMapModal } from '../components/RiderLocationMapModal';
 
 interface AdminDashboardProps {
   onOpenAddModal: () => void;
@@ -59,7 +58,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const {
     orders = [],
     partners = [],
-    updatePartnerLocation,
+    outletLocations = [],
     searchQuery,
     selectedOutletFilter,
     selectedStatusFilter,
@@ -73,33 +72,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
-  const [isMapOpen, setIsMapOpen] = useState<boolean>(false);
-
-  // Simulation handler to move riders slightly on map
-  const handleSimulateMovement = () => {
-    (partners || []).forEach((p) => {
-      const currentLoc = p.location || { lat: 28.4520, lng: 77.3180, address: 'Faridabad Sector' };
-      const deltaLat = (Math.random() - 0.5) * 0.008;
-      const deltaLng = (Math.random() - 0.5) * 0.008;
-      const newSpeed = Math.floor(15 + Math.random() * 30);
-
-      updatePartnerLocation(p.id, {
-        lat: currentLoc.lat + deltaLat,
-        lng: currentLoc.lng + deltaLng,
-        speed: newSpeed,
-        address: currentLoc.address || 'En route delivery'
-      });
-    });
-  };
-
-  // Automatic live movement pulse on map view
-  React.useEffect(() => {
-    if (activeBoardView !== 'map' && !isMapOpen) return;
-    const interval = setInterval(() => {
-      handleSimulateMovement();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [activeBoardView, isMapOpen]);
 
   // Dates
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -242,44 +214,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Map markers computation for Admin Map View
   const adminMapMarkers = useMemo(() => {
-    const list: MapMarkerData[] = [
-      {
-        id: 'outlet-31',
-        title: 'Sector 31 Outlet',
-        subtitle: 'Shop no. 4, Ch. Hetram Complex, near Anupam Sweets, Sector 31, Faridabad',
-        lat: 28.4682,
-        lng: 77.3060,
-        color: '#10b981',
-        icon: '🏬'
-      },
-      {
-        id: 'outlet-35',
-        title: 'Sector 35 Outlet',
-        subtitle: 'Shop No.9, Ground Floor, Ashoka Enclave Part 3, Subash Nagar, Sector 35, Faridabad',
-        lat: 28.4875,
-        lng: 77.3082,
-        color: '#f59e0b',
-        icon: '🏬'
-      },
-      {
-        id: 'outlet-42',
-        title: 'Sector 42 Outlet',
-        subtitle: 'B-107, Greenfield Colony, Mall Road, Sector 42, Faridabad',
-        lat: 28.4632,
-        lng: 77.3015,
-        color: '#3b82f6',
-        icon: '🏬'
-      },
-      {
-        id: 'outlet-88',
-        title: 'Sector 88 Outlet',
-        subtitle: 'Shop 112, RPS Savana Rd, RPS City, Sector 88, Faridabad',
-        lat: 28.4118,
-        lng: 77.3458,
-        color: '#8b5cf6',
-        icon: '🏬'
-      }
-    ];
+    const list: MapMarkerData[] = (outletLocations || []).map((outlet) => ({
+      id: `outlet-${outlet.id}`,
+      title: outlet.name,
+      subtitle: outlet.address,
+      lat: outlet.lat,
+      lng: outlet.lng,
+      color: outlet.color || '#10b981',
+      icon: '🏬'
+    }));
 
     (partners || []).forEach((p) => {
       if (p.location) {
@@ -311,7 +254,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
 
     return list;
-  }, [partners, filteredOrders]);
+  }, [partners, filteredOrders, outletLocations]);
 
   // Aggregate Metrics
   const metrics = useMemo(() => {
@@ -533,20 +476,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsMapOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-700/60 text-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
-                <span>Fullscreen Rider GPS Tracker</span>
-              </button>
-            </div>
           </div>
 
           <div className="h-[460px] w-full relative">
-            <Map center={[77.3180, 28.4520]} zoom={12} markers={adminMapMarkers}>
+            <Map center={[77.3100, 28.4520]} zoom={12} markers={adminMapMarkers}>
               <MapControls position="top-right" />
             </Map>
           </div>
@@ -632,14 +565,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         order={editingOrder}
         isOpen={!!editingOrder}
         onClose={() => setEditingOrder(null)}
-      />
-
-      {/* Rider Live Location Map Modal */}
-      <RiderLocationMapModal
-        isOpen={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
-        partners={partners}
-        onSimulateMovement={handleSimulateMovement}
       />
     </div>
   );

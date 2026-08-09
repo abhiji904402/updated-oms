@@ -19,7 +19,6 @@ import {
   Download
 } from 'lucide-react';
 import { InstallAndroidAppModal } from './InstallAndroidAppModal';
-import { RiderLocationMapModal } from './RiderLocationMapModal';
 
 interface SidebarProps {
   activeTab: string;
@@ -44,7 +43,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { session, orders = [], alerts = [], logout, switchRole, partners = [] } = useOMS();
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [isRiderMapOpen, setIsRiderMapOpen] = useState(false);
 
   const unreadAlertsCount = (alerts || []).filter((a) => !a.is_read).length;
 
@@ -165,18 +163,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       PWA v2.4
                     </span>
                   </button>
-
-                  {/* Live Location Map button */}
-                  <button
-                    onClick={() => {
-                      setIsRiderMapOpen(true);
-                      setIsOpenMobile(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-indigo-950/80 hover:bg-indigo-900/80 text-indigo-200 border border-indigo-700/60 font-bold text-xs transition"
-                  >
-                    <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
-                    <span>Live GPS Tracking Map</span>
-                  </button>
                 </div>
               ) : (
                 <>
@@ -229,23 +215,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Truck className="w-5 h-5" />
                     <span>Delivery Partners</span>
-                  </button>
-
-                  {/* Rider GPS Tracking Map Button in Sidebar */}
-                  <button
-                    onClick={() => {
-                      setIsRiderMapOpen(true);
-                      setIsOpenMobile(false);
-                    }}
-                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-950/80 to-teal-950/80 hover:from-emerald-900/80 hover:to-teal-900/80 text-emerald-200 border border-emerald-700/60 font-bold text-xs shadow-lg transition active:scale-95"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                      <span>Rider GPS Live Map</span>
-                    </div>
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40 font-mono">
-                      LIVE
-                    </span>
                   </button>
 
                   {/* 5. Reports */}
@@ -346,13 +315,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isOpen={isInstallModalOpen}
         onClose={() => setIsInstallModalOpen(false)}
         partnerName={session.name}
-      />
-
-      {/* Live GPS Map Modal */}
-      <RiderLocationMapModal
-        isOpen={isRiderMapOpen}
-        onClose={() => setIsRiderMapOpen(false)}
-        partners={partners}
       />
     </>
   );
