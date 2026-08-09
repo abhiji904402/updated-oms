@@ -25,12 +25,36 @@ interface RiderLocationMapModalProps {
   onSimulateMovement?: () => void;
 }
 
-// Outlet Base Locations (Faridabad / NCR Grid)
+// Outlet Base Locations (Faridabad Precise Outlets)
 const OUTLET_LOCATIONS = [
-  { name: 'Sector 31 Outlet', lat: 28.4682, lng: 77.3060, color: '#10b981' },
-  { name: 'Sector 35 Outlet', lat: 28.4520, lng: 77.3180, color: '#f59e0b' },
-  { name: 'Sector 42 Outlet', lat: 28.4350, lng: 77.3320, color: '#3b82f6' },
-  { name: 'Sector 88 Outlet', lat: 28.4120, lng: 77.3450, color: '#8b5cf6' }
+  {
+    name: 'Sector 31 Outlet',
+    address: 'Shop no. 4, Ch. Hetram Complex, near Anupam Sweets, Sector 31, Faridabad, Haryana 121003',
+    lat: 28.4682,
+    lng: 77.3060,
+    color: '#10b981'
+  },
+  {
+    name: 'Sector 35 Outlet',
+    address: 'Shop No.9, Ground Floor, Shopping Center In, Ashoka Enclave Part 3, Subash Nagar, Sector 35, Faridabad, Haryana 121003',
+    lat: 28.4875,
+    lng: 77.3082,
+    color: '#f59e0b'
+  },
+  {
+    name: 'Sector 42 Outlet',
+    address: 'B-107, Greenfield Colony, Mall Road, Sector 42, Faridabad',
+    lat: 28.4632,
+    lng: 77.3015,
+    color: '#3b82f6'
+  },
+  {
+    name: 'Sector 88 Outlet',
+    address: 'Shop 112, RPS Savana Rd, RPS City, Sector 88, Faridabad, Haryana 121002',
+    lat: 28.4118,
+    lng: 77.3458,
+    color: '#8b5cf6'
+  }
 ];
 
 // Predefined reliable map tile styles
@@ -105,6 +129,15 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
       setSelectedPartnerId(partners[0].id);
     }
   }, [partners, selectedPartnerId]);
+
+  // Automatic live GPS movement interval while tracking modal is open
+  useEffect(() => {
+    if (!isOpen || !onSimulateMovement) return;
+    const interval = setInterval(() => {
+      onSimulateMovement();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isOpen, onSimulateMovement]);
 
   // Function to resolve style specification or URL
   const getStyleSpec = (type: StyleType): string | maplibregl.StyleSpecification => {
@@ -202,9 +235,9 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
       `;
 
       const popup = new maplibregl.Popup({ offset: 25, className: 'custom-maplibre-popup' }).setHTML(`
-        <div class="p-2 text-slate-900 font-bold text-xs">
+        <div class="p-2 text-slate-900 font-bold text-xs max-w-[220px]">
           <div class="font-extrabold text-sm text-purple-900">${outlet.name}</div>
-          <div class="text-[10px] text-slate-600">Broomies Bakery Base Outlet</div>
+          <div class="text-[10px] text-slate-600 mt-0.5 leading-snug">${outlet.address}</div>
         </div>
       `);
 

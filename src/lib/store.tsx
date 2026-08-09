@@ -49,6 +49,7 @@ interface OMSContextType {
   addPartner: (partner: Omit<DeliveryPartner, 'id' | 'total_deliveries'>) => void;
   deletePartner: (id: string) => void;
   updatePartnerStatus: (id: string, status: DeliveryPartner['status']) => void;
+  updatePartnerLocation: (id: string, location: DeliveryPartnerLocation) => void;
 
   // Alerts
   alerts: Alert[];
@@ -262,28 +263,36 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => unsub();
   }, []);
 
-  // Save changes to IndexedDB (unlimited) and localStorage (quota-safe)
+  // Save changes to IndexedDB (unlimited) and localStorage (quota-safe) asynchronously
   useEffect(() => {
-    // 1. Always save full dataset to IndexedDB
-    idbSet(LOCAL_STORAGE_KEY_ORDERS, orders);
+    const timer = setTimeout(() => {
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, orders);
 
-    // 2. Save to localStorage with quota-exceeded fallback
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(orders));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded! Stripping large image payloads for localStorage fallback:', e);
       try {
-        const lightweightOrders = orders.map((o) => {
-          if (o.item_image_url && o.item_image_url.length > 300) {
-            return { ...o, item_image_url: '' };
-          }
-          return o;
-        });
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(lightweightOrders));
-      } catch (e2) {
-        console.error('Failed to write to localStorage even after image stripping:', e2);
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(orders));
+      } catch (e) {
+        console.warn('LocalStorage quota exceeded! Stripping large image payloads for localStorage fallback:', e);
+        try {
+          const lightweightOrders = orders.map((o) => {
+            const hasLargeImage = o.item_image_url && o.item_image_url.length > 300;
+            const hasLargePhoto = o.delivery_photo_url && o.delivery_photo_url.length > 300;
+            if (hasLargeImage || hasLargePhoto) {
+              return {
+                ...o,
+                item_image_url: hasLargeImage ? '' : o.item_image_url,
+                delivery_photo_url: hasLargePhoto ? '' : o.delivery_photo_url
+              };
+            }
+            return o;
+          });
+          localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(lightweightOrders));
+        } catch (e2) {
+          console.error('Failed to write to localStorage even after image stripping:', e2);
+        }
       }
-    }
+    }, 50);
+
+    return () => clearTimeout(timer);
   }, [orders]);
 
   useEffect(() => {
@@ -579,24 +588,44 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (overwrite) {
       setOrders(formattedOrders);
-      // Clear Firestore existing orders
-      getDocs(collection(db, 'orders')).then((snap) => {
-        snap.forEach((docSnap) => {
-          deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
-        });
-      }).catch(() => {});
+      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(formattedOrders));
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders);
+
+      // Clear Firestore existing orders atomically with writeBatch
+      getDocs(collection(db, 'orders')).then(async (snap) => {
+        if (!snap.empty) {
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const chunk = docs.slice(i, i + 400);
+            const batch = writeBatch(db);
+            chunk.forEach((d) => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+
+        // Persist all newly imported orders to Firestore in batches
+        for (let i = 0; i < formattedOrders.length; i += 400) {
+          const chunk = formattedOrders.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+          await batch.commit();
+        }
+      }).catch((err) => {
+        console.warn('Firestore overwrite import error:', err);
+      });
+
       showNotification(`Replaced all orders with ${formattedOrders.length} imported orders!`);
     } else {
       setOrders((prev) => [...formattedOrders, ...prev]);
+      // Persist new imported orders to Firestore
+      for (let i = 0; i < formattedOrders.length; i += 400) {
+        const chunk = formattedOrders.slice(i, i + 400);
+        const batch = writeBatch(db);
+        chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+        batch.commit().catch(() => {});
+      }
       showNotification(`Successfully imported ${formattedOrders.length} new orders!`);
     }
-
-    // Persist all imported orders to Firestore
-    formattedOrders.forEach((ord) => {
-      setDoc(doc(db, 'orders', ord.id), ord).catch((err) => {
-        console.warn('Firestore import setDoc error:', err);
-      });
-    });
 
     if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
       triggerGoogleSheetSync();
@@ -604,90 +633,98 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [orders, showNotification, sheetConfig.sheet_url, triggerGoogleSheetSync]);
 
   const updateOrder = useCallback((id: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === id) {
-          const now = new Date().toISOString();
-          const hasPaymentUpdate =
-            updates.payment_type !== undefined ||
-            updates.advance_amount !== undefined ||
-            updates.remaining_balance !== undefined ||
-            updates.due_amount !== undefined;
+    const target = orders.find((o) => o.id === id);
+    if (!target) return;
 
-          const updated: Order = {
-            ...ord,
-            ...updates,
-            updated_at: now,
-            ...(hasPaymentUpdate
-              ? {
-                  payment_changed_by: session.name || session.role,
-                  payment_changed_at: now
-                }
-              : {})
-          };
+    const now = new Date().toISOString();
+    const hasPaymentUpdate =
+      updates.payment_type !== undefined ||
+      updates.advance_amount !== undefined ||
+      updates.remaining_balance !== undefined ||
+      updates.due_amount !== undefined;
 
-          setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
-          pushToSheet(updated, 'update');
-          return updated;
-        }
-        return ord;
-      })
-    );
-  }, [session.name, session.role, pushToSheet]);
+    const updated: Order = {
+      ...target,
+      ...updates,
+      updated_at: now,
+      ...(hasPaymentUpdate
+        ? {
+            payment_changed_by: session.name || session.role,
+            payment_changed_at: now
+          }
+        : {})
+    };
+
+    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
+
+    setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
+    pushToSheet(updated, 'update');
+  }, [orders, session.name, session.role, pushToSheet]);
 
   const deleteOrder = useCallback((id: string) => {
-    setOrders((prev) => {
-      const target = prev.find((o) => o.id === id);
-      if (target) {
-        showNotification(`Order #${target.order_number} removed.`);
-        pushToSheet(target, 'delete');
-      }
-      return prev.filter((o) => o.id !== id);
-    });
+    const target = orders.find((o) => o.id === id);
+    if (target) {
+      showNotification(`Order #${target.order_number} removed.`);
+      pushToSheet(target, 'delete');
+    }
+
+    setOrders((prev) => prev.filter((o) => o.id !== id));
     deleteDoc(doc(db, 'orders', id)).catch(() => {});
     setSelectedOrderIds((prev) => prev.filter((item) => item !== id));
-  }, [showNotification, pushToSheet]);
+  }, [orders, showNotification, pushToSheet]);
 
-  const clearAllOrders = useCallback(() => {
+  const clearAllOrders = useCallback(async () => {
+    // 1. Immediately update UI state & local persistent storages
     setOrders([]);
     setSelectedOrderIds([]);
     localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, '[]');
-    getDocs(collection(db, 'orders')).then((snap) => {
-      snap.forEach((docSnap) => {
-        deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
-      });
-    }).catch(() => {});
-    showNotification('All orders cleared! Ready for fresh data.');
+    idbSet(LOCAL_STORAGE_KEY_ORDERS, []);
+
+    // 2. Perform atomic batch delete on Firestore collection
+    try {
+      const snap = await getDocs(collection(db, 'orders'));
+      if (!snap.empty) {
+        const docs = snap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const chunk = docs.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+      showNotification('🗑️ All orders permanently deleted! Ready for fresh data.');
+    } catch (err) {
+      console.error('Error clearing Firestore orders:', err);
+      showNotification('All orders cleared locally!');
+    }
   }, [showNotification]);
 
   const updateOrderStatus = useCallback((id: string, status: OrderStatus, deliveryPartner?: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === id) {
-          const now = new Date().toISOString();
-          const updates: Partial<Order> = {
-            status,
-            updated_at: now
-          };
-          if (deliveryPartner) {
-            updates.delivery_partner = deliveryPartner;
-          }
-          if (status === 'delivered' && !ord.actual_delivery_time) {
-            updates.actual_delivery_time = now;
-            updates.delivered_by = session.name || deliveryPartner || 'Rider';
-            updates.rider_delivered = true;
-          }
+    const target = orders.find((o) => o.id === id);
+    if (!target) return;
 
-          const updated = { ...ord, ...updates };
-          setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
-          showNotification(`Order #${ord.order_number} status changed to ${status.toUpperCase()}`);
-          pushToSheet(updated, 'update');
-          return updated;
-        }
-        return ord;
-      })
-    );
-  }, [session.name, showNotification, pushToSheet]);
+    const now = new Date().toISOString();
+    const updates: Partial<Order> = {
+      status,
+      updated_at: now
+    };
+    if (deliveryPartner) {
+      updates.delivery_partner = deliveryPartner;
+    }
+    if (status === 'delivered' && !target.actual_delivery_time) {
+      updates.actual_delivery_time = now;
+      updates.delivered_by = session.name || deliveryPartner || 'Rider';
+      updates.rider_delivered = true;
+    }
+
+    const updated: Order = { ...target, ...updates };
+
+    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
+
+    setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
+    showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
+    pushToSheet(updated, 'update');
+  }, [orders, session.name, showNotification, pushToSheet]);
 
   const markDelivered = useCallback((id: string, photoUrl?: string, otpInput?: string) => {
     const targetOrder = orders.find((o) => o.id === id);
@@ -864,6 +901,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       importOrders,
       updateOrder,
       deleteOrder,
+      clearAllOrders,
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,

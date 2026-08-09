@@ -7,6 +7,8 @@ import { printThermalReceipts } from '../lib/thermalPrint';
 import { sortOrdersByDeliveryPriority } from '../lib/timeUtils';
 import { matchesOutlet, isOrderForToday } from '../lib/outletUtils';
 import { Order, OrderStatus } from '../types';
+import { Map, MapControls, MapMarkerData } from '../components/ui/map';
+import { Card } from '../components/ui/card';
 import {
   DollarSign,
   ShoppingBag,
@@ -25,7 +27,9 @@ import {
   Clock3,
   Key,
   Radio,
-  Trash2
+  Trash2,
+  MapPin,
+  Map as MapIcon
 } from 'lucide-react';
 import { RiderLocationMapModal } from '../components/RiderLocationMapModal';
 
@@ -65,7 +69,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const safeOrders = orders || [];
 
-  const [activeBoardView, setActiveBoardView] = useState<'kanban' | 'list'>('list');
+  const [activeBoardView, setActiveBoardView] = useState<'kanban' | 'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
@@ -87,6 +91,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
     });
   };
+
+  // Automatic live movement pulse on map view
+  React.useEffect(() => {
+    if (activeBoardView !== 'map' && !isMapOpen) return;
+    const interval = setInterval(() => {
+      handleSimulateMovement();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeBoardView, isMapOpen]);
 
   // Dates
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -227,6 +240,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return sortOrdersByDeliveryPriority(raw);
   }, [safeOrders, searchQuery, selectedOutletFilter, selectedStatusFilter, activeTab, todayStr, tomorrowStr]);
 
+  // Map markers computation for Admin Map View
+  const adminMapMarkers = useMemo(() => {
+    const list: MapMarkerData[] = [
+      {
+        id: 'outlet-31',
+        title: 'Sector 31 Outlet',
+        subtitle: 'Shop no. 4, Ch. Hetram Complex, near Anupam Sweets, Sector 31, Faridabad',
+        lat: 28.4682,
+        lng: 77.3060,
+        color: '#10b981',
+        icon: '🏬'
+      },
+      {
+        id: 'outlet-35',
+        title: 'Sector 35 Outlet',
+        subtitle: 'Shop No.9, Ground Floor, Ashoka Enclave Part 3, Subash Nagar, Sector 35, Faridabad',
+        lat: 28.4875,
+        lng: 77.3082,
+        color: '#f59e0b',
+        icon: '🏬'
+      },
+      {
+        id: 'outlet-42',
+        title: 'Sector 42 Outlet',
+        subtitle: 'B-107, Greenfield Colony, Mall Road, Sector 42, Faridabad',
+        lat: 28.4632,
+        lng: 77.3015,
+        color: '#3b82f6',
+        icon: '🏬'
+      },
+      {
+        id: 'outlet-88',
+        title: 'Sector 88 Outlet',
+        subtitle: 'Shop 112, RPS Savana Rd, RPS City, Sector 88, Faridabad',
+        lat: 28.4118,
+        lng: 77.3458,
+        color: '#8b5cf6',
+        icon: '🏬'
+      }
+    ];
+
+    (partners || []).forEach((p) => {
+      if (p.location) {
+        list.push({
+          id: `rider-${p.id}`,
+          title: `${p.name} (Rider)`,
+          subtitle: `${p.vehicle || 'Bike'} • ${p.status === 'on_delivery' ? 'On Trip' : 'Available'} • ${p.location.speed || 0} km/h`,
+          lat: p.location.lat,
+          lng: p.location.lng,
+          color: p.status === 'on_delivery' ? '#f59e0b' : '#10b981',
+          icon: '🛵'
+        });
+      }
+    });
+
+    filteredOrders.slice(0, 30).forEach((o) => {
+      const offsetLat = 28.4520 + ((o.order_number * 17) % 60) * 0.001 - 0.03;
+      const offsetLng = 77.3180 + ((o.order_number * 31) % 60) * 0.001 - 0.03;
+
+      list.push({
+        id: `ord-${o.id}`,
+        title: `Order #${o.order_number}`,
+        subtitle: `${o.customer_name} • ₹${o.total_amount} • Status: ${o.status.toUpperCase()}`,
+        lat: offsetLat,
+        lng: offsetLng,
+        color: o.status === 'delivered' ? '#10b981' : o.status === 'out_for_delivery' ? '#3b82f6' : '#a855f7',
+        icon: '🎂'
+      });
+    });
+
+    return list;
+  }, [partners, filteredOrders]);
+
   // Aggregate Metrics
   const metrics = useMemo(() => {
     const totalRevenue = filteredOrders.reduce((sum, o) => sum + o.total_amount, 0);
@@ -273,27 +359,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          {/* Kanban vs List toggle */}
+          {/* Kanban vs List vs Map toggle */}
           <div className="bg-[#0f1220] border border-indigo-950 p-1 rounded-xl flex items-center">
             <button
               onClick={() => setActiveBoardView('kanban')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                 activeBoardView === 'kanban'
                   ? 'bg-purple-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Kanban Board
+              Kanban
             </button>
             <button
               onClick={() => setActiveBoardView('list')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                 activeBoardView === 'list'
                   ? 'bg-purple-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               List View
+            </button>
+            <button
+              onClick={() => setActiveBoardView('map')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                activeBoardView === 'map'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Map View</span>
             </button>
           </div>
 
@@ -416,8 +513,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Main Board View: Kanban or List */}
-      {activeBoardView === 'kanban' ? (
+      {/* Main Board View: Map, Kanban or List */}
+      {activeBoardView === 'map' ? (
+        <Card className="h-[540px] p-0 overflow-hidden border border-indigo-900/80 bg-[#0c0f24]">
+          <div className="p-4 bg-[#090c1b] border-b border-indigo-950 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-purple-600/20 border border-purple-500/40 rounded-xl text-purple-300">
+                <MapPin className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  Admin Spatial Live Map View
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    MapLibre GPS Active
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Showing Outlets, Riders, and {filteredOrders.length} Tab Orders on Map
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsMapOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-700/60 text-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
+                <span>Fullscreen Rider GPS Tracker</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="h-[460px] w-full relative">
+            <Map center={[77.3180, 28.4520]} zoom={12} markers={adminMapMarkers}>
+              <MapControls position="top-right" />
+            </Map>
+          </div>
+        </Card>
+      ) : activeBoardView === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {columns.map((col) => {
             const columnOrders = filteredOrders.filter((o) => o.status === col.status);

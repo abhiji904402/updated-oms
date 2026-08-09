@@ -528,12 +528,15 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
 };
 
 export const GoogleSheetsPage: React.FC = () => {
-  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders } = useOMS();
+  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, clearAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
   const [urlInput, setUrlInput] = useState(sheetConfig.sheet_url);
   const [copied, setCopied] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -541,6 +544,16 @@ export const GoogleSheetsPage: React.FC = () => {
     setTimeout(() => {
       setIsSyncing(false);
     }, 1200);
+  };
+
+  const handleClearAllOrdersRequest = () => {
+    if (orders.length === 0) return;
+    setIsClearConfirmOpen(true);
+  };
+
+  const handleConfirmClearAll = () => {
+    clearAllOrders();
+    setIsClearConfirmOpen(false);
   };
 
   const handleCopyCode = () => {
@@ -552,7 +565,8 @@ export const GoogleSheetsPage: React.FC = () => {
   const handleSaveUrl = (e: React.FormEvent) => {
     e.preventDefault();
     updateSheetConfig({ sheet_url: urlInput, auto_sync: true, is_active: true });
-    alert('⚡ Web App URL saved & Auto-Sync activated!');
+    setSaveSuccessMsg(true);
+    setTimeout(() => setSaveSuccessMsg(false), 3000);
   };
 
   const handleToggleAutoSync = () => {
@@ -566,8 +580,13 @@ export const GoogleSheetsPage: React.FC = () => {
   };
 
   const handleDeleteClick = (order: Order) => {
-    if (window.confirm(`Are you sure you want to delete Order #${order.order_number}? This will also delete it live from Google Sheets.`)) {
-      deleteOrder(order.id);
+    setOrderToDelete(order);
+  };
+
+  const handleConfirmDeleteSingle = () => {
+    if (orderToDelete) {
+      deleteOrder(orderToDelete.id);
+      setOrderToDelete(null);
     }
   };
 
@@ -618,14 +637,27 @@ export const GoogleSheetsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleManualSync}
-          disabled={isSyncing}
-          className="px-4 py-2.5 rounded-xl bg-[#0e1120] hover:bg-indigo-950 border border-slate-700/80 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
-        >
-          <RefreshCw className={`w-4 h-4 text-slate-300 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{isSyncing ? 'Syncing...' : 'Manual Sync'}</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          {orders.length > 0 && (
+            <button
+              onClick={handleClearAllOrdersRequest}
+              className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
+              title="Clear all order data to replace with new data"
+            >
+              <Trash2 className="w-4 h-4 text-rose-400" />
+              <span>Clear All Data ({orders.length})</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="px-4 py-2.5 rounded-xl bg-[#0e1120] hover:bg-indigo-950 border border-slate-700/80 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
+          >
+            <RefreshCw className={`w-4 h-4 text-slate-300 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Syncing...' : 'Manual Sync'}</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. Sync Active Banner & Controls */}
@@ -736,9 +768,20 @@ export const GoogleSheetsPage: React.FC = () => {
           <h2 className="text-base font-extrabold text-white">
             All Orders ({sortedOrders.length})
           </h2>
-          <span className="text-xs text-slate-400 font-medium">
-            Newest first • Click to edit
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+              Newest first • Click to edit
+            </span>
+            {orders.length > 0 && (
+              <button
+                onClick={handleClearAllOrdersRequest}
+                className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Clear All ({orders.length})</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-indigo-950/80">
@@ -830,6 +873,83 @@ export const GoogleSheetsPage: React.FC = () => {
             setEditingOrder(null);
           }}
         />
+      )}
+
+      {/* Clear All Orders Modal */}
+      {isClearConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#101426] border border-rose-900/60 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl">
+                <Trash2 className="w-6 h-6 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Delete All Orders?</h3>
+                <p className="text-xs text-rose-300/80">Permanent action • Cannot be undone</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Are you sure you want to permanently delete all <strong className="text-rose-400 font-extrabold">{orders.length} orders</strong> from the live database and system?
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearConfirmOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAll}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-900/40 flex items-center gap-2 transition"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Clear All Orders ({orders.length})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Order Confirmation Modal */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#101426] border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl">
+                <Trash2 className="w-6 h-6 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Delete Order #{orderToDelete.order_number}?</h3>
+                <p className="text-xs text-slate-400">{orderToDelete.customer_name} • ₹{orderToDelete.total_amount}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-300">
+              This will remove Order #{orderToDelete.order_number} from the local system and sync live deletion with Google Sheets.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToDelete(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSingle}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition"
+              >
+                Delete Order
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
