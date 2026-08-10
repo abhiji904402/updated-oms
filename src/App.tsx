@@ -44,7 +44,7 @@ function OMSAppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-950 via-black to-zinc-950 text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white">
+    <div className="min-h-screen minecraft-stone text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white">
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar Navigation */}
         <Sidebar
