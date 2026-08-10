@@ -68,26 +68,36 @@ function OMSAppContent() {
             onOpenSheetModal={() => setIsSheetModalOpen(true)}
           />
 
-          {/* Page Routing based on activeTab */}
-          <main className="flex-1 pb-12">
-            {(activeTab === 'dashboard' || activeTab === 'admin') && (
+          {/* Instant Pre-loaded Page Containers for 0ms Page Switch */}
+          <main className="flex-1 pb-12 relative">
+            <div className={(activeTab === 'dashboard' || activeTab === 'admin') ? 'block' : 'hidden'}>
               <AdminDashboard
                 onOpenAddModal={() => setIsAddModalOpen(true)}
                 onOpenThermalModal={() => setIsThermalModalOpen(true)}
                 onOpenDeliveryModal={handleOpenDeliveryModal}
                 onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
               />
-            )}
+            </div>
 
-            {activeTab === 'outlet' && <OutletDashboard />}
+            <div className={activeTab === 'outlet' ? 'block' : 'hidden'}>
+              <OutletDashboard />
+            </div>
 
-            {activeTab === 'delivery' && <DeliveryDashboard />}
+            <div className={activeTab === 'delivery' ? 'block' : 'hidden'}>
+              <DeliveryDashboard />
+            </div>
 
-            {activeTab === 'analytics' && <AnalyticsPage />}
+            <div className={activeTab === 'analytics' ? 'block' : 'hidden'}>
+              <AnalyticsPage />
+            </div>
 
-            {activeTab === 'alerts' && <AlertsPage />}
+            <div className={activeTab === 'alerts' ? 'block' : 'hidden'}>
+              <AlertsPage />
+            </div>
 
-            {activeTab === 'sheets' && <GoogleSheetsPage />}
+            <div className={activeTab === 'sheets' ? 'block' : 'hidden'}>
+              <GoogleSheetsPage />
+            </div>
           </main>
         </div>
       </div>

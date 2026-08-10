@@ -94,44 +94,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return o.status === 'delivered';
   };
 
-  // Compute Badge Counts for all 8 Tabs
+  // Compute Badge Counts for all 8 Tabs in a single linear pass
   const counts = useMemo(() => {
+    let today = 0, tomorrow = 0, future = 0, delivered_history = 0, pending_payment = 0, pending_payment_amount = 0, cancelled = 0, missed = 0, on_hold = 0;
+
+    safeOrders.forEach((o) => {
+      const isDel = isDeliveredMarked(o);
+      const isCanc = o.status === 'cancelled';
+      const isHold = o.status === 'on_hold';
+      const isPayPending = isPaymentPending(o);
+
+      if (isDel) delivered_history++;
+      if (isCanc) cancelled++;
+      if (isHold) on_hold++;
+
+      if (isPayPending && !isCanc) {
+        pending_payment++;
+        pending_payment_amount += (o.remaining_balance || 0);
+      }
+
+      if (o.status === 'missed' || (o.delivery_date < todayStr && !isDel && !isCanc)) {
+        missed++;
+      }
+
+      if (!isCanc && !isHold && !isDel && o.status !== 'missed') {
+        const delDate = o.delivery_date || o.order_date;
+        if (delDate === todayStr) {
+          today++;
+        } else if (delDate === tomorrowStr) {
+          tomorrow++;
+        } else if (delDate > tomorrowStr) {
+          future++;
+        }
+      }
+    });
+
     return {
-      today: safeOrders.filter(
-        (o) =>
-          (o.delivery_date === todayStr || o.order_date === todayStr) &&
-          o.status !== 'cancelled' &&
-          o.status !== 'on_hold' &&
-          !isDeliveredMarked(o) &&
-          o.status !== 'missed' &&
-          o.delivery_date >= todayStr
-      ).length,
-      tomorrow: safeOrders.filter(
-        (o) =>
-          (o.delivery_date === tomorrowStr || o.order_date === tomorrowStr) &&
-          o.status !== 'cancelled' &&
-          o.status !== 'on_hold' &&
-          !isDeliveredMarked(o)
-      ).length,
-      future: safeOrders.filter(
-        (o) =>
-          (o.delivery_date > tomorrowStr || o.order_date > tomorrowStr) &&
-          o.status !== 'cancelled' &&
-          o.status !== 'on_hold' &&
-          !isDeliveredMarked(o)
-      ).length,
-      delivered_history: safeOrders.filter((o) => isDeliveredMarked(o)).length,
-      pending_payment: safeOrders.filter((o) => isPaymentPending(o) && o.status !== 'cancelled').length,
-      pending_payment_amount: safeOrders
-        .filter((o) => isPaymentPending(o) && o.status !== 'cancelled')
-        .reduce((sum, o) => sum + (o.remaining_balance || 0), 0),
-      cancelled: safeOrders.filter((o) => o.status === 'cancelled').length,
-      missed: safeOrders.filter(
-        (o) =>
-          o.status === 'missed' ||
-          (o.delivery_date < todayStr && !isDeliveredMarked(o) && o.status !== 'cancelled')
-      ).length,
-      on_hold: safeOrders.filter((o) => o.status === 'on_hold').length
+      today,
+      tomorrow,
+      future,
+      delivered_history,
+      pending_payment,
+      pending_payment_amount,
+      cancelled,
+      missed,
+      on_hold
     };
   }, [safeOrders, todayStr, tomorrowStr]);
 

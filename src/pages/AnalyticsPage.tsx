@@ -185,28 +185,39 @@ export const AnalyticsPage: React.FC = () => {
     ].filter(d => d.value > 0);
   }, [filteredOrders]);
 
-  // 4. Outlet-wise Summary Table Data
+  // 4. Outlet-wise Summary Table Data (Optimized O(N) single-pass)
   const outletSummaryRows = useMemo(() => {
-    return outletBreakdownData.outlets.map((outletName) => {
-      const outletOrders = filteredOrders.filter((o) => o.outlet === outletName);
-      const total = outletOrders.length;
-      const del = outletOrders.filter((o) => o.status === 'delivered').length;
-      const pend = outletOrders.filter((o) => o.status === 'pending' || o.status === 'processing').length;
-      const canc = outletOrders.filter((o) => o.status === 'cancelled').length;
-      const due = outletOrders.filter((o) => (o.remaining_balance || 0) > 0).length;
-      const rev = outletOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-
-      return {
-        outlet: outletName,
-        total,
-        del,
-        pend,
-        canc,
-        due,
-        rev
-      };
+    const map: Record<string, { total: number; del: number; pend: number; canc: number; due: number; rev: number }> = {};
+    
+    outletBreakdownData.outlets.forEach((outletName) => {
+      map[outletName] = { total: 0, del: 0, pend: 0, canc: 0, due: 0, rev: 0 };
     });
-  }, [filteredOrders, outletBreakdownData]);
+
+    filteredOrders.forEach((o) => {
+      const outletName = o.outlet || 'Sector 31';
+      if (!map[outletName]) {
+        map[outletName] = { total: 0, del: 0, pend: 0, canc: 0, due: 0, rev: 0 };
+      }
+      const item = map[outletName];
+      item.total += 1;
+      item.rev += o.total_amount || 0;
+      if (o.status === 'delivered') {
+        item.del += 1;
+      } else if (o.status === 'cancelled') {
+        item.canc += 1;
+      } else {
+        item.pend += 1;
+      }
+      if ((o.remaining_balance || 0) > 0) {
+        item.due += 1;
+      }
+    });
+
+    return outletBreakdownData.outlets.map((outletName) => ({
+      outlet: outletName,
+      ...map[outletName]
+    }));
+  }, [filteredOrders, outletBreakdownData.outlets]);
 
   // Export handlers
   const handleExportExcel = () => {
