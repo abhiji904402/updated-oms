@@ -47,8 +47,15 @@ function OMSAppContent() {
   }
 
   return (
-    <div className="min-h-screen minecraft-stone text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white">
-      <div className="flex-1 flex overflow-hidden">
+    <div className="min-h-screen text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white relative z-10">
+      {/* Starry Animated Background */}
+      <div className="stars-bg-container" aria-hidden="true">
+        <div id="stars"></div>
+        <div id="stars2"></div>
+        <div id="stars3"></div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden relative z-10">
         {/* Sidebar Navigation */}
         <Sidebar
           activeTab={activeTab}
