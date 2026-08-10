@@ -317,3 +317,17 @@
   transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
+/* Smooth Black Gradient Theme for Pages */
+body {
+  background-color: #000000;
+  background-image: 
+    radial-gradient(at 50% 0%, #18181b 0px, transparent 75%),
+    radial-gradient(at 0% 50%, #09090b 0px, transparent 50%),
+    radial-gradient(at 100% 100%, #050508 0px, transparent 50%),
+    linear-gradient(to bottom, #09090b, #000000, #09090b);
+  background-attachment: fixed;
+  color: #f8fafc;
+  min-height: 100vh;
+}
+
+

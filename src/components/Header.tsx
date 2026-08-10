@@ -90,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, [orders, session, selectedOutletFilter, selectedStatusFilter, searchQuery, dateRangeFilter]);
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-900/95 border-b border-slate-800/80 backdrop-blur-md px-4 py-3">
+    <header className="sticky top-0 z-30 bg-zinc-950/90 border-b border-zinc-800/80 backdrop-blur-md px-4 py-3">
       {/* Toast Banner for Real-time Notifications */}
       {recentNotification && (
         <div className="mb-2 p-2 px-3 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs flex items-center justify-between animate-fade-in shadow-lg">
