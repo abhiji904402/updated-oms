@@ -92,7 +92,7 @@ export const ITEM_PRESETS: ItemPreset[] = [
 ];
 
 export const INITIAL_SHEET_CONFIG: SheetConfig = {
-  sheet_url: 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit',
+  sheet_url: '',
   is_active: true,
   last_sync: new Date().toISOString(),
   last_synced_at: new Date().toISOString(),

@@ -231,7 +231,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY_SHEET);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed.sheet_url && parsed.sheet_url.includes('docs.google.com/spreadsheets')) {
+          parsed.sheet_url = '';
+        }
+        return parsed;
       } catch (e) {
         console.error('Failed to parse saved sheet config', e);
       }
@@ -382,7 +386,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 24/7 Continuous Background Auto-Sync Interval for Google Sheets & Cloud Sync
   useEffect(() => {
-    if (!sheetConfig.auto_sync || !sheetConfig.sheet_url || !sheetConfig.sheet_url.startsWith('http')) {
+    const targetUrl = (sheetConfig.sheet_url || '').trim();
+    if (!sheetConfig.auto_sync || !targetUrl || !targetUrl.startsWith('http') || targetUrl.includes('docs.google.com/spreadsheets')) {
       return;
     }
 
@@ -396,7 +401,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const CHUNK_SIZE = 35;
         for (let i = 0; i < sanitizedOrders.length; i += CHUNK_SIZE) {
           const chunk = sanitizedOrders.slice(i, i + CHUNK_SIZE);
-          fetch(sheetConfig.sheet_url, {
+          fetch(targetUrl, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
@@ -581,24 +586,31 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Fast, non-blocking pushToSheet function for Google Sheet webhook
   const pushToSheet = useCallback((order: Order, action: 'create' | 'update' | 'delete') => {
     if (!sheetConfig.auto_sync) return;
+    const targetUrl = (sheetConfig.sheet_url || '').trim();
+    if (!targetUrl || !targetUrl.startsWith('http') || targetUrl.includes('docs.google.com/spreadsheets')) return;
     
     // Log sync immediately for instant UI responsiveness
     logSync(order.order_number, action, true);
 
-    if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
-      fetch(sheetConfig.sheet_url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action, order: sanitizeOrderForSync(order) })
-      }).catch((err) => console.warn('Push to sheet error:', err));
-    }
+    fetch(targetUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, order: sanitizeOrderForSync(order) })
+    }).catch((err) => console.warn('Push to sheet error:', err));
   }, [sheetConfig.auto_sync, sheetConfig.sheet_url, logSync]);
 
   // Fast Webhook / API sync function - sends ALL orders starting from order #1 ascending
   const triggerGoogleSheetSync = useCallback(async () => {
-    if (!sheetConfig.sheet_url || !sheetConfig.sheet_url.startsWith('http')) {
-      showNotification('⚠️ Please enter a valid Google Sheet Webhook URL first in Settings');
+    const targetUrl = (sheetConfig.sheet_url || '').trim();
+
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+      showNotification('⚠️ Please enter a Google Apps Script Webhook URL first in Settings');
+      return;
+    }
+
+    if (targetUrl.includes('docs.google.com/spreadsheets')) {
+      showNotification('⚠️ Google Sheet document URL detected! Please paste the Apps Script Web App URL ending with /exec');
       return;
     }
 
@@ -622,7 +634,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const CHUNK_SIZE = 35;
       for (let i = 0; i < sanitizedOrders.length; i += CHUNK_SIZE) {
         const chunk = sanitizedOrders.slice(i, i + CHUNK_SIZE);
-        await fetch(sheetConfig.sheet_url, {
+        await fetch(targetUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
@@ -633,8 +645,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       logSync(sanitizedOrders.length, 'manual_sync', true);
       showNotification(`✅ Successfully synced all ${sanitizedOrders.length} orders (#${firstNum}–#${lastNum}) with Google Sheets!`);
     } catch (err) {
-      console.error('Sheet sync error:', err);
-      showNotification('⚠️ Sync error. Please verify Google Sheet Webhook URL.');
+      console.warn('Sheet sync warning:', err);
+      showNotification('⚠️ Network or Webhook connection check required.');
     }
   }, [orders, sheetConfig.sheet_url, logSync, showNotification]);
 

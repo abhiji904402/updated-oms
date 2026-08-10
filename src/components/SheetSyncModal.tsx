@@ -176,7 +176,12 @@ export const SheetSyncModal: React.FC<SheetSyncModalProps> = ({ isOpen, onClose 
   const [showScriptGuide, setShowScriptGuide] = useState(true);
 
   const handleSave = () => {
-    updateSheetConfig({ sheet_url: sheetUrl, auto_sync: autoSync });
+    const cleanUrl = (sheetUrl || '').trim();
+    if (cleanUrl.includes('docs.google.com/spreadsheets')) {
+      alert('⚠️ Note: You entered a Google Sheet document URL (docs.google.com)!\n\nTo enable auto-sync, you must paste the Web App URL generated from Google Apps Script (Step 1 -> Extensions -> Apps Script -> Deploy as Web App).\n\nExample Web App URL: https://script.google.com/macros/s/AKfycb.../exec');
+      return;
+    }
+    updateSheetConfig({ sheet_url: cleanUrl, auto_sync: autoSync });
   };
 
   const handleManualSync = async () => {

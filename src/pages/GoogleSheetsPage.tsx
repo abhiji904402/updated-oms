@@ -589,7 +589,12 @@ export const GoogleSheetsPage: React.FC = () => {
 
   const handleSaveUrl = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSheetConfig({ sheet_url: urlInput, auto_sync: true, is_active: true });
+    const cleanUrl = (urlInput || '').trim();
+    if (cleanUrl.includes('docs.google.com/spreadsheets')) {
+      alert('⚠️ Note: You entered a Google Sheet document URL (docs.google.com)!\n\nTo enable auto-sync, you must paste the Web App URL generated from Google Apps Script (Step 1 -> Extensions -> Apps Script -> Deploy as Web App).\n\nExample Web App URL: https://script.google.com/macros/s/AKfycb.../exec');
+      return;
+    }
+    updateSheetConfig({ sheet_url: cleanUrl, auto_sync: true, is_active: true });
     setSaveSuccessMsg(true);
     setTimeout(() => setSaveSuccessMsg(false), 3000);
   };
