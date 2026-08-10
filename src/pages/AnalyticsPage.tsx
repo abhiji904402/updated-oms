@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { getDeliveryTimeInfo, formatTo12Hour } from '../lib/timeUtils';
 
-export const AnalyticsPage: React.FC = () => {
+export const AnalyticsPage = React.memo(() => {
   const { orders = [] } = useOMS();
   const safeOrders = orders || [];
 
@@ -872,4 +872,4 @@ export const AnalyticsPage: React.FC = () => {
       </div>
     </div>
   );
-};
+});

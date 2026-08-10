@@ -23,7 +23,7 @@ interface HeaderProps {
   onOpenSheetModal?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export const Header = React.memo<HeaderProps>(({
   onToggleMobileMenu,
   onOpenAddModal,
   onOpenPasswordModal,
@@ -256,4 +256,4 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
     </header>
   );
-};
+});

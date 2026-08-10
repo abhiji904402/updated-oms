@@ -49,7 +49,7 @@ export type DashboardTab =
   | 'missed'
   | 'on_hold';
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+export const AdminDashboard = React.memo<AdminDashboardProps>(({
   onOpenAddModal,
   onOpenThermalModal,
   onOpenDeliveryModal,
@@ -70,6 +70,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const [activeBoardView, setActiveBoardView] = useState<'kanban' | 'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
 
@@ -245,8 +246,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return sortOrdersByDeliveryPriority(raw);
   }, [safeOrders, searchQuery, selectedOutletFilter, selectedStatusFilter, activeTab, todayStr, tomorrowStr]);
 
+  // Reset pagination on filter or tab change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, selectedOutletFilter, selectedStatusFilter, activeBoardView]);
+
+  const PAGE_SIZE = 30;
+  const totalPages = useMemo(() => Math.ceil(filteredOrders.length / PAGE_SIZE) || 1, [filteredOrders.length]);
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredOrders.slice(start, start + PAGE_SIZE);
+  }, [filteredOrders, currentPage]);
+
   // Map markers computation for Admin Map View
   const adminMapMarkers = useMemo(() => {
+    if (activeBoardView !== 'map') return [];
     const list: MapMarkerData[] = (outletLocations || []).map((outlet) => ({
       id: `outlet-${outlet.id}`,
       title: outlet.name,
@@ -287,7 +301,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
 
     return list;
-  }, [partners, filteredOrders, outletLocations]);
+  }, [activeBoardView, partners, filteredOrders, outletLocations]);
 
   // Aggregate Metrics
   const metrics = useMemo(() => {
@@ -521,6 +535,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {columns.map((col) => {
             const columnOrders = filteredOrders.filter((o) => o.status === col.status);
+            const displayedColumnOrders = columnOrders.slice(0, 25);
 
             return (
               <div key={col.status} className="space-y-3">
@@ -543,15 +558,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       No orders in {col.label.toLowerCase()}
                     </div>
                   ) : (
-                    columnOrders.map((order) => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        onOpenDeliveryModal={onOpenDeliveryModal}
-                        onViewOrder={setViewingOrder}
-                        onEditOrder={setEditingOrder}
-                      />
-                    ))
+                    <>
+                      {displayedColumnOrders.map((order) => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          onOpenDeliveryModal={onOpenDeliveryModal}
+                          onViewOrder={setViewingOrder}
+                          onEditOrder={setEditingOrder}
+                        />
+                      ))}
+                      {columnOrders.length > 25 && (
+                        <div className="p-3 text-center bg-indigo-950/40 border border-indigo-900/50 rounded-xl text-xs text-purple-300 font-medium">
+                          Showing top 25 of {columnOrders.length} orders in {col.label}.
+                          <button
+                            onClick={() => setActiveBoardView('list')}
+                            className="underline font-bold text-white ml-1.5 hover:text-purple-200"
+                          >
+                            Switch to List View to see all paginated orders
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -559,24 +587,115 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           })}
         </div>
       ) : (
-        /* List View */
-        <div className="space-y-3">
+        /* List View with Fast Pagination */
+        <div className="space-y-4">
           {filteredOrders.length === 0 ? (
             <div className="p-12 text-center border border-dashed border-indigo-950 rounded-2xl text-slate-500 text-sm">
               No matching orders found under this tab. Try selecting another tab or clearing search.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onOpenDeliveryModal={onOpenDeliveryModal}
-                  onViewOrder={setViewingOrder}
-                  onEditOrder={setEditingOrder}
-                />
-              ))}
-            </div>
+            <>
+              {/* Pagination Top Bar */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#0b0e1b] border border-indigo-950/80 rounded-xl text-xs text-slate-300">
+                <div>
+                  Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
+                  <strong className="text-white">
+                    {Math.min(currentPage * PAGE_SIZE, filteredOrders.length)}
+                  </strong>{' '}
+                  of <strong className="text-purple-400">{filteredOrders.length}</strong> orders
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(1)}
+                      className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      First
+                    </button>
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      Prev
+                    </button>
+                    <span className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-lg text-purple-200 font-extrabold">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      Next
+                    </button>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(totalPages)}
+                      className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      Last
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Paginated Orders Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pagedOrders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    onOpenDeliveryModal={onOpenDeliveryModal}
+                    onViewOrder={setViewingOrder}
+                    onEditOrder={setEditingOrder}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination Bottom Bar */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#0b0e1b] border border-indigo-950/80 rounded-xl text-xs text-slate-300">
+                  <div>
+                    Page <strong className="text-white">{currentPage}</strong> of{' '}
+                    <strong className="text-white">{totalPages}</strong>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(1)}
+                      className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      First
+                    </button>
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      Next
+                    </button>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(totalPages)}
+                      className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+                    >
+                      Last
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -601,4 +720,4 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       />
     </div>
   );
-};
+});

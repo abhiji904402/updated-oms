@@ -274,11 +274,33 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return clean as Order;
   };
 
+  // Keep a ref of orders for non-reactive access inside intervals
+  const ordersRef = React.useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  // Fast offline hydration from IndexedDB on startup
+  useEffect(() => {
+    idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((idbOrders) => {
+      if (idbOrders && Array.isArray(idbOrders) && idbOrders.length > 0) {
+        setOrders((current) => {
+          if (!current || current.length < idbOrders.length) {
+            return idbOrders;
+          }
+          return current;
+        });
+      }
+    }).catch(() => {});
+  }, []);
+
   // 1. Real-time Firestore Sync for Orders
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
       (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return;
+
         const list: Order[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ ...docSnap.data(), id: docSnap.id } as Order);
@@ -286,22 +308,39 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (list.length > 0) {
           list.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
-          setOrders(list);
+          setOrders((prev) => {
+            if (prev.length === list.length) {
+              const matches = prev.every(
+                (p, idx) =>
+                  p.id === list[idx]?.id &&
+                  p.updated_at === list[idx]?.updated_at &&
+                  p.status === list[idx]?.status &&
+                  p.delivery_confirmation_pending === list[idx]?.delivery_confirmation_pending
+              );
+              if (matches) return prev;
+            }
+            return list;
+          });
           try {
             localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(list));
             idbSet(LOCAL_STORAGE_KEY_ORDERS, list);
           } catch (e) {}
         } else if (!snapshot.metadata.fromCache) {
-          // If Firestore collection is empty, preserve local orders and seed them to Firestore
-          setOrders((currentLocal) => {
-            if (currentLocal && currentLocal.length > 0) {
-              currentLocal.forEach((ord) => {
-                const clean = sanitizeOrderForFirestore(ord);
-                setDoc(doc(db, 'orders', clean.id), clean).catch(() => {});
-              });
-            }
-            return currentLocal;
-          });
+          const seeded = localStorage.getItem('orders_firestore_seeded_v2');
+          if (!seeded) {
+            localStorage.setItem('orders_firestore_seeded_v2', 'true');
+            setOrders((currentLocal) => {
+              if (currentLocal && currentLocal.length > 0) {
+                const batch = writeBatch(db);
+                currentLocal.forEach((ord) => {
+                  const clean = sanitizeOrderForFirestore(ord);
+                  batch.set(doc(db, 'orders', clean.id), clean);
+                });
+                batch.commit().catch((err) => console.warn('Batch seed failed:', err));
+              }
+              return currentLocal;
+            });
+          }
         }
       },
       (err) => {
@@ -316,25 +355,31 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsub = onSnapshot(
       collection(db, 'delivery_partners'),
       (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return;
+
         const list: DeliveryPartner[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ ...docSnap.data(), id: docSnap.id } as DeliveryPartner);
         });
 
         if (list.length > 0) {
-          setPartners(list);
+          setPartners((prev) => {
+            if (prev.length === list.length) {
+              const matches = prev.every((p, idx) => p.id === list[idx]?.id && p.status === list[idx]?.status);
+              if (matches) return prev;
+            }
+            return list;
+          });
         } else if (!snapshot.metadata.fromCache) {
-          const seeded = localStorage.getItem('delivery_partners_seeded');
+          const seeded = localStorage.getItem('delivery_partners_seeded_v2');
           if (!seeded) {
-            localStorage.setItem('delivery_partners_seeded', 'true');
+            localStorage.setItem('delivery_partners_seeded_v2', 'true');
+            const batch = writeBatch(db);
             INITIAL_DELIVERY_PARTNERS.forEach((p) => {
-              setDoc(doc(db, 'delivery_partners', p.id), p).catch(() => {});
+              batch.set(doc(db, 'delivery_partners', p.id), p);
             });
-          } else {
-            setPartners([]);
+            batch.commit().catch((err) => console.warn('Batch partners seed failed:', err));
           }
-        } else {
-          setPartners([]);
         }
       },
       (err) => {
@@ -393,8 +438,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Background sync timer every 45 seconds to keep Google Sheets & Cloud in 24/7 perfect sync
     const interval = setInterval(() => {
-      if (orders && orders.length > 0) {
-        const sortedOrders = [...orders].sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
+      const currentOrders = ordersRef.current;
+      if (currentOrders && currentOrders.length > 0) {
+        const sortedOrders = [...currentOrders].sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
         const sanitizedOrders = sortedOrders.map(sanitizeOrderForSync);
         
         // Push batch sync silently in background
@@ -409,17 +455,23 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }).catch(() => {});
         }
 
-        setSheetConfig((prev) => ({
-          ...prev,
-          last_sync: new Date().toISOString(),
-          last_synced_at: new Date().toISOString(),
-          webhook_status: 'connected'
-        }));
+        const now = new Date().toISOString();
+        setSheetConfig((prev) => {
+          if (prev.last_synced_at && (Date.now() - new Date(prev.last_synced_at).getTime() < 40000)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            last_sync: now,
+            last_synced_at: now,
+            webhook_status: 'connected'
+          };
+        });
       }
     }, 45000);
 
     return () => clearInterval(interval);
-  }, [sheetConfig.auto_sync, sheetConfig.sheet_url, orders]);
+  }, [sheetConfig.auto_sync, sheetConfig.sheet_url]);
 
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(session));

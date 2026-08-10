@@ -31,7 +31,7 @@ interface SidebarProps {
   onOpenPasswordModal?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+export const Sidebar = React.memo<SidebarProps>(({
   activeTab,
   setActiveTab,
   isOpenMobile,
@@ -318,4 +318,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
       />
     </>
   );
-};
+});

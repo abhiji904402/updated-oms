@@ -27,7 +27,7 @@ import {
   Radio
 } from 'lucide-react';
 
-export const DeliveryDashboard: React.FC = () => {
+export const DeliveryDashboard = React.memo(() => {
   const {
     orders = [],
     partners = [],
@@ -1138,4 +1138,4 @@ export const DeliveryDashboard: React.FC = () => {
       )}
     </div>
   );
-};
+});

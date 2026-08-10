@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useOMS } from '../lib/store';
 import { OrderCard } from '../components/OrderCard';
 import { EditOrderModal } from '../components/EditOrderModal';
@@ -28,7 +28,7 @@ import {
 
 const OUTLETS: OutletName[] = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
 
-export const OutletDashboard: React.FC = () => {
+export const OutletDashboard = React.memo(() => {
   const { orders = [], session, switchRole, updateOrder, updateOrderStatus } = useOMS();
 
   const isOutletUser = session?.role === 'outlet';
@@ -68,23 +68,28 @@ export const OutletDashboard: React.FC = () => {
 
   // Outlet Metrics per outlet
   const outletMetrics = useMemo(() => {
-    return OUTLETS.map((outletName) => {
-      const outletOrders = safeOrders.filter((o) => o.outlet === outletName);
-      const totalCount = outletOrders.length;
-      const totalRevenue = outletOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const pendingCount = outletOrders.filter(
-        (o) => o.status === 'pending' || o.status === 'processing' || o.status === 'out_for_delivery' || o.delivery_confirmation_pending
-      ).length;
-      const doneCount = outletOrders.filter((o) => isFullyDelivered(o)).length;
-
-      return {
-        name: outletName,
-        totalCount,
-        totalRevenue,
-        pendingCount,
-        doneCount
-      };
+    const map: Record<string, { name: string; totalCount: number; totalRevenue: number; pendingCount: number; doneCount: number }> = {};
+    OUTLETS.forEach((o) => {
+      map[o] = { name: o, totalCount: 0, totalRevenue: 0, pendingCount: 0, doneCount: 0 };
     });
+
+    safeOrders.forEach((o) => {
+      const name = o.outlet || 'Sector 31';
+      if (!map[name]) {
+        map[name] = { name, totalCount: 0, totalRevenue: 0, pendingCount: 0, doneCount: 0 };
+      }
+      const item = map[name];
+      item.totalCount += 1;
+      item.totalRevenue += o.total_amount || 0;
+      if (o.status === 'pending' || o.status === 'processing' || o.status === 'out_for_delivery' || o.delivery_confirmation_pending) {
+        item.pendingCount += 1;
+      }
+      if (isFullyDelivered(o)) {
+        item.doneCount += 1;
+      }
+    });
+
+    return OUTLETS.map((o) => map[o]);
   }, [safeOrders]);
 
   // Total All Outlets Summary
@@ -185,6 +190,19 @@ export const OutletDashboard: React.FC = () => {
     filterPaymentStatus,
     filterDeliveryType
   ]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 30;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedOutlet, searchQuery, filterOrderDate, filterDeliveryDate, filterStatus, filterPaymentStatus, filterDeliveryType, viewMode]);
+
+  const totalPages = useMemo(() => Math.ceil(filteredOrders.length / PAGE_SIZE) || 1, [filteredOrders.length]);
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredOrders.slice(start, start + PAGE_SIZE);
+  }, [filteredOrders, currentPage]);
 
   // Reset Smart Filters
   const handleClearFilters = () => {
@@ -489,7 +507,7 @@ export const OutletDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-indigo-950/80 text-slate-200">
-                    {filteredOrders.map((o) => {
+                    {pagedOrders.map((o) => {
                       const remaining = o.remaining_balance ?? 0;
                       const timeInfo = getDeliveryTimeInfo(o);
                       return (
@@ -650,25 +668,116 @@ export const OutletDashboard: React.FC = () => {
                   </tfoot>
                 </table>
               </div>
+
+              {/* Table Pagination Bar */}
+              {filteredOrders.length > 0 && totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#080a14] border-t border-indigo-950 text-xs text-slate-300">
+                  <div>
+                    Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
+                    <strong className="text-white">{Math.min(currentPage * PAGE_SIZE, filteredOrders.length)}</strong> of{' '}
+                    <strong className="text-purple-400">{filteredOrders.length}</strong> orders
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(1)}
+                      className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                    >
+                      First
+                    </button>
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                    >
+                      Prev
+                    </button>
+                    <span className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-lg text-purple-200 font-extrabold">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                    >
+                      Next
+                    </button>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(totalPages)}
+                      className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                    >
+                      Last
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         ) : (
           /* GRID VIEW (Order Cards) */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredOrders.length === 0 ? (
-              <div className="col-span-full p-12 text-center bg-[#0e111d] border border-dashed border-indigo-950 rounded-2xl text-slate-400 text-xs">
-                No matching orders found.
+          <div className="space-y-4">
+            {filteredOrders.length > 0 && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#0d1020] border border-indigo-950 rounded-xl text-xs text-slate-300">
+                <div>
+                  Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
+                  <strong className="text-white">{Math.min(currentPage * PAGE_SIZE, filteredOrders.length)}</strong> of{' '}
+                  <strong className="text-purple-400">{filteredOrders.length}</strong> orders
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(1)}
+                    className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                  >
+                    First
+                  </button>
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-lg text-purple-200 font-extrabold">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                  >
+                    Next
+                  </button>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+                  >
+                    Last
+                  </button>
+                </div>
               </div>
-            ) : (
-              filteredOrders.map((o) => (
-                <OrderCard
-                  key={o.id}
-                  order={o}
-                  onViewOrder={setViewingOrder}
-                  onEditOrder={setEditingOrder}
-                />
-              ))
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredOrders.length === 0 ? (
+                <div className="col-span-full p-12 text-center bg-[#0e111d] border border-dashed border-indigo-950 rounded-2xl text-slate-400 text-xs">
+                  No matching orders found.
+                </div>
+              ) : (
+                pagedOrders.map((o) => (
+                  <OrderCard
+                    key={o.id}
+                    order={o}
+                    onViewOrder={setViewingOrder}
+                    onEditOrder={setEditingOrder}
+                  />
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -806,4 +915,4 @@ export const OutletDashboard: React.FC = () => {
       )}
     </div>
   );
-};
+});

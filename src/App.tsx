@@ -20,6 +20,9 @@ function OMSAppContent() {
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState<boolean>(false);
+  const handleSelectTab = (tab: string) => {
+    setActiveTab(tab);
+  };
 
   // Automatically enforce delivery page for rider role
   React.useEffect(() => {
@@ -35,7 +38,7 @@ function OMSAppContent() {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   const handleOpenDeliveryModal = (order: Order) => {
-    setActiveTab('delivery');
+    handleSelectTab('delivery');
   };
 
   // If user is not authenticated, show Login Screen
@@ -49,7 +52,7 @@ function OMSAppContent() {
         {/* Sidebar Navigation */}
         <Sidebar
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={handleSelectTab}
           isOpenMobile={isOpenMobile}
           setIsOpenMobile={setIsOpenMobile}
           onOpenAddModal={() => setIsAddModalOpen(true)}
@@ -59,7 +62,7 @@ function OMSAppContent() {
         />
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto -webkit-overflow-scrolling-touch">
           {/* Header */}
           <Header
             onToggleMobileMenu={() => setIsOpenMobile(!isOpenMobile)}
@@ -68,36 +71,26 @@ function OMSAppContent() {
             onOpenSheetModal={() => setIsSheetModalOpen(true)}
           />
 
-          {/* Instant Pre-loaded Page Containers for 0ms Page Switch */}
+          {/* Instant Active Page Rendering */}
           <main className="flex-1 pb-12 relative">
-            <div className={(activeTab === 'dashboard' || activeTab === 'admin') ? 'block' : 'hidden'}>
+            {(activeTab === 'dashboard' || activeTab === 'admin') && (
               <AdminDashboard
                 onOpenAddModal={() => setIsAddModalOpen(true)}
                 onOpenThermalModal={() => setIsThermalModalOpen(true)}
                 onOpenDeliveryModal={handleOpenDeliveryModal}
                 onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
               />
-            </div>
+            )}
 
-            <div className={activeTab === 'outlet' ? 'block' : 'hidden'}>
-              <OutletDashboard />
-            </div>
+            {activeTab === 'outlet' && <OutletDashboard />}
 
-            <div className={activeTab === 'delivery' ? 'block' : 'hidden'}>
-              <DeliveryDashboard />
-            </div>
+            {activeTab === 'delivery' && <DeliveryDashboard />}
 
-            <div className={activeTab === 'analytics' ? 'block' : 'hidden'}>
-              <AnalyticsPage />
-            </div>
+            {activeTab === 'analytics' && <AnalyticsPage />}
 
-            <div className={activeTab === 'alerts' ? 'block' : 'hidden'}>
-              <AlertsPage />
-            </div>
+            {activeTab === 'alerts' && <AlertsPage />}
 
-            <div className={activeTab === 'sheets' ? 'block' : 'hidden'}>
-              <GoogleSheetsPage />
-            </div>
+            {activeTab === 'sheets' && <GoogleSheetsPage />}
           </main>
         </div>
       </div>

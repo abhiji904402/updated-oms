@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useOMS } from '../lib/store';
 import { Order, OrderStatus } from '../types';
 import { EditOrderModal } from '../components/EditOrderModal';
@@ -552,7 +552,7 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
   );
 };
 
-export const GoogleSheetsPage: React.FC = () => {
+export const GoogleSheetsPage = React.memo(() => {
   const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, clearAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
   const [urlInput, setUrlInput] = useState(sheetConfig.sheet_url);
@@ -645,14 +645,25 @@ export const GoogleSheetsPage: React.FC = () => {
   };
 
   // Sort orders by Order Number descending (highest/newest order number at top)
-  const sortedOrders = [...orders].sort((a, b) => {
-    const numA = Number(a.order_number) || 0;
-    const numB = Number(b.order_number) || 0;
-    if (numB !== numA) return numB - numA;
-    const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return timeB - timeA;
-  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
+
+  const sortedOrders = useMemo(() => {
+    return [...orders].sort((a, b) => {
+      const numA = Number(a.order_number) || 0;
+      const numB = Number(b.order_number) || 0;
+      if (numB !== numA) return numB - numA;
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [orders]);
+
+  const totalPages = useMemo(() => Math.ceil(sortedOrders.length / PAGE_SIZE) || 1, [sortedOrders.length]);
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return sortedOrders.slice(start, start + PAGE_SIZE);
+  }, [sortedOrders, currentPage]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto text-slate-100">
@@ -837,7 +848,7 @@ export const GoogleSheetsPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                sortedOrders.map((ord) => (
+                pagedOrders.map((ord) => (
                   <tr key={ord.id} className="hover:bg-indigo-950/30 transition">
                     <td className="py-3 px-4 font-bold text-indigo-400 font-mono text-sm">
                       #{ord.order_number}
@@ -887,6 +898,51 @@ export const GoogleSheetsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Table Pagination Bar */}
+        {sortedOrders.length > 0 && totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-indigo-950/80 text-xs text-slate-300">
+            <div>
+              Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
+              <strong className="text-white">{Math.min(currentPage * PAGE_SIZE, sortedOrders.length)}</strong> of{' '}
+              <strong className="text-purple-400">{sortedOrders.length}</strong> total synced orders
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(1)}
+                className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+              >
+                First
+              </button>
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+              >
+                Prev
+              </button>
+              <span className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-lg text-purple-200 font-extrabold">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+              >
+                Next
+              </button>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 disabled:hover:bg-[#12162a] font-bold"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Edit Order Modal */}
@@ -979,5 +1035,5 @@ export const GoogleSheetsPage: React.FC = () => {
       )}
     </div>
   );
-};
+});
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { useOMS } from '../lib/store';
 import { Bell, AlertTriangle, CheckCircle2, Clock, Info, ShieldAlert } from 'lucide-react';
 
-export const AlertsPage: React.FC = () => {
+export const AlertsPage = React.memo(() => {
   const { alerts = [], orders = [] } = useOMS();
 
   const safeOrders = orders || [];
@@ -135,4 +135,4 @@ export const AlertsPage: React.FC = () => {
       </div>
     </div>
   );
-};
+});
