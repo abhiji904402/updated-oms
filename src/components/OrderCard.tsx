@@ -33,7 +33,7 @@ interface OrderCardProps {
   onViewOrder?: (order: Order) => void;
 }
 
-export const OrderCard: React.FC<OrderCardProps> = ({ order, compact = false, onOpenDeliveryModal, onEditOrder, onViewOrder }) => {
+export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact = false, onOpenDeliveryModal, onEditOrder, onViewOrder }) => {
   const {
     session,
     updateOrderStatus,
@@ -49,13 +49,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, compact = false, on
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [nowTime, setNowTime] = useState(Date.now());
 
-  // Live ticker for countdown timer
+  // Live ticker for countdown timer (only for active orders)
   useEffect(() => {
+    if (order.status === 'delivered' || order.status === 'cancelled') return;
     const timer = setInterval(() => {
       setNowTime(Date.now());
-    }, 10000); // refresh every 10 sec
+    }, 15000); // refresh every 15 sec
     return () => clearInterval(timer);
-  }, []);
+  }, [order.status]);
 
   const isSelected = selectedOrderIds.includes(order.id);
   const timeInfo = getDeliveryTimeInfo(order);
@@ -567,4 +568,4 @@ Broomies Team`;
       )}
     </>
   );
-};
+});

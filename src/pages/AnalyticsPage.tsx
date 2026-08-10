@@ -73,7 +73,17 @@ export const AnalyticsPage = React.memo(() => {
 
   // Overall statistics
   const totalOrdersCount = filteredOrders.length;
-  const totalRevenue = filteredOrders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
+  const totalRevenue = useMemo(() => filteredOrders.reduce((acc, o) => acc + (o.total_amount || 0), 0), [filteredOrders]);
+
+  // Analytics table pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
+
+  const totalPages = useMemo(() => Math.ceil(filteredOrders.length / PAGE_SIZE) || 1, [filteredOrders.length]);
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredOrders.slice(start, start + PAGE_SIZE);
+  }, [filteredOrders, currentPage]);
 
   // 1. Order Status (Date) Breakdown
   const statusCounts = useMemo(() => {
@@ -776,7 +786,7 @@ export const AnalyticsPage = React.memo(() => {
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((ord) => {
+                pagedOrders.map((ord) => {
                   const isDue = (ord.remaining_balance || 0) > 0;
                   const timeInfo = getDeliveryTimeInfo(ord);
                   return (
@@ -869,6 +879,51 @@ export const AnalyticsPage = React.memo(() => {
             </tbody>
           </table>
         </div>
+
+        {/* Analytics Table Pagination Controls */}
+        {filteredOrders.length > 0 && totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#080a14] border border-indigo-950 rounded-xl text-xs text-slate-300">
+            <div>
+              Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
+              <strong className="text-white">{Math.min(currentPage * PAGE_SIZE, filteredOrders.length)}</strong> of{' '}
+              <strong className="text-purple-400">{filteredOrders.length}</strong> records
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(1)}
+                className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+              >
+                First
+              </button>
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+              >
+                Prev
+              </button>
+              <span className="px-3 py-1 bg-purple-600/30 border border-purple-500/40 rounded-lg text-purple-200 font-extrabold">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-3 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+              >
+                Next
+              </button>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                className="px-2.5 py-1 rounded-lg bg-[#12162a] border border-indigo-950 hover:bg-purple-900 disabled:opacity-40 font-bold"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
