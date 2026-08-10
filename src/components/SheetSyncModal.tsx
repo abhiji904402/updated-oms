@@ -86,19 +86,21 @@ function syncOrderToSheets(ss, order) {
 
 function appendOrUpdateOrder(sheet, order) {
   var rows = sheet.getDataRange().getValues();
-  var orderNum = Number(order.order_number) || order.order_number;
+  var numVal = Number(order.order_number);
+  var orderNum = (!isNaN(numVal) && String(order.order_number).trim() !== "") ? numVal : (order.order_number || "");
   var rowIndex = -1;
 
   for (var i = 1; i < rows.length; i++) {
-    var existingNum = Number(rows[i][0]) || rows[i][0];
-    if (existingNum == orderNum && orderNum !== "" && orderNum !== undefined) {
+    var existingNum = Number(rows[i][0]);
+    var compareVal = (!isNaN(existingNum) && String(rows[i][0]).trim() !== "") ? existingNum : rows[i][0];
+    if (compareVal == orderNum && orderNum !== "" && orderNum !== undefined) {
       rowIndex = i + 1;
       break;
     }
   }
 
   var rowData = [
-    order.order_number || "",
+    orderNum,
     order.customer_name || "",
     order.mobile_number || "",
     order.outlet || "",
@@ -108,9 +110,9 @@ function appendOrUpdateOrder(sheet, order) {
     order.delivery_type || "",
     order.delivery_date || "",
     order.delivery_time_expected || "",
-    order.total_amount || 0,
-    order.advance_amount || 0,
-    order.remaining_balance || 0,
+    Number(order.total_amount) || 0,
+    Number(order.advance_amount) || 0,
+    Number(order.remaining_balance) || 0,
     order.payment_type || "",
     order.advance_bill_number || "",
     order.final_bill_number || "",
@@ -139,10 +141,13 @@ function sortSheetByOrderNumber(sheet) {
 
 function deleteOrderFromSheet(sheet, orderNum) {
   var rows = sheet.getDataRange().getValues();
-  var numToDel = Number(orderNum) || orderNum;
+  var numToDel = Number(orderNum);
+  var targetNum = (!isNaN(numToDel) && String(orderNum).trim() !== "") ? numToDel : orderNum;
+
   for (var i = 1; i < rows.length; i++) {
-    var existingNum = Number(rows[i][0]) || rows[i][0];
-    if (existingNum == numToDel) {
+    var existingNum = Number(rows[i][0]);
+    var compareVal = (!isNaN(existingNum) && String(rows[i][0]).trim() !== "") ? existingNum : rows[i][0];
+    if (compareVal == targetNum) {
       sheet.deleteRow(i + 1);
       break;
     }
