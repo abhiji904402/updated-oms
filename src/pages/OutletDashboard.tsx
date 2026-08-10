@@ -29,7 +29,7 @@ import {
 const OUTLETS: OutletName[] = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
 
 export const OutletDashboard: React.FC = () => {
-  const { orders = [], session, switchRole } = useOMS();
+  const { orders = [], session, switchRole, updateOrder, updateOrderStatus } = useOMS();
 
   const isOutletUser = session?.role === 'outlet';
   const assignedOutlet = session?.outlet || 'Sector 31';
@@ -483,7 +483,8 @@ export const OutletDashboard: React.FC = () => {
                       <th className="p-3.5 text-rose-300">Total Delay (Mins)</th>
                       <th className="p-3.5">Total (₹)</th>
                       <th className="p-3.5">Due (₹)</th>
-                      <th className="p-3.5">Payment</th>
+                      <th className="p-3.5">Payment Status</th>
+                      <th className="p-3.5">Bill Numbers</th>
                       <th className="p-3.5">Status</th>
                     </tr>
                   </thead>
@@ -540,31 +541,93 @@ export const OutletDashboard: React.FC = () => {
                               <span className="text-slate-500">₹0</span>
                             )}
                           </td>
-                          <td className="p-3.5">
-                            {remaining > 0 ? (
-                              <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded text-[10px] font-bold">
-                                DUE (₹{remaining})
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] font-bold">
-                                PAID FULL
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3.5">
-                            <span
-                              className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border ${
-                                o.status === 'delivered'
-                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                  : o.status === 'out_for_delivery'
-                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                  : o.status === 'pending'
-                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                          <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={o.payment_type || 'full'}
+                              onChange={(e) => {
+                                const newType = e.target.value as PaymentType;
+                                const total = o.total_amount ?? 0;
+                                let updates: Partial<Order> = {
+                                  payment_type: newType,
+                                  payment_changed_by: session?.name || session?.role,
+                                  payment_changed_at: new Date().toISOString()
+                                };
+                                if (newType === 'full') {
+                                  updates.advance_amount = total;
+                                  updates.remaining_balance = 0;
+                                  updates.due_amount = 0;
+                                } else if (newType === 'due') {
+                                  updates.advance_amount = 0;
+                                  updates.remaining_balance = total;
+                                  updates.due_amount = total;
+                                } else if (newType === 'part') {
+                                  const adv = o.advance_amount && o.advance_amount < total ? o.advance_amount : Math.round(total / 2);
+                                  updates.advance_amount = adv;
+                                  updates.remaining_balance = Math.max(0, total - adv);
+                                  updates.due_amount = Math.max(0, total - adv);
+                                }
+                                updateOrder(o.id, updates);
+                              }}
+                              className={`text-[11px] font-black uppercase px-2 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 transition ${
+                                o.payment_type === 'full'
+                                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+                                  : o.payment_type === 'part'
+                                  ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
+                                  : 'bg-rose-950/90 text-rose-300 border-rose-500/50'
                               }`}
                             >
-                              {o.status}
-                            </span>
+                              <option value="full" className="bg-slate-900 text-emerald-300">PAID FULL</option>
+                              <option value="part" className="bg-slate-900 text-amber-300">PARTIAL</option>
+                              <option value="due" className="bg-slate-900 text-rose-300">DUE / POD</option>
+                              <option value="cash" className="bg-slate-900 text-slate-200">CASH</option>
+                              <option value="upi" className="bg-slate-900 text-slate-200">UPI</option>
+                              <option value="online" className="bg-slate-900 text-slate-200">ONLINE</option>
+                            </select>
+                          </td>
+                          <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col gap-1 w-28 text-xs font-mono">
+                              <input
+                                type="text"
+                                placeholder="Adv Bill #"
+                                defaultValue={o.advance_bill_number || ''}
+                                key={`adv-${o.id}-${o.advance_bill_number}`}
+                                onBlur={(e) => {
+                                  const val = e.target.value.trim();
+                                  if (val !== (o.advance_bill_number || '')) {
+                                    updateOrder(o.id, { advance_bill_number: val });
+                                  }
+                                }}
+                                className="bg-slate-950 border border-amber-800/60 text-amber-200 text-[10px] px-1.5 py-0.5 rounded focus:outline-none focus:border-amber-400 font-mono font-bold"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Final Bill #"
+                                defaultValue={o.final_bill_number || ''}
+                                key={`final-${o.id}-${o.final_bill_number}`}
+                                onBlur={(e) => {
+                                  const val = e.target.value.trim();
+                                  if (val !== (o.final_bill_number || '')) {
+                                    updateOrder(o.id, { final_bill_number: val });
+                                  }
+                                }}
+                                className="bg-slate-950 border border-emerald-800/60 text-emerald-200 text-[10px] px-1.5 py-0.5 rounded focus:outline-none focus:border-emerald-400 font-mono font-bold"
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={o.status}
+                              onChange={(e) => updateOrderStatus(o.id, e.target.value as OrderStatus)}
+                              className="bg-slate-950 border border-indigo-900 text-purple-200 font-extrabold uppercase text-[10px] rounded-lg px-2 py-1 focus:outline-none focus:border-purple-500 cursor-pointer"
+                            >
+                              <option value="pending" className="bg-slate-900 text-rose-300">Pending</option>
+                              <option value="processing" className="bg-slate-900 text-amber-300">Processing</option>
+                              <option value="out_for_delivery" className="bg-slate-900 text-blue-300">Out for Delivery</option>
+                              <option value="delivered" className="bg-slate-900 text-emerald-300">Delivered</option>
+                              <option value="on_hold" className="bg-slate-900 text-purple-300">On Hold</option>
+                              <option value="cancelled" className="bg-slate-900 text-slate-400">Cancelled</option>
+                              <option value="missed" className="bg-slate-900 text-red-400">Missed</option>
+                            </select>
                           </td>
                         </tr>
                       );
@@ -582,7 +645,7 @@ export const OutletDashboard: React.FC = () => {
                       <td className="p-3.5 font-black text-rose-400 text-sm">
                         ₹{filteredOrders.reduce((acc, o) => acc + (o.remaining_balance || 0), 0).toLocaleString()}
                       </td>
-                      <td colSpan={2} className="p-3.5"></td>
+                      <td colSpan={3} className="p-3.5"></td>
                     </tr>
                   </tfoot>
                 </table>
