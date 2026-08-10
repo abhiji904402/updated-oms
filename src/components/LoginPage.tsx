@@ -39,12 +39,8 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen text-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      {/* Starry Animated Background */}
-      <div className="stars-bg-container" aria-hidden="true">
-        <div id="stars"></div>
-        <div id="stars2"></div>
-        <div id="stars3"></div>
-      </div>
+      {/* Cyber Laser Animated Background */}
+      <div className="bg-laser-container" aria-hidden="true" />
 
       {/* Background Subtle Gradient Blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
