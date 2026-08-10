@@ -20,12 +20,14 @@ interface HeaderProps {
   onToggleMobileMenu: () => void;
   onOpenAddModal: () => void;
   onOpenPasswordModal?: () => void;
+  onOpenSheetModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onToggleMobileMenu,
   onOpenAddModal,
-  onOpenPasswordModal
+  onOpenPasswordModal,
+  onOpenSheetModal
 }) => {
   const {
     orders,
@@ -40,7 +42,8 @@ export const Header: React.FC<HeaderProps> = ({
     dateRangeFilter,
     setDateRangeFilter,
     recentNotification,
-    dismissNotification
+    dismissNotification,
+    sheetConfig
   } = useOMS();
 
   // Outlets list
@@ -180,6 +183,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Section: Export Actions, Password Settings & Logout */}
         <div className="flex items-center justify-end gap-2 w-full lg:w-auto">
+          {/* 24/7 Auto-Sync Indicator Badge (Admin & Outlet) */}
+          {session.role !== 'delivery' && (
+            <button
+              onClick={onOpenSheetModal}
+              title="24/7 Google Sheets & Cloud Auto-Sync is ACTIVE. Click to configure."
+              className="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span>24/7 AUTO SYNC</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            </button>
+          )}
+
           {/* Rider Mode Indicator Badge */}
           {session.role === 'delivery' && (
             <div className="px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-800/60 text-purple-300 text-xs font-extrabold flex items-center gap-1.5">

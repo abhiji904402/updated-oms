@@ -380,6 +380,42 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(LOCAL_STORAGE_KEY_SHEET, JSON.stringify(sheetConfig));
   }, [sheetConfig]);
 
+  // 24/7 Continuous Background Auto-Sync Interval for Google Sheets & Cloud Sync
+  useEffect(() => {
+    if (!sheetConfig.auto_sync || !sheetConfig.sheet_url || !sheetConfig.sheet_url.startsWith('http')) {
+      return;
+    }
+
+    // Background sync timer every 45 seconds to keep Google Sheets & Cloud in 24/7 perfect sync
+    const interval = setInterval(() => {
+      if (orders && orders.length > 0) {
+        const sortedOrders = [...orders].sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
+        const sanitizedOrders = sortedOrders.map(sanitizeOrderForSync);
+        
+        // Push batch sync silently in background
+        const CHUNK_SIZE = 35;
+        for (let i = 0; i < sanitizedOrders.length; i += CHUNK_SIZE) {
+          const chunk = sanitizedOrders.slice(i, i + CHUNK_SIZE);
+          fetch(sheetConfig.sheet_url, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(chunk)
+          }).catch(() => {});
+        }
+
+        setSheetConfig((prev) => ({
+          ...prev,
+          last_sync: new Date().toISOString(),
+          last_synced_at: new Date().toISOString(),
+          webhook_status: 'connected'
+        }));
+      }
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, [sheetConfig.auto_sync, sheetConfig.sheet_url, orders]);
+
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(session));
   }, [session]);

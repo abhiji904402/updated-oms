@@ -65,6 +65,7 @@ function OMSAppContent() {
             onToggleMobileMenu={() => setIsOpenMobile(!isOpenMobile)}
             onOpenAddModal={() => setIsAddModalOpen(true)}
             onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
+            onOpenSheetModal={() => setIsSheetModalOpen(true)}
           />
 
           {/* Page Routing based on activeTab */}
