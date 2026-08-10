@@ -317,14 +317,25 @@
   transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
-/* Minecraft Stone Background Theme */
+/* Minecraft Stone Background Theme - Superfast GPU Accelerated */
 .minecraft-stone, body {
   background-color: #7a7a7a;
   background-image: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjN0E3QTdBIi8+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjIiIGhlaWdodD0iMiIgZmlsbD0iIzhGOEY4RiIvPjxyZWN0IHg9IjIiIHk9IjAiIHdpZHRoPSIxMiIgaGVpZ2h0PSIyIiBmaWxsPSIjOTk5OTk5Ii8+PHJlY3QgeD0iMTQiIHk9IjAiIHdpZHRoPSIyIiBoZWlnaHQ9IjIiIGZpbGw9IiM2QjZCNkIiLz48cmVjdCB4PSIwIiB5PSIyIiB3aWR0aD0iMiIgaGVpZ2h0PSIxMiIgZmlsbD0iIzk5OTk5OSIvPjxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgZmlsbD0iIzdBN0E3QSIvPjxyZWN0IHg9IjE0IiB5PSIyIiB3aWR0aD0iMiIgaGVpZ2h0PSIxMiIgZmlsbD0iIzVDNUM1QyIvPjxyZWN0IHg9IjAiIHk9IjE0IiB3aWR0aD0iMiIgaGVpZ2h0PSIyIiBmaWxsPSIjNkI2QjZCIi8+PHJlY3QgeD0iMiIgeT0iMTQiIHdpZHRoPSIxMiIgaGVpZ2h0PSIyIiBmaWxsPSIjNUM1QzVDIi8+PHJlY3QgeD0iMTQiIHk9IjE0IiB3aWR0aD0iMiIgaGVpZ2h0PSIyIiBmaWxsPSIjNEQ0RDREIi8+PC9zdmc+");
   background-size: 48px 48px;
-  background-attachment: fixed;
+  background-repeat: repeat;
   color: #f8fafc;
   min-height: 100vh;
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 
