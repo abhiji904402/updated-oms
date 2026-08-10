@@ -34,6 +34,7 @@ import {
 const APPS_SCRIPT_CODE = `// ===================================================
 // BROOMIES BAKERY – Google Apps Script
 // Multi-Outlet Separate Sheets + Master Sheet Auto-Routing
+// Sorted Strictly by Order # (Column 1) - No S.No needed
 // ===================================================
 
 function doPost(e) {
@@ -52,7 +53,7 @@ function doPost(e) {
       syncOrderToSheets(ss, data);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Orders routed to outlet-specific sheets & master sheet" }))
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Orders routed & sorted by Order #" }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", error: err.toString() }))
@@ -65,19 +66,27 @@ function getOrCreateSheet(ss, sheetName) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
   }
+  
   // Auto-create Header row if sheet is empty
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([
-      "S.No.", "Order #", "Customer Name", "Phone", "Outlet", "Item Type", "Quantity/Weight",
+      "Order #", "Customer Name", "Phone", "Outlet", "Item Type", "Quantity/Weight",
       "Informed By", "Delivery Type", "Delivery Date", "Time", "Total (₹)", "Advance (₹)",
       "Remaining (₹)", "Payment Type", "Adv Bill No.", "Final Bill No.", "Status", "Cake Photo URL", "Remarks", "Last Updated"
     ]);
-    sheet.getRange(1, 1, 1, 21).setFontWeight("bold").setBackground("#d9ead3");
+    sheet.getRange(1, 1, 1, 20).setFontWeight("bold").setBackground("#d9ead3");
+  } else {
+    // Auto-remove old S.No column if present so Order # becomes Column 1
+    var firstCell = String(sheet.getRange(1, 1).getValue()).trim();
+    if (firstCell === "S.No." || firstCell === "S.No") {
+      sheet.deleteColumn(1);
+    }
   }
   return sheet;
 }
 
 function syncOrderToSheets(ss, order) {
+  if (!order || !order.order_number) return;
   var outletName = order.outlet ? String(order.outlet).trim() : "Sector 31";
 
   // 1. Sync to Master Sheet ("All Orders")
@@ -101,20 +110,18 @@ function syncOrderToSheets(ss, order) {
 
 function appendOrUpdateOrder(sheet, order) {
   var rows = sheet.getDataRange().getValues();
-  var orderNum = order.order_number;
+  var orderNum = Number(order.order_number) || order.order_number;
   var rowIndex = -1;
 
   for (var i = 1; i < rows.length; i++) {
-    if (rows[i][1] == orderNum || rows[i][0] == orderNum) {
+    var existingNum = Number(rows[i][0]) || rows[i][0];
+    if (existingNum == orderNum && orderNum !== "" && orderNum !== undefined) {
       rowIndex = i + 1;
       break;
     }
   }
 
-  var sNo = rowIndex > 0 ? (rows[rowIndex - 1][0] || (rowIndex - 1)) : (sheet.getLastRow());
-
   var rowData = [
-    sNo,
     order.order_number || "",
     order.customer_name || "",
     order.mobile_number || "",
@@ -142,16 +149,29 @@ function appendOrUpdateOrder(sheet, order) {
   } else {
     sheet.appendRow(rowData);
   }
+
+  // Keep sheet sorted by Column 1 (Order #) in Ascending Order
+  sortSheetByOrderNumber(sheet);
+}
+
+function sortSheetByOrderNumber(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).sort({column: 1, ascending: true});
+  }
 }
 
 function deleteOrderFromSheet(sheet, orderNum) {
   var rows = sheet.getDataRange().getValues();
+  var numToDel = Number(orderNum) || orderNum;
   for (var i = 1; i < rows.length; i++) {
-    if (rows[i][0] == orderNum) {
+    var existingNum = Number(rows[i][0]) || rows[i][0];
+    if (existingNum == numToDel) {
       sheet.deleteRow(i + 1);
       break;
     }
   }
+  sortSheetByOrderNumber(sheet);
 }
 
 function deleteOrderFromAllSheets(ss, order) {
@@ -788,8 +808,7 @@ export const GoogleSheetsPage: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-indigo-950 bg-[#070913] text-slate-400 text-xs font-semibold">
-                <th className="py-3 px-4 text-center">S.No.</th>
-                <th className="py-3 px-4">Order#</th>
+                <th className="py-3 px-4">Order #</th>
                 <th className="py-3 px-4">Outlet</th>
                 <th className="py-3 px-4">Item</th>
                 <th className="py-3 px-4 text-center">Qty</th>
@@ -803,17 +822,14 @@ export const GoogleSheetsPage: React.FC = () => {
             <tbody className="divide-y divide-indigo-950/60 text-xs">
               {sortedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-500">
+                  <td colSpan={9} className="py-8 text-center text-slate-500">
                     No orders synced yet.
                   </td>
                 </tr>
               ) : (
-                sortedOrders.map((ord, index) => (
+                sortedOrders.map((ord) => (
                   <tr key={ord.id} className="hover:bg-indigo-950/30 transition">
-                    <td className="py-3 px-4 text-center font-bold text-slate-400 font-mono">
-                      {index + 1}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-indigo-400 font-mono">
+                    <td className="py-3 px-4 font-bold text-indigo-400 font-mono text-sm">
                       #{ord.order_number}
                     </td>
                     <td className="py-3 px-4 text-slate-300 font-medium">
