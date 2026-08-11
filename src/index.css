@@ -2410,15 +2410,27 @@ html {
   }
 }
 
-/* From Uiverse.io by marsella_3472 - Cyber Laser Grid Background */
+/* Custom Repeating Linear Gradient Background */
+.container,
 .bg-laser-container,
 .stars-bg-container {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  background-color: #000000;
+  background: repeating-linear-gradient(
+      -45deg,
+      orange,
+      orangered 10px,
+      orange 10px,
+      orangered 20px
+    )
+    orange;
+  background-blend-mode: screen;
+  opacity: 0.85;
 }
 
 .bg-laser-container::before,
@@ -2427,7 +2439,7 @@ html {
   position: absolute;
   inset: -145%;
   rotate: -45deg;
-  background: #000000;
+  background: transparent;
   background-image:
     radial-gradient(
       4px 100px at 0px 235px,
