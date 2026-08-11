@@ -335,7 +335,7 @@
 
 /* Minecraft Stone Background Theme - Superfast GPU Accelerated */
 .minecraft-stone, body {
-  background-color: #090a0f;
+  background-color: #1d1d1d;
   color: #f8fafc;
   min-height: 100vh;
   text-rendering: optimizeLegibility;
@@ -2425,26 +2425,37 @@ html {
   }
 }
 
-/* Custom Performance-Optimized Repeating Linear Gradient Background */
+/* Custom Performance-Optimized Repeating Conic Gradient Background Pattern */
 .container,
 .bg-laser-container,
 .stars-bg-container {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
   overflow: hidden;
-  background: repeating-linear-gradient(
-      -45deg,
-      #ea580c,
-      #c2410c 10px,
-      #ea580c 10px,
-      #c2410c 20px
+  --s: 200px; /* control the size */
+  --c1: #1d1d1d;
+  --c2: #4e4f51;
+  --c3: #3c3c3c;
+
+  background: repeating-conic-gradient(
+        from 30deg,
+        #0000 0 120deg,
+        var(--c3) 0 180deg
+      )
+      calc(0.5 * var(--s)) calc(0.5 * var(--s) * 0.577),
+    repeating-conic-gradient(
+      from 30deg,
+      var(--c1) 0 60deg,
+      var(--c2) 0 120deg,
+      var(--c3) 0 180deg
     );
-  opacity: 0.35;
-  transform: translateZ(0);
+  background-size: var(--s) calc(var(--s) * 0.577);
+  opacity: 1;
 }
 
 
