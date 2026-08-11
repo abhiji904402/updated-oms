@@ -328,28 +328,8 @@ Broomies Team`;
                   >
                     <Printer className="w-3.5 h-3.5" />
                   </button>
-                  {session.role === 'admin' && (
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="p-1 rounded bg-slate-800 text-slate-400 hover:bg-rose-950 hover:text-rose-400 transition"
-                      title="Delete Order"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
                 </div>
               </div>
-
-              {/* Delete Confirm Banner */}
-              {showDeleteConfirm && (
-                <div className="p-2 bg-rose-950/90 border border-rose-800 rounded-lg flex items-center justify-between text-xs text-rose-200" onClick={(e) => e.stopPropagation()}>
-                  <span>Delete Order #{order.order_number}?</span>
-                  <div className="flex gap-1">
-                    <button onClick={() => { deleteOrder(order.id); setShowDeleteConfirm(false); }} className="px-2 py-0.5 rounded bg-rose-600 text-white font-bold">Yes</button>
-                    <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">No</button>
-                  </div>
-                </div>
-              )}
 
               {/* Rider Delivery Confirmation Banner */}
               {(order.rider_delivered || order.delivery_confirmation_pending) && order.status !== 'delivered' && (
