@@ -14,6 +14,9 @@ export function printThermalReceipts(orders: Order[]) {
           : orderDateStr;
         const delivTimeStr = formatTo12Hour(o.delivery_time_expected || o.order_time);
 
+        const imageUrl = (o.item_image_url || o.delivery_photo_url || '').trim();
+        const hasValidImage = imageUrl.length > 5 && imageUrl !== '[image]' && !imageUrl.includes('photo-1578985545062-69928b1d9587');
+
         return `
     <div class="receipt">
       <div class="center header-title">BROOMIES BAKERY</div>
@@ -63,13 +66,15 @@ export function printThermalReceipts(orders: Order[]) {
         <span class="bold font-large">Qty: ${o.quantity}</span>
       </div>
 
+      ${hasValidImage ? `
       <!-- CAKE PHOTO SECTION -->
       <div class="photo-container">
         <div class="bold center photo-title">[ CAKE PHOTO ]</div>
         <div class="center photo-wrapper">
-          <img src="${o.item_image_url || o.delivery_photo_url || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&q=80'}" class="cake-photo" alt="Cake Photo" />
+          <img src="${imageUrl}" class="cake-photo" alt="Cake Photo" />
         </div>
       </div>
+      ` : ''}
 
       ${o.remarks ? `
         <div class="notes-box">
