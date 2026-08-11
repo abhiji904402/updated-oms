@@ -20,6 +20,8 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
     'Advance (₹)',
     'Remaining Balance (₹)',
     'Payment Status',
+    'Adv Bill No.',
+    'Final Bill No.',
     'Order Status',
     'Delivery Partner',
     'Delivered By',
@@ -47,6 +49,8 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
       (o.advance_amount || 0).toFixed(2),
       (o.remaining_balance || 0).toFixed(2),
       o.payment_type,
+      `"${o.advance_bill_number || 'N/A'}"`,
+      `"${o.final_bill_number || 'N/A'}"`,
       o.status,
       `"${o.delivery_partner || 'Unassigned'}"`,
       `"${o.delivered_by || o.delivery_partner || 'N/A'}"`,
@@ -128,8 +132,8 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
         ${o.otp ? `<div style="font-size: 10px; color: #d97706; font-weight: bold;">OTP: ${o.otp}</div>` : ''}
       </td>
       <td>
-        <div style="font-size: 10px;">Adv: <strong>${o.advance_bill_number || 'N/A'}</strong></div>
-        <div style="font-size: 10px;">Fin: <strong>${o.final_bill_number || 'N/A'}</strong></div>
+        <div style="font-size: 10px; color: #d97706;">Adv Bill: <strong>${o.advance_bill_number || 'N/A'}</strong></div>
+        <div style="font-size: 10px; color: #16a34a;">Final Bill: <strong>${o.final_bill_number || 'N/A'}</strong></div>
       </td>
     </tr>
   `;
@@ -208,7 +212,7 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
               <th style="width: 10%;">Payment (₹)</th>
               <th style="width: 9%;">Status</th>
               <th style="width: 8%;">Delivery / OTP</th>
-              <th style="width: 6%;">Bills</th>
+              <th style="width: 8%;">Bill No(s)</th>
             </tr>
           </thead>
           <tbody>
