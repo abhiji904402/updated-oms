@@ -4,8 +4,16 @@ import { OrderCard } from '../components/OrderCard';
 import { EditOrderModal } from '../components/EditOrderModal';
 import { ViewOrderModal } from '../components/ViewOrderModal';
 import { printThermalReceipts } from '../lib/thermalPrint';
-import { sortOrdersByDeliveryPriority } from '../lib/timeUtils';
-import { matchesOutlet, isOrderForToday } from '../lib/outletUtils';
+import { matchesOutlet } from '../lib/outletUtils';
+import {
+  isDeliveredMarked,
+  isPaymentPending,
+  sortOrdersByTab,
+  computeTabCounts,
+  DashboardTab,
+  getNormalizedDateStr,
+  isOrderForToday
+} from '../lib/orderLogic';
 import { Order, OrderStatus } from '../types';
 import { Map, MapControls, MapMarkerData } from '../components/ui/map';
 import { Card } from '../components/ui/card';
@@ -38,16 +46,6 @@ interface AdminDashboardProps {
   onOpenDeliveryModal: (order: Order) => void;
   onOpenPasswordModal?: () => void;
 }
-
-export type DashboardTab =
-  | 'today'
-  | 'tomorrow'
-  | 'future'
-  | 'delivered_history'
-  | 'pending_payment'
-  | 'cancelled'
-  | 'missed'
-  | 'on_hold';
 
 export const AdminDashboard = React.memo<AdminDashboardProps>(({
   onOpenAddModal,
@@ -92,77 +90,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     return d.toISOString().split('T')[0];
   }, []);
 
-  // Helper logic for order filtering across tabs
-  const isPaymentPending = (o: Order) => {
-    const pType = String(o.payment_type || '').toLowerCase().trim();
-    const total = Number(o.total_amount) || 0;
-    const adv = Number(o.advance_amount) || 0;
-    const rem = typeof o.remaining_balance === 'number' ? o.remaining_balance : Math.max(0, total - adv);
-    const due = typeof o.due_amount === 'number' ? o.due_amount : 0;
-
-    if (rem > 0 || due > 0) return true;
-    if (pType === 'due' || pType === 'part' || pType === 'partial' || pType === 'cod' || pType === 'unpaid') return true;
-    if (total > 0 && adv < total && pType !== 'full') return true;
-
-    return false;
-  };
-
-  const isDeliveredMarked = (o: Order) => {
-    return o.status === 'delivered' || Boolean(o.rider_delivered);
-  };
-
-  // Compute Badge Counts for all 8 Tabs in a single linear pass
+  // Compute Badge Counts for all 8 Tabs
   const counts = useMemo(() => {
-    let today = 0, tomorrow = 0, future = 0, delivered_history = 0, pending_payment = 0, pending_payment_amount = 0, cancelled = 0, missed = 0, on_hold = 0;
-
-    safeOrders.forEach((o) => {
-      const isDel = isDeliveredMarked(o);
-      const isCanc = o.status === 'cancelled';
-      const isHold = o.status === 'on_hold';
-      const isPayPending = isPaymentPending(o);
-
-      if (isDel) delivered_history++;
-      if (isCanc) cancelled++;
-      if (isHold) on_hold++;
-
-      // Pending Payment tab strictly shows orders that are DELIVERED but still have payment due
-      if (isDel && isPayPending && !isCanc) {
-        pending_payment++;
-        const total = o.total_amount || 0;
-        const adv = o.advance_amount || 0;
-        const rem = typeof o.remaining_balance === 'number' ? o.remaining_balance : (total - adv);
-        const due = typeof o.due_amount === 'number' ? o.due_amount : 0;
-        const pendingAmt = rem > 0 ? rem : (due > 0 ? due : (total - adv));
-        pending_payment_amount += Math.max(0, pendingAmt);
-      }
-
-      if (o.status === 'missed' || (o.delivery_date < todayStr && !isDel && !isCanc)) {
-        missed++;
-      }
-
-      if (!isCanc && !isHold && !isDel && o.status !== 'missed') {
-        const delDate = o.delivery_date || o.order_date;
-        if (delDate === todayStr) {
-          today++;
-        } else if (delDate === tomorrowStr) {
-          tomorrow++;
-        } else if (delDate > tomorrowStr) {
-          future++;
-        }
-      }
-    });
-
-    return {
-      today,
-      tomorrow,
-      future,
-      delivered_history,
-      pending_payment,
-      pending_payment_amount,
-      cancelled,
-      missed,
-      on_hold
-    };
+    return computeTabCounts(safeOrders, todayStr, tomorrowStr);
   }, [safeOrders, todayStr, tomorrowStr]);
 
   // Tab definitions
@@ -265,7 +195,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       return true;
     });
 
-    return sortOrdersByDeliveryPriority(raw);
+    return sortOrdersByTab(raw, activeTab);
   }, [safeOrders, searchQuery, selectedOutletFilter, selectedStatusFilter, activeTab, todayStr, tomorrowStr]);
 
   // Reset pagination on filter or tab change

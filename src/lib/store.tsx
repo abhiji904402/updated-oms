@@ -853,9 +853,18 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updates.remaining_balance !== undefined ||
       updates.due_amount !== undefined;
 
+    // Reset delivery flags if status is changed to non-delivered
+    const resetDeliveryFlags = updates.status && updates.status !== 'delivered' ? {
+      rider_delivered: false,
+      delivery_confirmation_pending: false,
+      actual_delivery_time: '',
+      delivered_by: ''
+    } : {};
+
     const rawUpdated: Order = {
       ...target,
       ...updates,
+      ...resetDeliveryFlags,
       updated_at: now,
       ...(hasPaymentUpdate
         ? {
@@ -930,10 +939,17 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (deliveryPartner) {
       updates.delivery_partner = deliveryPartner;
     }
-    if (status === 'delivered' && !target.actual_delivery_time) {
-      updates.actual_delivery_time = now;
-      updates.delivered_by = session.name || deliveryPartner || 'Rider';
+    if (status === 'delivered') {
+      if (!target.actual_delivery_time) {
+        updates.actual_delivery_time = now;
+      }
+      updates.delivered_by = session.name || deliveryPartner || target.delivered_by || 'Rider';
       updates.rider_delivered = true;
+    } else {
+      updates.rider_delivered = false;
+      updates.delivery_confirmation_pending = false;
+      updates.actual_delivery_time = '';
+      updates.delivered_by = '';
     }
 
     const updated: Order = { ...target, ...updates };
