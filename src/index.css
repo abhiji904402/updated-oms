@@ -184,16 +184,17 @@
 }
 
 .t-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1em;
-  margin-bottom: 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
 }
 
 .t-detail-item {
   display: flex;
   flex-direction: column;
   gap: 0.2em;
+  min-width: 0;
 }
 
 .t-label {
@@ -204,9 +205,11 @@
 }
 
 .t-value {
-  font-size: 1.05em;
+  font-size: 0.95em;
   font-weight: 700;
   color: var(--t-text-main);
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .t-perforation {

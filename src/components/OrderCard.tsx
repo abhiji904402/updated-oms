@@ -87,10 +87,10 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
     const remaining = typeof order.remaining_balance === 'number' ? order.remaining_balance : Math.max(0, total - advance);
 
     return (
-      <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Payment:</span>
+      <div className="space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">Payment:</span>
             <select
               value={order.payment_type || 'full'}
               onChange={(e) => {
@@ -118,7 +118,7 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
                 }
                 updateOrder(order.id, updates);
               }}
-              className={`text-[11px] font-black uppercase px-2 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition shadow-sm ${
+              className={`text-[11px] font-black uppercase px-2 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition shadow-sm truncate min-w-0 max-w-full flex-1 ${
                 order.payment_type === 'full'
                   ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
                   : order.payment_type === 'part' || order.payment_type === 'part_payment'
@@ -136,22 +136,22 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
           </div>
 
           {remaining > 0 ? (
-            <span className="text-xs font-black text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60 font-mono">
+            <span className="text-xs font-black text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60 font-mono shrink-0">
               Due: ₹{remaining.toLocaleString()}
             </span>
           ) : (
-            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40 font-mono">
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40 font-mono shrink-0">
               Fully Paid
             </span>
           )}
         </div>
 
         {order.payment_changed_by && (
-          <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1.5 pt-0.5 border-t border-slate-800/60">
-            <span className="text-purple-400 font-bold">Audit:</span>
-            <span>By {order.payment_changed_by}</span>
+          <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1.5 pt-0.5 border-t border-slate-800/60 truncate min-w-0">
+            <span className="text-purple-400 font-bold shrink-0">Audit:</span>
+            <span className="truncate">By {order.payment_changed_by}</span>
             {order.payment_changed_at && (
-              <span className="text-slate-500">
+              <span className="text-slate-500 shrink-0">
                 ({new Date(order.payment_changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
               </span>
             )}
@@ -371,29 +371,31 @@ Broomies Team`;
               )}
 
               {/* Details Grid (Ticket Detail Grid) */}
-              <div className="t-details bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
-                <div className="t-detail-item">
-                  <span className="t-label">Bakery Item</span>
-                  <span className="t-value text-xs truncate font-bold text-slate-100 flex items-center gap-1">
-                    {order.item_type} ({order.quantity})
-                  </span>
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 space-y-2.5">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-0.5">Bakery Item</span>
+                  <div className="text-xs font-extrabold text-slate-100 break-words leading-snug">
+                    {order.item_type || (order as any).items || 'Item'} <span className="text-purple-300 font-extrabold">({order.quantity || 1})</span>
+                  </div>
                 </div>
 
-                <div className="t-detail-item">
-                  <span className="t-label">Outlet</span>
-                  <span className="t-value text-xs text-purple-300 font-bold">{order.outlet}</span>
-                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/60 min-w-0">
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Outlet</span>
+                    <span className="text-xs text-purple-300 font-black truncate block mt-0.5">{order.outlet || 'Sector 31'}</span>
+                  </div>
 
-                <div className="t-detail-item">
-                  <span className="t-label">Exp Delivery</span>
-                  <span className="t-value text-xs text-indigo-300 font-mono">{timeInfo.expectedFormatted}</span>
-                </div>
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Exp Delivery</span>
+                    <span className="text-xs text-indigo-300 font-mono font-bold truncate block mt-0.5">{timeInfo.expectedFormatted}</span>
+                  </div>
 
-                <div className="t-detail-item">
-                  <span className="t-label">Delay Status</span>
-                  <span className={`t-value text-[11px] font-mono ${timeInfo.delayMinutes > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {timeInfo.delayText}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Delay Status</span>
+                    <span className={`text-[11px] font-mono font-bold truncate block mt-0.5 ${timeInfo.delayMinutes > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {timeInfo.delayText}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -412,10 +414,10 @@ Broomies Team`;
                 </div>
               )}
 
-              {order.delivery_type === 'delivery' && (
-                <div className="text-[11px] text-slate-400 bg-slate-950/50 p-2 rounded-lg border border-slate-800/80 flex items-start gap-1">
+              {(order.delivery_address || order.address) && (
+                <div className="text-[11px] text-slate-300 bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 flex items-start gap-1.5 min-w-0">
                   <MapPin className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
-                  <span className="line-clamp-2">{order.address || 'No address provided'}</span>
+                  <span className="break-words min-w-0 font-medium">{order.delivery_address || order.address}</span>
                 </div>
               )}
 
@@ -454,7 +456,7 @@ Broomies Team`;
               </div>
 
               {/* Payment Status Dropdown */}
-              <div className="p-2 bg-slate-950/80 rounded-xl border border-purple-900/30">
+              <div className="p-2 bg-slate-950/80 rounded-xl border border-purple-900/30 overflow-hidden min-w-0">
                 {renderPaymentDropdown()}
               </div>
 
