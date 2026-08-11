@@ -2,6 +2,7 @@ import React from 'react';
 import { useOMS } from '../lib/store';
 import { exportToCSV, printPDFReport } from '../lib/exportUtils';
 import { matchesOutlet } from '../lib/outletUtils';
+import { getNormalizedDateStr } from '../lib/orderLogic';
 import {
   Search,
   Download,
@@ -13,7 +14,8 @@ import {
   Sparkles,
   Calendar,
   LogOut,
-  Key
+  Key,
+  X
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -81,8 +83,9 @@ export const Header = React.memo<HeaderProps>(({
 
       // 4. Date Range Filter
       if (dateRangeFilter) {
-        if (dateRangeFilter.startDate && o.order_date < dateRangeFilter.startDate) return false;
-        if (dateRangeFilter.endDate && o.order_date > dateRangeFilter.endDate) return false;
+        const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
+        if (dateRangeFilter.start && delDate < dateRangeFilter.start) return false;
+        if (dateRangeFilter.end && delDate > dateRangeFilter.end) return false;
       }
 
       return true;
@@ -177,6 +180,35 @@ export const Header = React.memo<HeaderProps>(({
                   <option key={s} value={s} className="bg-slate-900 text-slate-200 capitalize">{s}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Date Range Filter Pickers */}
+            <div className="flex items-center gap-1.5 bg-slate-950/60 p-1 rounded-xl border border-slate-800 text-xs">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 ml-1 shrink-0" />
+              <input
+                type="date"
+                value={dateRangeFilter?.start || ''}
+                onChange={(e) => setDateRangeFilter({ ...dateRangeFilter, start: e.target.value })}
+                className="bg-transparent text-slate-200 text-xs focus:outline-none w-28 font-medium cursor-pointer"
+                title="Filter From Date"
+              />
+              <span className="text-slate-500 font-bold">-</span>
+              <input
+                type="date"
+                value={dateRangeFilter?.end || ''}
+                onChange={(e) => setDateRangeFilter({ ...dateRangeFilter, end: e.target.value })}
+                className="bg-transparent text-slate-200 text-xs focus:outline-none w-28 font-medium cursor-pointer"
+                title="Filter To Date"
+              />
+              {(dateRangeFilter?.start || dateRangeFilter?.end) && (
+                <button
+                  onClick={() => setDateRangeFilter({ start: '', end: '' })}
+                  className="px-1.5 py-0.5 text-[10px] bg-rose-950/80 border border-rose-800/60 text-rose-300 hover:text-white rounded font-bold transition"
+                  title="Clear Date Filter"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           </div>
         )}

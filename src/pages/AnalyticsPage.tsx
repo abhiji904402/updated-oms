@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useOMS } from '../lib/store';
 import { Order, OrderStatus } from '../types';
+import { exportToCSV, printPDFReport } from '../lib/exportUtils';
 import {
   PieChart,
   Pie,
@@ -249,37 +250,11 @@ export const AnalyticsPage = React.memo(() => {
 
   // Export handlers
   const handleExportExcel = () => {
-    const headers = [
-      'Order #', 'Outlet', 'Item', 'Qty', 'Amount', 'Payment Type',
-      'Remaining Balance', 'Status', 'Delivery Date', 'Delivery Time', 'Customer Name', 'Phone'
-    ];
-    const rows = filteredOrders.map((o) => [
-      o.order_number,
-      `"${o.outlet}"`,
-      `"${o.item_type}"`,
-      o.quantity,
-      o.total_amount,
-      o.payment_type,
-      o.remaining_balance || 0,
-      o.status,
-      o.delivery_date,
-      o.delivery_time_expected,
-      `"${o.customer_name || ''}"`,
-      `"${o.mobile_number || ''}"`
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Broomies_Report_${selectedDate || 'all'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportToCSV(filteredOrders, `Broomies_Report_${selectedDate || 'filtered'}.csv`);
   };
 
   const handleExportPDF = () => {
-    window.print();
+    printPDFReport(filteredOrders, `Broomies Analytics Report (${filteredOrders.length} Orders)`);
   };
 
   return (

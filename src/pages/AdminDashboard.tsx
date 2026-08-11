@@ -4,6 +4,7 @@ import { OrderCard } from '../components/OrderCard';
 import { EditOrderModal } from '../components/EditOrderModal';
 import { ViewOrderModal } from '../components/ViewOrderModal';
 import { printThermalReceipts } from '../lib/thermalPrint';
+import { exportToCSV, printPDFReport } from '../lib/exportUtils';
 import { matchesOutlet } from '../lib/outletUtils';
 import {
   isDeliveredMarked,
@@ -37,7 +38,9 @@ import {
   Radio,
   Trash2,
   MapPin,
-  Map as MapIcon
+  Map as MapIcon,
+  Download,
+  FileText
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -60,6 +63,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     searchQuery,
     selectedOutletFilter,
     selectedStatusFilter,
+    dateRangeFilter,
     selectedOrderIds = [],
     session,
     clearOrderSelection
@@ -134,6 +138,13 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       // 3. Status Filter dropdown
       if (selectedStatusFilter !== 'ALL' && o.status !== selectedStatusFilter) {
         return false;
+      }
+
+      // 3.5 Date Range filter
+      if (dateRangeFilter) {
+        const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
+        if (dateRangeFilter.start && delDate < dateRangeFilter.start) return false;
+        if (dateRangeFilter.end && delDate > dateRangeFilter.end) return false;
       }
 
       // 4. Tab Specific Filter
@@ -546,14 +557,37 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
             </div>
           ) : (
             <>
-              {/* Pagination Top Bar */}
+              {/* Pagination & Direct Filter Export Bar */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#0b0e1b] border border-indigo-950/80 rounded-xl text-xs text-slate-300">
-                <div>
-                  Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
-                  <strong className="text-white">
-                    {Math.min(currentPage * PAGE_SIZE, filteredOrders.length)}
-                  </strong>{' '}
-                  of <strong className="text-purple-400">{filteredOrders.length}</strong> orders
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    Showing <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> to{' '}
+                    <strong className="text-white">
+                      {Math.min(currentPage * PAGE_SIZE, filteredOrders.length)}
+                    </strong>{' '}
+                    of <strong className="text-purple-400">{filteredOrders.length}</strong> orders
+                  </div>
+
+                  {/* Export Filtered Data Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => exportToCSV(filteredOrders, `Filtered_Orders_${activeTab}`)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-800/80 hover:bg-emerald-900 text-emerald-300 font-bold flex items-center gap-1 transition"
+                      title="Export current tab filtered orders to CSV"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Export CSV ({filteredOrders.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => printPDFReport(filteredOrders, `Orders Report - ${activeTab.toUpperCase()}`)}
+                      className="px-2.5 py-1 rounded-lg bg-purple-950/80 border border-purple-800/80 hover:bg-purple-900 text-purple-300 font-bold flex items-center gap-1 transition"
+                      title="Export current tab filtered orders to PDF"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-purple-400" />
+                      <span>PDF Report ({filteredOrders.length})</span>
+                    </button>
+                  </div>
                 </div>
 
                 {totalPages > 1 && (
