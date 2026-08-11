@@ -21,16 +21,34 @@ import {
   DollarSign
 } from 'lucide-react';
 import { getDeliveryTimeInfo, formatTo12Hour } from '../lib/timeUtils';
+import { matchesOutlet } from '../lib/outletUtils';
 
 export const AnalyticsPage = React.memo(() => {
-  const { orders = [] } = useOMS();
-  const safeOrders = orders || [];
+  const { orders = [], session } = useOMS();
+  const isOutletUser = session?.role === 'outlet';
+  const assignedOutlet = session?.outlet || 'Sector 31';
+
+  const safeOrders = useMemo(() => {
+    const raw = orders || [];
+    if (isOutletUser && assignedOutlet) {
+      return raw.filter((o) => matchesOutlet(o.outlet, assignedOutlet));
+    }
+    return raw;
+  }, [orders, isOutletUser, assignedOutlet]);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('ALL');
+  const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>(
+    isOutletUser ? assignedOutlet : 'ALL'
+  );
+
+  React.useEffect(() => {
+    if (isOutletUser && assignedOutlet) {
+      setSelectedOutletFilter(assignedOutlet);
+    }
+  }, [isOutletUser, assignedOutlet]);
 
   const activeFiltersCount = (selectedDate ? 1 : 0) + (selectedOutletFilter !== 'ALL' ? 1 : 0) + (searchTerm ? 1 : 0);
 
@@ -52,7 +70,7 @@ export const AnalyticsPage = React.memo(() => {
         return false;
       }
       // Outlet filter match
-      if (selectedOutletFilter !== 'ALL' && o.outlet !== selectedOutletFilter) {
+      if (selectedOutletFilter !== 'ALL' && !matchesOutlet(o.outlet, selectedOutletFilter)) {
         return false;
       }
       // Search term match
@@ -371,10 +389,11 @@ export const AnalyticsPage = React.memo(() => {
             <label className="block text-slate-400 mb-1 font-semibold">Filter Outlet</label>
             <select
               value={selectedOutletFilter}
+              disabled={isOutletUser}
               onChange={(e) => setSelectedOutletFilter(e.target.value)}
-              className="w-full bg-[#12162a] border border-indigo-950 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:border-purple-500"
+              className="w-full bg-[#12162a] border border-indigo-950 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <option value="ALL">All Outlets</option>
+              {!isOutletUser && <option value="ALL">All Outlets</option>}
               <option value="Sector 31">Sector 31</option>
               <option value="Sector 35">Sector 35</option>
               <option value="Sector 42">Sector 42</option>
@@ -386,7 +405,7 @@ export const AnalyticsPage = React.memo(() => {
             <button
               onClick={() => {
                 setSelectedDate('');
-                setSelectedOutletFilter('ALL');
+                setSelectedOutletFilter(isOutletUser ? assignedOutlet : 'ALL');
                 setSearchTerm('');
               }}
               className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg transition"

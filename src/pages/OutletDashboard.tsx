@@ -34,7 +34,13 @@ export const OutletDashboard = React.memo(() => {
   const isOutletUser = session?.role === 'outlet';
   const assignedOutlet = session?.outlet || 'Sector 31';
 
-  const safeOrders = useMemo(() => orders || [], [orders]);
+  const safeOrders = useMemo(() => {
+    const raw = orders || [];
+    if (isOutletUser && assignedOutlet) {
+      return raw.filter((o) => matchesOutlet(o.outlet, assignedOutlet));
+    }
+    return raw;
+  }, [orders, isOutletUser, assignedOutlet]);
 
   // Selected Outlet (Defaults to assigned outlet for outlet user, or ALL for admin)
   const [selectedOutlet, setSelectedOutlet] = useState<string>(
@@ -322,7 +328,7 @@ export const OutletDashboard = React.memo(() => {
           )}
 
           {/* INDIVIDUAL OUTLET CARDS */}
-          {outletMetrics.map((met) => {
+          {outletMetrics.filter(m => !isOutletUser || matchesOutlet(m.name, assignedOutlet)).map((met) => {
             const isAssigned = isOutletUser && met.name === assignedOutlet;
             const isDisabledForUser = isOutletUser && met.name !== assignedOutlet;
 

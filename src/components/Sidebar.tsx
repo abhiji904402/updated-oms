@@ -164,6 +164,59 @@ export const Sidebar = React.memo<SidebarProps>(({
                     </span>
                   </button>
                 </div>
+              ) : session.role === 'outlet' ? (
+                <div className="space-y-2.5">
+                  {/* Outlet Branch Profile Badge */}
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/90 to-purple-950/90 border border-purple-800/60 shadow-xl mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 font-extrabold text-sm shrink-0">
+                        <Store className="w-5 h-5 text-purple-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400">Outlet Manager</div>
+                        <div className="text-sm font-extrabold text-white truncate">{session.outlet || 'Sector 31'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1. Dashboard */}
+                  <button
+                    onClick={() => handleTabClick('dashboard')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-semibold text-sm transition ${
+                      activeTab === 'dashboard' || activeTab === 'outlet'
+                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40 font-bold'
+                        : 'text-slate-300 hover:bg-indigo-950/50 hover:text-white'
+                    }`}
+                  >
+                    <LayoutDashboard className="w-5 h-5 text-purple-300" />
+                    <span>Dashboard</span>
+                  </button>
+
+                  {/* 2. + Add Order Button */}
+                  <button
+                    onClick={() => {
+                      onOpenAddModal();
+                      setIsOpenMobile(false);
+                    }}
+                    className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/50 flex items-center justify-start gap-3 transition active:scale-[0.98]"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>Add Order</span>
+                  </button>
+
+                  {/* 3. Reports */}
+                  <button
+                    onClick={() => handleTabClick('analytics')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-semibold text-sm transition ${
+                      activeTab === 'analytics'
+                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40 font-bold'
+                        : 'text-slate-300 hover:bg-indigo-950/50 hover:text-white'
+                    }`}
+                  >
+                    <BarChart3 className="w-5 h-5 text-purple-300" />
+                    <span>Reports</span>
+                  </button>
+                </div>
               ) : (
                 <>
                   {/* 1. Dashboard */}

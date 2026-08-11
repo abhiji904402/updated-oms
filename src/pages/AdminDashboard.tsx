@@ -63,10 +63,20 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     selectedOutletFilter,
     selectedStatusFilter,
     selectedOrderIds = [],
+    session,
     clearOrderSelection
   } = useOMS();
 
-  const safeOrders = orders || [];
+  const isOutletUser = session?.role === 'outlet';
+  const assignedOutlet = session?.outlet || 'Sector 31';
+
+  const safeOrders = useMemo(() => {
+    const raw = orders || [];
+    if (isOutletUser && assignedOutlet) {
+      return raw.filter((o) => matchesOutlet(o.outlet, assignedOutlet));
+    }
+    return raw;
+  }, [orders, isOutletUser, assignedOutlet]);
 
   const [activeBoardView, setActiveBoardView] = useState<'kanban' | 'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
@@ -84,15 +94,21 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
 
   // Helper logic for order filtering across tabs
   const isPaymentPending = (o: Order) => {
-    return (
-      o.payment_type === 'due' ||
-      (typeof o.remaining_balance === 'number' && o.remaining_balance > 0) ||
-      (typeof o.due_amount === 'number' && o.due_amount > 0)
-    );
+    const pType = String(o.payment_type || '').toLowerCase().trim();
+    const total = Number(o.total_amount) || 0;
+    const adv = Number(o.advance_amount) || 0;
+    const rem = typeof o.remaining_balance === 'number' ? o.remaining_balance : Math.max(0, total - adv);
+    const due = typeof o.due_amount === 'number' ? o.due_amount : 0;
+
+    if (rem > 0 || due > 0) return true;
+    if (pType === 'due' || pType === 'part' || pType === 'partial' || pType === 'cod' || pType === 'unpaid') return true;
+    if (total > 0 && adv < total && pType !== 'full') return true;
+
+    return false;
   };
 
   const isDeliveredMarked = (o: Order) => {
-    return o.status === 'delivered';
+    return o.status === 'delivered' || Boolean(o.rider_delivered);
   };
 
   // Compute Badge Counts for all 8 Tabs in a single linear pass
@@ -109,9 +125,15 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       if (isCanc) cancelled++;
       if (isHold) on_hold++;
 
-      if (isPayPending && !isCanc) {
+      // Pending Payment tab strictly shows orders that are DELIVERED but still have payment due
+      if (isDel && isPayPending && !isCanc) {
         pending_payment++;
-        pending_payment_amount += (o.remaining_balance || 0);
+        const total = o.total_amount || 0;
+        const adv = o.advance_amount || 0;
+        const rem = typeof o.remaining_balance === 'number' ? o.remaining_balance : (total - adv);
+        const due = typeof o.due_amount === 'number' ? o.due_amount : 0;
+        const pendingAmt = rem > 0 ? rem : (due > 0 ? due : (total - adv));
+        pending_payment_amount += Math.max(0, pendingAmt);
       }
 
       if (o.status === 'missed' || (o.delivery_date < todayStr && !isDel && !isCanc)) {
@@ -222,7 +244,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       }
 
       if (activeTab === 'pending_payment') {
-        return isPaymentPending(o) && o.status !== 'cancelled';
+        return isDeliveredMarked(o) && isPaymentPending(o) && o.status !== 'cancelled';
       }
 
       if (activeTab === 'cancelled') {
@@ -338,9 +360,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            Bakery Order Management Dashboard
+            {isOutletUser ? `${assignedOutlet} Outlet Dashboard` : 'Bakery Order Management Dashboard'}
             <span className="text-xs font-bold uppercase tracking-wider bg-purple-600/20 text-purple-400 px-2.5 py-1 rounded-full border border-purple-500/30">
-              Live
+              {isOutletUser ? assignedOutlet : 'Live'}
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">

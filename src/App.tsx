@@ -24,10 +24,12 @@ function OMSAppContent() {
     setActiveTab(tab);
   };
 
-  // Automatically enforce delivery page for rider role
+  // Automatically enforce delivery page for rider role and restricted tabs for outlet role
   React.useEffect(() => {
     if (session.role === 'delivery' && activeTab !== 'delivery') {
       setActiveTab('delivery');
+    } else if (session.role === 'outlet' && activeTab !== 'dashboard' && activeTab !== 'outlet' && activeTab !== 'analytics') {
+      setActiveTab('dashboard');
     }
   }, [session.role, activeTab]);
 
@@ -85,15 +87,15 @@ function OMSAppContent() {
               />
             )}
 
-            {activeTab === 'outlet' && <OutletDashboard />}
+            {activeTab === 'outlet' && session.role !== 'outlet' && <OutletDashboard />}
 
-            {activeTab === 'delivery' && <DeliveryDashboard />}
+            {activeTab === 'delivery' && session.role !== 'outlet' && <DeliveryDashboard />}
 
             {activeTab === 'analytics' && <AnalyticsPage />}
 
-            {activeTab === 'alerts' && <AlertsPage />}
+            {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
 
-            {activeTab === 'sheets' && <GoogleSheetsPage />}
+            {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
           </main>
         </div>
       </div>
