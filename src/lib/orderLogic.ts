@@ -22,14 +22,16 @@ export const isDeliveredMarked = (o: Order): boolean => {
  */
 export const isPaymentPending = (o: Order): boolean => {
   const pType = String(o.payment_type || '').toLowerCase().trim();
+  if (pType === 'full' || pType === 'full_paid' || pType === 'paid') {
+    return false;
+  }
   const total = Number(o.total_amount) || 0;
   const adv = Number(o.advance_amount) || 0;
   const rem = typeof o.remaining_balance === 'number' ? o.remaining_balance : Math.max(0, total - adv);
   const due = typeof o.due_amount === 'number' ? o.due_amount : 0;
 
   if (rem > 0 || due > 0) return true;
-  if (pType === 'due' || pType === 'part' || pType === 'partial' || pType === 'cod' || pType === 'unpaid') return true;
-  if (total > 0 && adv < total && pType !== 'full') return true;
+  if (pType === 'due' || pType === 'part' || pType === 'partial' || pType === 'part_payment' || pType === 'cod' || pType === 'unpaid') return true;
 
   return false;
 };

@@ -465,6 +465,25 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
         </div>
       )}
 
+      {/* Pending Payment Audit Banner */}
+      {activeTab === 'pending_payment' && (
+        <div className="p-4 bg-amber-950/80 border border-amber-500/70 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-xl">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <p className="font-extrabold text-amber-300 text-sm">⚠️ Delivered orders with pending payment (Due / Part Payment)</p>
+              <p className="text-amber-300/80 text-[11px] mt-0.5">
+                Audit list for delivered orders where money is still owed. Marking an order "Paid Full" updates audit logs instantly and clears it from this list.
+              </p>
+            </div>
+          </div>
+          <div className="px-3.5 py-1.5 bg-amber-900/90 border border-amber-600/60 rounded-xl font-mono font-black text-amber-200 text-xs shrink-0 flex items-center gap-1.5">
+            <span>Total Outstanding:</span>
+            <span className="text-amber-100 text-sm">₹{(metrics.totalDue ?? 0).toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+
       {/* Main Board View: Map, Kanban or List */}
       {activeBoardView === 'map' ? (
         <Card className="h-[540px] p-0 overflow-hidden border border-indigo-900/80 bg-[#0c0f24]">
@@ -552,8 +571,18 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
         /* List View with Fast Pagination */
         <div className="space-y-4">
           {filteredOrders.length === 0 ? (
-            <div className="p-12 text-center border border-dashed border-indigo-950 rounded-2xl text-slate-500 text-sm">
-              No matching orders found under this tab. Try selecting another tab or clearing search.
+            <div className="p-12 text-center border border-dashed border-indigo-950 rounded-2xl text-slate-400 text-sm space-y-2 bg-[#0b0e1b]/50">
+              {activeTab === 'pending_payment' ? (
+                <div className="space-y-1.5">
+                  <p className="text-emerald-400 font-extrabold text-base flex items-center justify-center gap-2">
+                    <span>✅</span>
+                    <span>All payments collected — no dues</span>
+                  </p>
+                  <p className="text-xs text-slate-400">Every delivered order has been fully paid for.</p>
+                </div>
+              ) : (
+                <p>No matching orders found under this tab. Try selecting another tab or clearing search.</p>
+              )}
             </div>
           ) : (
             <>

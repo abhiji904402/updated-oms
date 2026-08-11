@@ -84,51 +84,79 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
   const renderPaymentDropdown = () => {
     const total = order.total_amount ?? 0;
     const advance = order.advance_amount ?? 0;
-    const remaining = order.remaining_balance ?? 0;
+    const remaining = typeof order.remaining_balance === 'number' ? order.remaining_balance : Math.max(0, total - advance);
 
     return (
-      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        <span className="text-[10px] font-bold text-slate-400 uppercase">Payment:</span>
-        <select
-          value={order.payment_type || 'full'}
-          onChange={(e) => {
-            const newType = e.target.value as PaymentType;
-            let updates: Partial<Order> = {
-              payment_type: newType,
-              payment_changed_by: session.name || session.role,
-              payment_changed_at: new Date().toISOString()
-            };
-            if (newType === 'full') {
-              updates.advance_amount = total;
-              updates.remaining_balance = 0;
-              updates.due_amount = 0;
-            } else if (newType === 'due') {
-              updates.advance_amount = 0;
-              updates.remaining_balance = total;
-              updates.due_amount = total;
-            } else if (newType === 'part') {
-              const adv = order.advance_amount && order.advance_amount < total ? order.advance_amount : Math.round(total / 2);
-              updates.advance_amount = adv;
-              updates.remaining_balance = Math.max(0, total - adv);
-              updates.due_amount = Math.max(0, total - adv);
-            }
-            updateOrder(order.id, updates);
-          }}
-          className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition shadow-sm ${
-            order.payment_type === 'full'
-              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
-              : order.payment_type === 'part'
-              ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
-              : 'bg-rose-950/90 text-rose-300 border-rose-500/50'
-          }`}
-        >
-          <option value="full" className="bg-slate-900 text-emerald-300">Paid Full (₹{total.toLocaleString()})</option>
-          <option value="part" className="bg-slate-900 text-amber-300">Partial Advance (Paid ₹{advance.toLocaleString()} | Due ₹{remaining.toLocaleString()})</option>
-          <option value="due" className="bg-slate-900 text-rose-300">Pay On Delivery / Due (₹{remaining.toLocaleString()})</option>
-          <option value="cash" className="bg-slate-900 text-slate-200">Cash</option>
-          <option value="upi" className="bg-slate-900 text-slate-200">UPI</option>
-          <option value="online" className="bg-slate-900 text-slate-200">Online</option>
-        </select>
+      <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Payment:</span>
+            <select
+              value={order.payment_type || 'full'}
+              onChange={(e) => {
+                const newType = e.target.value as PaymentType;
+                let updates: Partial<Order> = {
+                  payment_type: newType,
+                  payment_changed_by: session.name || session.role || 'Admin',
+                  payment_changed_at: new Date().toISOString()
+                };
+                if (newType === 'full' || (newType as string) === 'full_paid') {
+                  updates.payment_type = 'full';
+                  updates.advance_amount = total;
+                  updates.remaining_balance = 0;
+                  updates.due_amount = 0;
+                } else if (newType === 'due') {
+                  updates.advance_amount = 0;
+                  updates.remaining_balance = total;
+                  updates.due_amount = total;
+                } else if (newType === 'part' || (newType as string) === 'part_payment') {
+                  updates.payment_type = 'part';
+                  const adv = order.advance_amount && order.advance_amount < total ? order.advance_amount : Math.round(total / 2);
+                  updates.advance_amount = adv;
+                  updates.remaining_balance = Math.max(0, total - adv);
+                  updates.due_amount = Math.max(0, total - adv);
+                }
+                updateOrder(order.id, updates);
+              }}
+              className={`text-[11px] font-black uppercase px-2 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition shadow-sm ${
+                order.payment_type === 'full'
+                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+                  : order.payment_type === 'part' || order.payment_type === 'part_payment'
+                  ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
+                  : 'bg-rose-950/90 text-rose-300 border-rose-500/50'
+              }`}
+            >
+              <option value="full" className="bg-slate-900 text-emerald-300">Paid Full (₹{total.toLocaleString()})</option>
+              <option value="part" className="bg-slate-900 text-amber-300">Partial Advance (Paid ₹{advance.toLocaleString()} | Due ₹{remaining.toLocaleString()})</option>
+              <option value="due" className="bg-slate-900 text-rose-300">Pay On Delivery / Due (₹{remaining.toLocaleString()})</option>
+              <option value="cash" className="bg-slate-900 text-slate-200">Cash</option>
+              <option value="upi" className="bg-slate-900 text-slate-200">UPI</option>
+              <option value="online" className="bg-slate-900 text-slate-200">Online</option>
+            </select>
+          </div>
+
+          {remaining > 0 ? (
+            <span className="text-xs font-black text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60 font-mono">
+              Due: ₹{remaining.toLocaleString()}
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40 font-mono">
+              Fully Paid
+            </span>
+          )}
+        </div>
+
+        {order.payment_changed_by && (
+          <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1.5 pt-0.5 border-t border-slate-800/60">
+            <span className="text-purple-400 font-bold">Audit:</span>
+            <span>By {order.payment_changed_by}</span>
+            {order.payment_changed_at && (
+              <span className="text-slate-500">
+                ({new Date(order.payment_changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+              </span>
+            )}
+          </div>
+        )}
       </div>
     );
   };
