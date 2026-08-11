@@ -274,11 +274,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return clean as Order;
   };
 
-  // Keep a ref of orders for non-reactive access inside intervals
+  // Keep refs of orders and sheetConfig for non-reactive access inside callbacks and intervals
   const ordersRef = React.useRef(orders);
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
+
+  const sheetConfigRef = React.useRef(sheetConfig);
+  useEffect(() => {
+    sheetConfigRef.current = sheetConfig;
+  }, [sheetConfig]);
 
   // Fast offline hydration from IndexedDB on startup
   useEffect(() => {
@@ -625,20 +630,13 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details: success ? `[pushToSheet] Synced Order #${orderNumber} (${event}) to Google Sheet` : `Sync failed for #${orderNumber}`
     };
     setSyncLogs((prev) => [newLog, ...prev.slice(0, 49)]);
-
-    setSheetConfig((prev) => ({
-      ...prev,
-      last_sync: new Date().toISOString(),
-      last_synced_at: new Date().toISOString(),
-      sync_count: prev.sync_count + 1,
-      webhook_status: 'connected'
-    }));
   }, []);
 
   // Fast, non-blocking pushToSheet function for Google Sheet webhook
   const pushToSheet = useCallback((order: Order, action: 'create' | 'update' | 'delete') => {
-    if (!sheetConfig.auto_sync) return;
-    const targetUrl = (sheetConfig.sheet_url || '').trim();
+    const config = sheetConfigRef.current;
+    if (!config.auto_sync) return;
+    const targetUrl = (config.sheet_url || '').trim();
     if (!targetUrl || !targetUrl.startsWith('http') || targetUrl.includes('docs.google.com/spreadsheets')) return;
     
     // Log sync immediately for instant UI responsiveness
@@ -650,11 +648,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action, order: sanitizeOrderForSync(order) })
     }).catch((err) => console.warn('Push to sheet error:', err));
-  }, [sheetConfig.auto_sync, sheetConfig.sheet_url, logSync]);
+  }, [logSync]);
 
   // Fast Webhook / API sync function - sends ALL orders starting from order #1 ascending
   const triggerGoogleSheetSync = useCallback(async () => {
-    const targetUrl = (sheetConfig.sheet_url || '').trim();
+    const config = sheetConfigRef.current;
+    const targetUrl = (config.sheet_url || '').trim();
 
     if (!targetUrl || !targetUrl.startsWith('http')) {
       showNotification('⚠️ Please enter a Google Apps Script Webhook URL first in Settings');
@@ -666,13 +665,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (orders.length === 0) {
+    const currentOrders = ordersRef.current;
+    if (!currentOrders || currentOrders.length === 0) {
       showNotification('ℹ️ No orders in system to synchronize.');
       return;
     }
 
     // 1. Sort orders strictly in ascending order by order_number (Order #1, #2, #3...)
-    const sortedOrders = [...orders].sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
+    const sortedOrders = [...currentOrders].sort((a, b) => (a.order_number || 0) - (b.order_number || 0));
     const sanitizedOrders = sortedOrders.map(sanitizeOrderForSync);
 
     const firstNum = sortedOrders[0]?.order_number || 1;
@@ -700,10 +700,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Sheet sync warning:', err);
       showNotification('⚠️ Network or Webhook connection check required.');
     }
-  }, [orders, sheetConfig.sheet_url, logSync, showNotification]);
+  }, [logSync, showNotification]);
 
   const addOrder = useCallback((orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'updated_at'>): Order => {
-    const maxOrderNum = orders.length > 0 ? orders.reduce((max, o) => Math.max(max, o.order_number || 0), 0) : 2159;
+    const currentOrders = ordersRef.current;
+    const maxOrderNum = currentOrders.length > 0 ? currentOrders.reduce((max, o) => Math.max(max, o.order_number || 0), 0) : 2159;
     const newOrderNumber = maxOrderNum > 0 ? maxOrderNum + 1 : 2160;
     const now = new Date().toISOString();
     const randomOtp = Math.floor(1000 + Math.random() * 9000).toString();
@@ -744,7 +745,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToSheet(newOrder, 'create');
 
     return newOrder;
-  }, [orders, session.name, pushToSheet, showNotification]);
+  }, [session.name, pushToSheet, showNotification]);
 
   const importOrders = useCallback((imported: Partial<Order>[], overwrite = false) => {
     const now = new Date().toISOString();
@@ -843,7 +844,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [orders, showNotification, sheetConfig.sheet_url, triggerGoogleSheetSync]);
 
   const updateOrder = useCallback((id: string, updates: Partial<Order>) => {
-    const target = orders.find((o) => o.id === id);
+    const target = ordersRef.current.find((o) => o.id === id);
     if (!target) return;
 
     const now = new Date().toISOString();
@@ -887,10 +888,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
     pushToSheet(updated, 'update');
-  }, [orders, session.name, session.role, pushToSheet]);
+  }, [session.name, session.role, pushToSheet]);
 
   const deleteOrder = useCallback((id: string) => {
-    const target = orders.find((o) => o.id === id);
+    const target = ordersRef.current.find((o) => o.id === id);
     if (target) {
       showNotification(`Order #${target.order_number} removed.`);
       pushToSheet(target, 'delete');
@@ -899,7 +900,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => prev.filter((o) => o.id !== id));
     deleteDoc(doc(db, 'orders', id)).catch(() => {});
     setSelectedOrderIds((prev) => prev.filter((item) => item !== id));
-  }, [orders, showNotification, pushToSheet]);
+  }, [showNotification, pushToSheet]);
 
   const clearAllOrders = useCallback(async () => {
     // 1. Immediately update UI state & local persistent storages
@@ -928,7 +929,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showNotification]);
 
   const updateOrderStatus = useCallback((id: string, status: OrderStatus, deliveryPartner?: string) => {
-    const target = orders.find((o) => o.id === id);
+    const target = ordersRef.current.find((o) => o.id === id);
     if (!target) return;
 
     const now = new Date().toISOString();
@@ -959,10 +960,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
     showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
     pushToSheet(updated, 'update');
-  }, [orders, session.name, showNotification, pushToSheet]);
+  }, [session.name, showNotification, pushToSheet]);
 
   const markDelivered = useCallback((id: string, photoUrl?: string, otpInput?: string) => {
-    const targetOrder = orders.find((o) => o.id === id);
+    const targetOrder = ordersRef.current.find((o) => o.id === id);
     if (!targetOrder) {
       return { success: false, message: 'Order not found.' };
     }
@@ -1015,7 +1016,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     showNotification(`🚀 Order #${targetOrder.order_number} delivered by rider! Waiting for Outlet confirmation.`);
     return { success: true, message: 'Delivered marked! Waiting for Outlet/Admin confirmation.' };
-  }, [orders, session.name, session.deliveryPartnerId, showNotification, pushToSheet]);
+  }, [session.name, session.deliveryPartnerId, showNotification, pushToSheet]);
 
   const confirmRiderDelivery = useCallback((id: string) => {
     setOrders((prev) =>
