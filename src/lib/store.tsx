@@ -285,6 +285,32 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sheetConfigRef.current = sheetConfig;
   }, [sheetConfig]);
 
+  // Fail-safe effects to sync partners, passwords, sheetConfig, and outletLocations to local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_PARTNERS, JSON.stringify(partners));
+      idbSet(LOCAL_STORAGE_KEY_PARTNERS, partners);
+    } catch (e) {}
+  }, [partners]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_PASSWORDS, JSON.stringify(authPasswords));
+    } catch (e) {}
+  }, [authPasswords]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_SHEET, JSON.stringify(sheetConfig));
+    } catch (e) {}
+  }, [sheetConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_OUTLETS, JSON.stringify(outletLocations));
+    } catch (e) {}
+  }, [outletLocations]);
+
   // Fast offline hydration from IndexedDB on startup
   useEffect(() => {
     idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((idbOrders) => {
@@ -955,7 +981,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updated: Order = { ...target, ...updates };
 
-    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
+    setOrders((prev) => {
+      const newList = prev.map((ord) => (ord.id === id ? updated : ord));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
+      } catch (e) {}
+      return newList;
+    });
 
     setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
     showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
@@ -993,9 +1026,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: now
     };
 
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? updatedOrder : o))
-    );
+    setOrders((prev) => {
+      const newList = prev.map((o) => (o.id === id ? updatedOrder : o));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
+      } catch (e) {}
+      return newList;
+    });
     setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch(() => {});
 
     pushToSheet(updatedOrder, 'update');
@@ -1019,25 +1057,29 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [session.name, session.deliveryPartnerId, showNotification, pushToSheet]);
 
   const confirmRiderDelivery = useCallback((id: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
+    setOrders((prev) => {
+      const newList = prev.map((ord) => {
         if (ord.id === id) {
-          const updated: Order = {
+          return {
             ...ord,
-            status: 'delivered',
+            status: 'delivered' as OrderStatus,
             rider_delivered: true,
             delivery_confirmation_pending: false,
             updated_at: new Date().toISOString()
           };
-          setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
-          showNotification(`✅ Order #${ord.order_number} delivery confirmed by Outlet!`);
-          pushToSheet(updated, 'update');
-          return updated;
         }
         return ord;
-      })
-    );
-  }, [showNotification, pushToSheet]);
+      });
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
+      } catch (e) {}
+      return newList;
+    });
+    const targetDoc = doc(db, 'orders', id);
+    setDoc(targetDoc, { status: 'delivered', rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    showNotification(`✅ Order delivery confirmed by Outlet!`);
+  }, [showNotification]);
 
   const updatePartnerLocation = useCallback((partnerId: string, location: Omit<DeliveryPartnerLocation, 'updated_at'>) => {
     const updatedAt = new Date().toISOString();

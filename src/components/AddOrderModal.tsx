@@ -87,6 +87,41 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
   const customerMobileContainerRef = useRef<HTMLDivElement>(null);
   const customerNameContainerRef = useRef<HTMLDivElement>(null);
 
+  // Handle Paste (Ctrl+V / Cmd+V) for instant image attachment
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            try {
+              setIsCompressing(true);
+              const compressedDataUrl = await compressImage(file, 800, 0.8);
+              setItemImageUrl(compressedDataUrl);
+            } catch (err) {
+              console.error('Failed to compress pasted image:', err);
+            } finally {
+              setIsCompressing(false);
+            }
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [isOpen]);
+
   // Click outside to close suggestion dropdowns immediately
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
@@ -1078,8 +1113,10 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                     <div className="text-sm font-semibold text-slate-200 mt-1">
                       {isCompressing ? 'Compressing photo...' : 'Drag & drop or click to upload'}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      Item photo (optional)
+                    <div className="text-xs text-purple-400 font-medium flex items-center justify-center gap-1 mt-0.5">
+                      <span>Item photo (optional)</span>
+                      <span>•</span>
+                      <span className="bg-purple-950/80 text-purple-300 border border-purple-800/60 px-1.5 py-0.5 rounded font-mono text-[10px] font-bold">Ctrl+V / Cmd+V to paste image</span>
                     </div>
                   </div>
                 )}

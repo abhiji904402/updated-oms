@@ -151,6 +151,41 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     }
   }, [order, isOpen]);
 
+  // Handle Paste (Ctrl+V / Cmd+V) for instant image attachment
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            try {
+              setIsCompressing(true);
+              const compressedDataUrl = await compressImage(file, 800, 0.8);
+              setItemImageUrl(compressedDataUrl);
+            } catch (err) {
+              console.error('Failed to compress pasted image:', err);
+            } finally {
+              setIsCompressing(false);
+            }
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [isOpen]);
+
   // Helper to parse quantity multiplier for total amount calculation
   const getQuantityMultiplier = (qtyStr: string): number => {
     if (!qtyStr) return 1;
@@ -936,9 +971,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <label className={`flex-1 ${isOutletUser ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#1a1e36]'} bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-slate-300 flex items-center justify-center gap-2 transition`}>
+                  <label className={`flex-1 ${isOutletUser ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#1a1e36]'} bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-slate-300 flex items-center justify-center gap-1.5 transition`}>
                     <ImageIcon className="w-4 h-4 text-purple-400" />
-                    <span>{isCompressing ? 'Compressing...' : itemImageUrl ? 'Change Photo' : 'Upload Item Photo'}</span>
+                    <span>{isCompressing ? 'Compressing...' : itemImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                    <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-800/60 hidden sm:inline">Ctrl+V</span>
                     {!isOutletUser && (
                       <input
                         type="file"
