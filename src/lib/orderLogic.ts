@@ -14,7 +14,7 @@ export type DashboardTab =
  * Checks if an order is marked as delivered
  */
 export const isDeliveredMarked = (o: Order): boolean => {
-  return o.status === 'delivered' || Boolean(o.rider_delivered);
+  return o.status === 'delivered';
 };
 
 /**

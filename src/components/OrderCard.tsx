@@ -324,17 +324,20 @@ Broomies Team`;
               )}
 
               {/* Rider Delivery Confirmation Banner */}
-              {order.rider_delivered && order.delivery_confirmation_pending && (
-                <div className="p-2.5 bg-emerald-950 border border-emerald-500/80 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs" onClick={(e) => e.stopPropagation()}>
+              {(order.rider_delivered || order.delivery_confirmation_pending) && order.status !== 'delivered' && (
+                <div className="p-2.5 bg-emerald-950/90 border border-emerald-500/80 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs shadow-md" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2 text-emerald-300 font-bold">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Rider Delivered (Pending Confirmation)</span>
+                    <CheckCircle className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
+                    <div>
+                      <p className="font-extrabold text-emerald-300 uppercase tracking-wide">Delivered Marked by Rider</p>
+                      <p className="text-[10px] text-emerald-400/80 font-medium">Pending Admin / Outlet Confirmation</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => confirmRiderDelivery(order.id)}
-                    className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase text-[10px]"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase text-[11px] tracking-wider shadow shrink-0 transition active:scale-95"
                   >
-                    CONFIRM
+                    CONFIRM DELIVERY
                   </button>
                 </div>
               )}

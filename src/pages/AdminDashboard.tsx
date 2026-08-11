@@ -138,21 +138,20 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
 
       // 4. Tab Specific Filter
       if (activeTab === 'today') {
-        const isToday = isOrderForToday(o, todayStr);
+        const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
         return (
-          isToday &&
+          (delDate === todayStr || delDate <= todayStr) &&
           o.status !== 'cancelled' &&
           o.status !== 'on_hold' &&
           !isDeliveredMarked(o) &&
-          o.status !== 'missed' &&
-          o.delivery_date >= todayStr
+          o.status !== 'missed'
         );
       }
 
       if (activeTab === 'tomorrow') {
-        const isTomorrow = o.delivery_date === tomorrowStr || o.order_date === tomorrowStr;
+        const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
         return (
-          isTomorrow &&
+          delDate === tomorrowStr &&
           o.status !== 'cancelled' &&
           o.status !== 'on_hold' &&
           !isDeliveredMarked(o)
@@ -160,9 +159,9 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       }
 
       if (activeTab === 'future') {
-        const isFuture = o.delivery_date > tomorrowStr || o.order_date > tomorrowStr;
+        const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
         return (
-          isFuture &&
+          delDate > tomorrowStr &&
           o.status !== 'cancelled' &&
           o.status !== 'on_hold' &&
           !isDeliveredMarked(o)

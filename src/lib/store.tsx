@@ -983,7 +983,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date().toISOString();
     const updatedOrder: Order = {
       ...targetOrder,
-      status: 'delivered',
+      status: targetOrder.status === 'delivered' ? 'delivered' : (targetOrder.status || 'out_for_delivery'),
       delivery_photo_url: photoUrl || targetOrder.delivery_photo_url || '',
       actual_delivery_time: now,
       delivered_by: session.name || targetOrder.delivery_partner || 'Delivery Partner',
@@ -1023,10 +1023,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (ord.id === id) {
           const updated: Order = {
             ...ord,
+            status: 'delivered',
+            rider_delivered: true,
             delivery_confirmation_pending: false,
             updated_at: new Date().toISOString()
           };
-          setDoc(doc(db, 'orders', id), { delivery_confirmation_pending: false, updated_at: updated.updated_at }, { merge: true }).catch(() => {});
+          setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
           showNotification(`✅ Order #${ord.order_number} delivery confirmed by Outlet!`);
           pushToSheet(updated, 'update');
           return updated;
