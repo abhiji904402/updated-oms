@@ -522,7 +522,7 @@ export const OutletDashboard = React.memo(() => {
                           onClick={() => setViewingOrder(o)}
                           className="hover:bg-[#12162a] transition cursor-pointer group"
                         >
-                          <td className="p-3.5 font-black text-white group-hover:text-purple-300 transition">
+                          <td className="p-3.5 font-black text-white text-base sm:text-lg font-mono group-hover:text-purple-300 transition">
                             #{o.order_number}
                           </td>
                           <td className="p-3.5">

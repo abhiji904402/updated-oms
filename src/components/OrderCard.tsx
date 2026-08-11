@@ -252,7 +252,7 @@ Broomies Team`;
                     onChange={() => toggleOrderSelection(order.id)}
                     className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-purple-500 cursor-pointer"
                   />
-                  <div className="t-type">#{order.order_number}</div>
+                  <div className="t-type text-sm sm:text-base font-black text-purple-100 tracking-wide px-2.5 py-1">#{order.order_number}</div>
                   <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-lg bg-purple-950/90 text-purple-300 border border-purple-700/60 shadow-sm flex items-center gap-1 tracking-wider">
                     📍 {order.outlet || 'Sector 31'}
                   </span>
