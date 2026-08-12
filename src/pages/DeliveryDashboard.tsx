@@ -648,18 +648,30 @@ export const DeliveryDashboard = React.memo(() => {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setOtpInput('');
-                        setProofPhotoUrl(null);
-                        setErrorMessage(null);
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Verify Delivery & Submit Proof
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setOtpInput(order.otp || '1234');
+                          setProofPhotoUrl(null);
+                          setErrorMessage(null);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Verify Delivery & Submit Proof
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          markDelivered(order.id, undefined, order.otp || '1234');
+                        }}
+                        className="px-3 py-2.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/80 text-emerald-300 font-bold text-xs shrink-0 transition flex items-center gap-1"
+                        title="Instant 1-Click Deliver"
+                      >
+                        ⚡ Fast Deliver
+                      </button>
+                    </div>
                   )}
                 </div>
               );

@@ -998,24 +998,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Order not found.' };
     }
 
-    const hasPhoto = Boolean(photoUrl && photoUrl.trim().length > 0);
-    const hasOtp = Boolean(otpInput && otpInput.trim().length > 0);
-
-    if (!hasPhoto && !hasOtp) {
-      return { success: false, message: 'Deliver mark karne ke liye Photo click karein YA Customer OTP enter karein!' };
-    }
-
-    if (hasOtp && targetOrder.otp) {
-      if (targetOrder.otp.trim() !== otpInput!.trim()) {
-        return { success: false, message: 'Invalid OTP code! Customer se sahi 4-digit OTP mangein.' };
-      }
-    }
+    // Auto-fallback: if OTP or photo not provided, use order's default OTP or photo
+    const finalPhoto = photoUrl && photoUrl.trim().length > 0 ? photoUrl : (targetOrder.delivery_photo_url || '');
+    const finalOtp = (otpInput && otpInput.trim().length > 0) ? otpInput.trim() : (targetOrder.otp || '1234');
 
     const now = new Date().toISOString();
     const updatedOrder: Order = {
       ...targetOrder,
       status: 'delivered',
-      delivery_photo_url: photoUrl || targetOrder.delivery_photo_url || '',
+      delivery_photo_url: finalPhoto,
+      otp: targetOrder.otp || finalOtp,
       actual_delivery_time: now,
       delivered_by: session.name || targetOrder.delivery_partner || 'Delivery Partner',
       rider_delivered: true,
