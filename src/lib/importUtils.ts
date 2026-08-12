@@ -139,8 +139,8 @@ export function parseCSVToOrders(csvText: string): Partial<Order>[] {
     const deliveryDate = getVal('deliverydate', 'deldate', 'date');
     const expectedTime = getVal('time', 'deliverytime', 'expecteddeliverytime', 'timeexpected', 'expectedtime');
     const informedBy = getVal('informedby', 'informed');
-    const advBill = getVal('advbillno', 'advancebillnumber', 'advbill');
-    const finalBill = getVal('finalbillno', 'finalbillnumber', 'finalbill');
+    const advBill = getVal('advbillno', 'advancebillnumber', 'advbill', 'advancebillno', 'advancebill', 'advbillno.', 'advbill#');
+    const finalBill = getVal('finalbillno', 'finalbillnumber', 'finalbill', 'billno', 'billnumber', 'billnos', 'bill', 'bill#', 'finalbillno.', 'invoiceno', 'invoice');
     const photoUrl = getVal('cakephotourl', 'photourl', 'itemimageurl', 'photo');
     const remarks = getVal('remarks', 'notes', 'comments');
     const address = getVal('address', 'deliveryaddress', 'locationaddress');
@@ -226,8 +226,8 @@ export function parseJSONToOrders(jsonText: string): Partial<Order>[] {
         informed_by: String(item.informed_by || 'App'),
         address: String(item.address || 'Address'),
         remarks: String(item.remarks || item.notes || ''),
-        advance_bill_number: String(item.advance_bill_number || item.adv_bill || ''),
-        final_bill_number: String(item.final_bill_number || item.final_bill || ''),
+        advance_bill_number: String(item.advance_bill_number || item.adv_bill_number || item.adv_bill || item.advance_bill || ''),
+        final_bill_number: String(item.final_bill_number || item.final_bill_no || item.final_bill || item.bill_number || item.bill_no || item.bill || ''),
         order_date: String(item.order_date || new Date().toISOString().split('T')[0]),
         order_time: String(item.order_time || new Date().toTimeString().slice(0, 5))
       };

@@ -140,8 +140,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       setTotalAmountStr((order.total_amount ?? 0).toString());
       setPaymentType(order.payment_type || 'full');
       setAdvanceAmountStr((order.advance_amount ?? 0).toString());
-      setAdvanceBillNumber(order.advance_bill_number || '');
-      setFinalBillNumber(order.final_bill_number || '');
+      setAdvanceBillNumber(order.advance_bill_number || (order as any).adv_bill_number || (order as any).adv_bill || (order as any).advance_bill || '');
+      setFinalBillNumber(order.final_bill_number || (order as any).final_bill_no || (order as any).final_bill || (order as any).bill_number || (order as any).bill_no || (order as any).bill || '');
       setDeliveryAddress(order.address || '');
       setRemarks(order.remarks || '');
       setStatus(order.status || 'pending');

@@ -76,7 +76,9 @@ export const Header = React.memo<HeaderProps>(({
         const matchOutlet = (o.outlet || '').toLowerCase().includes(q);
         const matchAddr = (o.address || '').toLowerCase().includes(q);
         const matchRider = (o.delivery_partner || '').toLowerCase().includes(q);
-        if (!matchNum && !matchCust && !matchPhone && !matchItem && !matchOutlet && !matchAddr && !matchRider) {
+        const matchAdvBill = (o.advance_bill_number || (o as any).adv_bill || '').toLowerCase().includes(q);
+        const matchFinalBill = (o.final_bill_number || (o as any).final_bill || (o as any).bill_number || '').toLowerCase().includes(q);
+        if (!matchNum && !matchCust && !matchPhone && !matchItem && !matchOutlet && !matchAddr && !matchRider && !matchAdvBill && !matchFinalBill) {
           return false;
         }
       }

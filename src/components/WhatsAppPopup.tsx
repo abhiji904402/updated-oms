@@ -22,10 +22,6 @@ export function buildWhatsAppConfirmationMessage(order: Order): string {
   msg += `Delivery Date: ${delDate}\n`;
   msg += `Delivery Time: ${delTime}\n`;
 
-  if (order.item_image_url) {
-    msg += `Item Photo: ${order.item_image_url}\n`;
-  }
-
   msg += `\nIf you have any queries or need further assistance, please feel free to get in touch with us at:\n`;
   msg += `9266424088\n`;
   msg += `If still query not solved call 9971860845\n\n`;
@@ -144,10 +140,10 @@ export const WhatsAppPopup: React.FC<WhatsAppPopupProps> = ({ order, onClose }) 
                 <div className="text-xs space-y-0.5">
                   <div className="flex items-center gap-1.5 font-bold text-emerald-400">
                     <ImageIcon className="w-3.5 h-3.5" />
-                    <span>Photo Attached</span>
+                    <span>Item Photo Available</span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    Image URL included in message • Download & attach manually in WhatsApp
+                    Item photo is stored safely with the order
                   </p>
                 </div>
               </div>

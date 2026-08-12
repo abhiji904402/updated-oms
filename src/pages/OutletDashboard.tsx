@@ -138,7 +138,9 @@ export const OutletDashboard = React.memo(() => {
         const matchItem = (o.item_type || '').toLowerCase().includes(q);
         const matchAddr = (o.address || '').toLowerCase().includes(q);
         const matchRider = (o.delivery_partner || '').toLowerCase().includes(q);
-        if (!matchNum && !matchCust && !matchPhone && !matchItem && !matchAddr && !matchRider) {
+        const matchAdvBill = (o.advance_bill_number || (o as any).adv_bill || '').toLowerCase().includes(q);
+        const matchFinalBill = (o.final_bill_number || (o as any).final_bill || (o as any).bill_number || '').toLowerCase().includes(q);
+        if (!matchNum && !matchCust && !matchPhone && !matchItem && !matchAddr && !matchRider && !matchAdvBill && !matchFinalBill) {
           return false;
         }
       }
@@ -615,11 +617,11 @@ export const OutletDashboard = React.memo(() => {
                               <input
                                 type="text"
                                 placeholder="Adv Bill #"
-                                defaultValue={o.advance_bill_number || ''}
-                                key={`adv-${o.id}-${o.advance_bill_number}`}
+                                defaultValue={o.advance_bill_number || (o as any).adv_bill || ''}
+                                key={`adv-${o.id}-${o.advance_bill_number || (o as any).adv_bill}`}
                                 onBlur={(e) => {
                                   const val = e.target.value.trim();
-                                  if (val !== (o.advance_bill_number || '')) {
+                                  if (val !== (o.advance_bill_number || (o as any).adv_bill || '')) {
                                     updateOrder(o.id, { advance_bill_number: val });
                                   }
                                 }}
@@ -628,11 +630,11 @@ export const OutletDashboard = React.memo(() => {
                               <input
                                 type="text"
                                 placeholder="Final Bill #"
-                                defaultValue={o.final_bill_number || ''}
-                                key={`final-${o.id}-${o.final_bill_number}`}
+                                defaultValue={o.final_bill_number || (o as any).final_bill || (o as any).bill_number || ''}
+                                key={`final-${o.id}-${o.final_bill_number || (o as any).final_bill || (o as any).bill_number}`}
                                 onBlur={(e) => {
                                   const val = e.target.value.trim();
-                                  if (val !== (o.final_bill_number || '')) {
+                                  if (val !== (o.final_bill_number || (o as any).final_bill || (o as any).bill_number || '')) {
                                     updateOrder(o.id, { final_bill_number: val });
                                   }
                                 }}

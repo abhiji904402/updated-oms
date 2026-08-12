@@ -101,12 +101,17 @@ export function printThermalReceipts(orders: Order[]) {
         <span class="bold uppercase">${o.payment_type}</span>
       </div>
 
-      ${(o.advance_bill_number || o.final_bill_number) ? `
-        <div class="flex-between font-medium" style="margin-top: 3px;">
-          <span class="bold">Bill No(s):</span>
-          <span class="bold">${[o.advance_bill_number, o.final_bill_number].filter(Boolean).join(' / ')}</span>
-        </div>
-      ` : ''}
+      ${(() => {
+        const adv = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
+        const fin = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
+        const billStr = [adv, fin].filter(Boolean).join(' / ');
+        return billStr ? `
+          <div class="flex-between font-medium" style="margin-top: 3px;">
+            <span class="bold">Bill No(s):</span>
+            <span class="bold">${billStr}</span>
+          </div>
+        ` : '';
+      })()}
 
       ${o.otp ? `
         <div class="center otp-box">

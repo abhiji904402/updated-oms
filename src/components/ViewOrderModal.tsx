@@ -269,17 +269,17 @@ The Broomies Team`;
                   </span>
                 </div>
 
-                {order.advance_bill_number && (
+                {(order.advance_bill_number || (order as any).adv_bill) && (
                   <div className="flex justify-between py-1 border-t border-slate-800/60 text-amber-300">
                     <span>Adv. Bill No.:</span>
-                    <strong className="font-mono bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">{order.advance_bill_number}</strong>
+                    <strong className="font-mono bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">{order.advance_bill_number || (order as any).adv_bill}</strong>
                   </div>
                 )}
 
-                {order.final_bill_number && (
+                {(order.final_bill_number || (order as any).final_bill || (order as any).bill_number) && (
                   <div className="flex justify-between py-1 border-t border-slate-800/60 text-emerald-300">
                     <span>Final Bill No.:</span>
-                    <strong className="font-mono bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">{order.final_bill_number}</strong>
+                    <strong className="font-mono bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">{order.final_bill_number || (order as any).final_bill || (order as any).bill_number}</strong>
                   </div>
                 )}
               </div>

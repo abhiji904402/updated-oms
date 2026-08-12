@@ -31,6 +31,9 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
 
   const rows = orders.map((o) => {
     const timeInfo = getDeliveryTimeInfo(o);
+    const advBill = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
+    const finalBill = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
+
     return [
       o.order_number,
       `"${o.outlet}"`,
@@ -49,8 +52,8 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
       (o.advance_amount || 0).toFixed(2),
       (o.remaining_balance || 0).toFixed(2),
       o.payment_type,
-      `"${o.advance_bill_number || 'N/A'}"`,
-      `"${o.final_bill_number || 'N/A'}"`,
+      `"${advBill || 'N/A'}"`,
+      `"${finalBill || 'N/A'}"`,
       o.status,
       `"${o.delivery_partner || 'Unassigned'}"`,
       `"${o.delivered_by || o.delivery_partner || 'N/A'}"`,
@@ -92,6 +95,23 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
             ? '#dc2626'
             : '#475569';
 
+        const advBill = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
+        const finalBill = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
+
+        let billCellHtml = '';
+        if (advBill && finalBill) {
+          billCellHtml = `
+            <div style="font-size: 10px; color: #d97706;">Adv Bill: <strong>${advBill}</strong></div>
+            <div style="font-size: 10px; color: #16a34a;">Final Bill: <strong>${finalBill}</strong></div>
+          `;
+        } else if (finalBill) {
+          billCellHtml = `<div style="font-size: 11px; color: #16a34a; font-weight: bold;">${finalBill}</div>`;
+        } else if (advBill) {
+          billCellHtml = `<div style="font-size: 11px; color: #d97706; font-weight: bold;">Adv: ${advBill}</div>`;
+        } else {
+          billCellHtml = `<span style="color: #94a3b8; font-size: 10px;">—</span>`;
+        }
+
         return `
     <tr>
       <td style="font-weight: bold; color: #0f172a;">#${o.order_number}</td>
@@ -132,8 +152,7 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
         ${o.otp ? `<div style="font-size: 10px; color: #d97706; font-weight: bold;">OTP: ${o.otp}</div>` : ''}
       </td>
       <td>
-        <div style="font-size: 10px; color: #d97706;">Adv Bill: <strong>${o.advance_bill_number || 'N/A'}</strong></div>
-        <div style="font-size: 10px; color: #16a34a;">Final Bill: <strong>${o.final_bill_number || 'N/A'}</strong></div>
+        ${billCellHtml}
       </td>
     </tr>
   `;

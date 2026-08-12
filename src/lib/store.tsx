@@ -630,11 +630,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 5000);
   }, []);
 
-  const setSession = (newSession: UserSession) => {
+  const setSession = useCallback((newSession: UserSession) => {
     setSessionState(newSession);
-  };
+  }, []);
 
-  const switchRole = (role: Role, outlet?: OutletName, partnerId?: string) => {
+  const switchRole = useCallback((role: Role, outlet?: OutletName, partnerId?: string) => {
     let name = 'Broomies Central Admin';
     if (role === 'outlet') {
       name = outlet ? `${outlet} Manager` : 'Outlet Manager';
@@ -652,7 +652,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSessionState(updatedSession);
     showNotification(`Switched role to ${role.toUpperCase()} (${name})`);
-  };
+  }, [partners, showNotification]);
 
   // Helper function to sanitize order payload for webhook (strips huge base64 images so sync is instant)
   const sanitizeOrderForSync = (order: Order): Partial<Order> => {
@@ -767,17 +767,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newOrder = sanitizeOrderForFirestore(rawOrder);
 
-    // Instant local state + synchronous local storage / IDB update to prevent data loss
-    setOrders((prev) => {
-      const updated = [newOrder, ...prev.filter((o) => o.id !== newOrder.id)];
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(updated));
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, updated);
-      } catch (e) {
-        console.warn('Sync storage failed:', e);
-      }
-      return updated;
-    });
+    // Instant local state update; debounced effect handles storage persistence
+    setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
 
     // Write to Firestore
     setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
@@ -831,8 +822,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         informed_by: item.informed_by || 'CSV/JSON Import',
         address: item.address || 'Address',
         remarks: item.remarks || '',
-        advance_bill_number: item.advance_bill_number || '',
-        final_bill_number: item.final_bill_number || '',
+        advance_bill_number: item.advance_bill_number || (item as any).adv_bill_number || (item as any).adv_bill || (item as any).advance_bill || '',
+        final_bill_number: item.final_bill_number || (item as any).final_bill_no || (item as any).final_bill || (item as any).bill_number || (item as any).bill_no || (item as any).bill || '',
         item_image_url: item.item_image_url || '',
         order_date: item.order_date || now.split('T')[0],
         order_time: item.order_time || now.slice(11, 16),
@@ -922,14 +913,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updated = sanitizeOrderForFirestore(rawUpdated);
 
-    setOrders((prev) => {
-      const newList = prev.map((ord) => (ord.id === id ? updated : ord));
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
-      } catch (e) {}
-      return newList;
-    });
+    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
 
     setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
     pushToSheet(updated, 'update');
@@ -1000,14 +984,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updated: Order = { ...target, ...updates };
 
-    setOrders((prev) => {
-      const newList = prev.map((ord) => (ord.id === id ? updated : ord));
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
-      } catch (e) {}
-      return newList;
-    });
+    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
 
     setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
     showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
@@ -1045,14 +1022,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: now
     };
 
-    setOrders((prev) => {
-      const newList = prev.map((o) => (o.id === id ? updatedOrder : o));
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
-      } catch (e) {}
-      return newList;
-    });
+    setOrders((prev) => prev.map((o) => (o.id === id ? updatedOrder : o)));
     setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch(() => {});
 
     pushToSheet(updatedOrder, 'update');
@@ -1076,8 +1046,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [session.name, session.deliveryPartnerId, showNotification, pushToSheet]);
 
   const confirmRiderDelivery = useCallback((id: string) => {
-    setOrders((prev) => {
-      const newList = prev.map((ord) => {
+    setOrders((prev) =>
+      prev.map((ord) => {
         if (ord.id === id) {
           return {
             ...ord,
@@ -1088,13 +1058,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return ord;
-      });
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(newList));
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, newList);
-      } catch (e) {}
-      return newList;
-    });
+      })
+    );
     const targetDoc = doc(db, 'orders', id);
     setDoc(targetDoc, { status: 'delivered', rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
     showNotification(`✅ Order delivery confirmed by Outlet!`);

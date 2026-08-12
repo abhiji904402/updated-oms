@@ -52,12 +52,12 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [nowTime, setNowTime] = useState(Date.now());
 
-  // Live ticker for countdown timer (only for active orders)
+  // Live ticker for countdown timer (only for active orders, refreshed every 60 sec)
   useEffect(() => {
     if (order.status === 'delivered' || order.status === 'cancelled') return;
     const timer = setInterval(() => {
       setNowTime(Date.now());
-    }, 15000); // refresh every 15 sec
+    }, 60000); // refresh every 60 sec
     return () => clearInterval(timer);
   }, [order.status]);
 
@@ -523,11 +523,11 @@ Broomies Team`;
                     <input
                       type="text"
                       placeholder="e.g. ADV-101"
-                      defaultValue={order.advance_bill_number || ''}
-                      key={`adv-${order.id}-${order.advance_bill_number}`}
+                      defaultValue={order.advance_bill_number || (order as any).adv_bill || ''}
+                      key={`adv-${order.id}-${order.advance_bill_number || (order as any).adv_bill}`}
                       onBlur={(e) => {
                         const val = e.target.value.trim();
-                        if (val !== (order.advance_bill_number || '')) {
+                        if (val !== (order.advance_bill_number || (order as any).adv_bill || '')) {
                           updateOrder(order.id, { advance_bill_number: val });
                         }
                       }}
@@ -539,11 +539,11 @@ Broomies Team`;
                     <input
                       type="text"
                       placeholder="e.g. BILL-201"
-                      defaultValue={order.final_bill_number || ''}
-                      key={`final-${order.id}-${order.final_bill_number}`}
+                      defaultValue={order.final_bill_number || (order as any).final_bill || (order as any).bill_number || ''}
+                      key={`final-${order.id}-${order.final_bill_number || (order as any).final_bill || (order as any).bill_number}`}
                       onBlur={(e) => {
                         const val = e.target.value.trim();
-                        if (val !== (order.final_bill_number || '')) {
+                        if (val !== (order.final_bill_number || (order as any).final_bill || (order as any).bill_number || '')) {
                           updateOrder(order.id, { final_bill_number: val });
                         }
                       }}
