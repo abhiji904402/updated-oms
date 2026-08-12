@@ -357,19 +357,22 @@ Broomies Team`;
               </div>
 
               {/* Rider Delivery Confirmation Banner */}
-              {(order.rider_delivered || order.delivery_confirmation_pending) && order.status !== 'delivered' && (
-                <div className="p-2.5 bg-emerald-950/90 border border-emerald-500/80 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs shadow-md" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2 text-emerald-300 font-bold">
-                    <CheckCircle className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
+              {Boolean(order.delivery_confirmation_pending) && (
+                <div className="p-3 bg-amber-950/90 border-2 border-amber-500/90 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs shadow-lg animate-pulse" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 text-amber-200 font-bold">
+                    <CheckCircle className="w-5 h-5 text-amber-400 shrink-0" />
                     <div>
-                      <p className="font-extrabold text-emerald-300 uppercase tracking-wide">Delivered Marked by Rider</p>
-                      <p className="text-[10px] text-emerald-400/80 font-medium">Pending Admin / Outlet Confirmation</p>
+                      <p className="font-extrabold text-amber-200 uppercase tracking-wide flex items-center gap-1.5">
+                        <span className="text-base">🚚</span> Delivered Marked by Rider
+                      </p>
+                      <p className="text-[10px] text-amber-300/90 font-medium">Outlet / Admin Confirmation Required</p>
                     </div>
                   </div>
                   <button
                     onClick={() => confirmRiderDelivery(order.id)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase text-[11px] tracking-wider shadow shrink-0 transition active:scale-95"
+                    className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase text-xs tracking-wider shadow-lg shrink-0 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
                   >
+                    <CheckCircle className="w-4 h-4" />
                     CONFIRM DELIVERY
                   </button>
                 </div>

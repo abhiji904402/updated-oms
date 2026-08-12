@@ -48,6 +48,7 @@ export function formatOutletDisplayName(raw?: string): string {
  * Checks if an order is scheduled or placed for today
  */
 export function isOrderForToday(o: Order, todayISO?: string): boolean {
+  if (o.delivery_confirmation_pending) return true;
   const dDate = o.delivery_date?.trim();
   const oDate = o.order_date?.trim();
 

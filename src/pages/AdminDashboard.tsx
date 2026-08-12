@@ -66,7 +66,8 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     dateRangeFilter,
     selectedOrderIds = [],
     session,
-    clearOrderSelection
+    clearOrderSelection,
+    confirmRiderDelivery
   } = useOMS();
 
   const isOutletUser = session?.role === 'outlet';
@@ -79,6 +80,11 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     }
     return raw;
   }, [orders, isOutletUser, assignedOutlet]);
+
+  // Pending Rider Delivery Confirmations
+  const pendingConfirmations = useMemo(() => {
+    return safeOrders.filter((o) => Boolean(o.delivery_confirmation_pending));
+  }, [safeOrders]);
 
   const [activeBoardView, setActiveBoardView] = useState<'kanban' | 'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState<DashboardTab>('today');
@@ -494,6 +500,56 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
             >
               Clear
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Rider Delivery Confirmations Banner */}
+      {pendingConfirmations.length > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-950/80 border-2 border-amber-500/80 text-amber-200 text-xs shadow-2xl space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 font-black text-sm text-amber-300 uppercase tracking-wide">
+              <span className="text-xl">🚚</span>
+              <span>Pending Rider Delivery Confirmations ({pendingConfirmations.length})</span>
+            </div>
+            <button
+              onClick={() => {
+                pendingConfirmations.forEach((ord) => confirmRiderDelivery(ord.id));
+              }}
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow transition cursor-pointer flex items-center gap-1.5"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Confirm All ({pendingConfirmations.length})
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+            {pendingConfirmations.map((ord) => (
+              <div
+                key={`conf-admin-${ord.id}`}
+                className="p-3 rounded-xl bg-[#0e111d] border border-amber-500/50 flex items-center justify-between gap-3 shadow-md"
+              >
+                <div>
+                  <div className="font-extrabold text-white text-xs">
+                    Order #{ord.order_number} • {ord.customer_name || 'Customer'}
+                  </div>
+                  <div className="text-[11px] text-amber-300/90 mt-0.5">
+                    Outlet: <strong>{ord.outlet}</strong> | Rider: <strong>{ord.delivered_by || ord.delivery_partner || 'Delivery Partner'}</strong>
+                  </div>
+                  {ord.delivery_photo_url && (
+                    <div className="text-[10px] text-emerald-400 mt-0.5 font-semibold">
+                      📷 Proof Photo Attached
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => confirmRiderDelivery(ord.id)}
+                  className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase shrink-0 transition cursor-pointer shadow"
+                >
+                  Confirm
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

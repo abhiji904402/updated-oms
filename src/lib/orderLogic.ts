@@ -14,7 +14,7 @@ export type DashboardTab =
  * Checks if an order is marked as delivered
  */
 export const isDeliveredMarked = (o: Order): boolean => {
-  return o.status === 'delivered';
+  return o.status === 'delivered' && !o.delivery_confirmation_pending;
 };
 
 /**
@@ -51,6 +51,7 @@ export const getNormalizedDateStr = (dateStr?: string | null): string => {
  * Checks if order is for today date
  */
 export const isOrderForToday = (order: Order, todayStr: string): boolean => {
+  if (order.delivery_confirmation_pending) return true;
   const delDate = getNormalizedDateStr(order.delivery_date) || getNormalizedDateStr(order.order_date);
   return delDate === todayStr;
 };
