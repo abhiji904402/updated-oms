@@ -125,6 +125,8 @@ export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrow
     const isPayPending = isPaymentPending(o);
     const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
 
+    const normDelDate = getNormalizedDateStr(o.delivery_date);
+
     if (isDel) delivered_history++;
     if (isCanc) cancelled++;
     if (isHold) on_hold++;
@@ -139,7 +141,7 @@ export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrow
       pending_payment_amount += Math.max(0, pendingAmt);
     }
 
-    if (o.status === 'missed' || (delDate < todayStr && !isDel && !isCanc)) {
+    if (normDelDate && normDelDate < todayStr && !isDel && !isCanc) {
       missed++;
     }
 

@@ -192,9 +192,12 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       }
 
       if (activeTab === 'missed') {
+        const normDelDate = getNormalizedDateStr(o.delivery_date);
         return (
-          o.status === 'missed' ||
-          (o.delivery_date < todayStr && !isDeliveredMarked(o) && o.status !== 'cancelled')
+          normDelDate !== '' &&
+          normDelDate < todayStr &&
+          !isDeliveredMarked(o) &&
+          o.status !== 'cancelled'
         );
       }
 
@@ -219,6 +222,34 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredOrders.slice(start, start + PAGE_SIZE);
   }, [filteredOrders, currentPage]);
+
+  // Date-grouped missed orders pass for Missed Tab
+  const missedGroups = useMemo(() => {
+    if (activeTab !== 'missed') return [];
+    const map: Record<string, Order[]> = {};
+    filteredOrders.forEach((o) => {
+      const d = getNormalizedDateStr(o.delivery_date);
+      if (!map[d]) map[d] = [];
+      map[d].push(o);
+    });
+
+    // Sort dates DESC (most recently missed date first)
+    const sortedDates = Object.keys(map).sort((a, b) => b.localeCompare(a));
+
+    return sortedDates.map((dateStr) => {
+      // Within each date group, sort cards by delivery_time_expected ASC
+      const groupOrders = [...map[dateStr]].sort((a, b) => {
+        const timeA = a.delivery_time_expected || a.order_time || '00:00';
+        const timeB = b.delivery_time_expected || b.order_time || '00:00';
+        return timeA.localeCompare(timeB);
+      });
+
+      return {
+        dateStr,
+        orders: groupOrders
+      };
+    });
+  }, [filteredOrders, activeTab]);
 
   // Map markers computation for Admin Map View
   const adminMapMarkers = useMemo(() => {
@@ -484,6 +515,27 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
         </div>
       )}
 
+      {/* Missed Orders Warning Banner */}
+      {activeTab === 'missed' && (
+        <div className="p-4 bg-orange-950/80 border border-orange-500/70 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-orange-200 shadow-xl">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0" />
+            <div>
+              <p className="font-extrabold text-orange-300 text-sm">
+                ⚠️ {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'} whose delivery date has passed but are not yet marked as delivered
+              </p>
+              <p className="text-orange-300/80 text-[11px] mt-0.5">
+                Review missed orders below to mark as delivered, move to on-hold, cancel, or reassign a delivery partner.
+              </p>
+            </div>
+          </div>
+          <div className="px-3.5 py-1.5 bg-orange-900/90 border border-orange-600/60 rounded-xl font-mono font-black text-orange-200 text-xs shrink-0 flex items-center gap-1.5">
+            <span>Past Due Target:</span>
+            <span className="text-orange-100 text-sm">{filteredOrders.length} Orders</span>
+          </div>
+        </div>
+      )}
+
       {/* Main Board View: Map, Kanban or List */}
       {activeBoardView === 'map' ? (
         <Card className="h-[540px] p-0 overflow-hidden border border-indigo-900/80 bg-[#0c0f24]">
@@ -572,7 +624,13 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
         <div className="space-y-4">
           {filteredOrders.length === 0 ? (
             <div className="p-12 text-center border border-dashed border-indigo-950 rounded-2xl text-slate-400 text-sm space-y-2 bg-[#0b0e1b]/50">
-              {activeTab === 'pending_payment' ? (
+              {activeTab === 'missed' ? (
+                <div className="space-y-1.5">
+                  <div className="text-3xl mb-1">🎉</div>
+                  <p className="text-emerald-400 font-extrabold text-base">No missed orders</p>
+                  <p className="text-xs text-slate-400">Everything is on track! No past due orders requiring attention.</p>
+                </div>
+              ) : activeTab === 'pending_payment' ? (
                 <div className="space-y-1.5">
                   <p className="text-emerald-400 font-extrabold text-base flex items-center justify-center gap-2">
                     <span>✅</span>
@@ -583,6 +641,65 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
               ) : (
                 <p>No matching orders found under this tab. Try selecting another tab or clearing search.</p>
               )}
+            </div>
+          ) : activeTab === 'missed' ? (
+            /* Date-Grouped View for Missed Tab */
+            <div className="space-y-6">
+              {/* Export Bar for Missed Orders */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-[#0b0e1b] border border-orange-500/30 rounded-xl text-xs text-slate-300 shadow">
+                <div className="flex items-center gap-2 font-bold text-orange-200">
+                  <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0" />
+                  <span>Showing {filteredOrders.length} Missed {filteredOrders.length === 1 ? 'Order' : 'Orders'} grouped across {missedGroups.length} {missedGroups.length === 1 ? 'date' : 'dates'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => exportToCSV(filteredOrders, `Missed_Orders_${todayStr}`)}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-800/80 hover:bg-emerald-900 text-emerald-300 font-bold flex items-center gap-1 transition"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Export CSV ({filteredOrders.length})</span>
+                  </button>
+                  <button
+                    onClick={() => printPDFReport(filteredOrders, `Missed Orders Report - ${todayStr}`)}
+                    className="px-2.5 py-1 rounded-lg bg-purple-950/80 border border-purple-800/80 hover:bg-purple-900 text-purple-300 font-bold flex items-center gap-1 transition"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-purple-400" />
+                    <span>PDF Report ({filteredOrders.length})</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Grouped Dated Sections */}
+              {missedGroups.map((group) => (
+                <div key={group.dateStr} className="space-y-3">
+                  {/* Dated Section Header */}
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-[#0e1226] border border-orange-500/30 rounded-xl text-xs font-bold text-orange-200 shadow-md">
+                    <div className="flex items-center gap-2 text-sm font-extrabold text-white">
+                      <Calendar className="w-4 h-4 text-orange-400" />
+                      <span>📅 {group.dateStr}</span>
+                      <span className="text-xs font-semibold text-orange-300/80 font-mono">
+                        ({group.orders.length} {group.orders.length === 1 ? 'order' : 'orders'})
+                      </span>
+                    </div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded bg-orange-950 text-orange-300 border border-orange-800/60">
+                      Past Due Group
+                    </span>
+                  </div>
+
+                  {/* Cards Grid for this date group */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.orders.map((order) => (
+                      <OrderCard
+                        key={order.id}
+                        order={order}
+                        onOpenDeliveryModal={onOpenDeliveryModal}
+                        onViewOrder={setViewingOrder}
+                        onEditOrder={setEditingOrder}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <>

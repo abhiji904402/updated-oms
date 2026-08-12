@@ -3,6 +3,7 @@ import { Order, OrderStatus, PaymentType } from '../types';
 import { useOMS } from '../lib/store';
 import { printThermalReceipts } from '../lib/thermalPrint';
 import { getDeliveryTimeInfo, getCountdownInfo, formatTo12Hour } from '../lib/timeUtils';
+import { getNormalizedDateStr } from '../lib/orderLogic';
 import {
   Clock,
   MapPin,
@@ -22,7 +23,9 @@ import {
   Trash2,
   Edit3,
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  PauseCircle,
+  XCircle
 } from 'lucide-react';
 
 interface OrderCardProps {
@@ -61,6 +64,10 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
   const isSelected = selectedOrderIds.includes(order.id);
   const timeInfo = getDeliveryTimeInfo(order);
   const countdown = getCountdownInfo(order, nowTime);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const normDelDate = getNormalizedDateStr(order.delivery_date);
+  const isMissedOrder = normDelDate !== '' && normDelDate < todayStr && order.status !== 'delivered' && order.status !== 'cancelled';
 
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
@@ -347,6 +354,53 @@ Broomies Team`;
                   >
                     CONFIRM DELIVERY
                   </button>
+                </div>
+              )}
+
+              {/* Quick Actions Bar for Missed Orders */}
+              {isMissedOrder && (
+                <div className="p-2.5 bg-orange-950/80 border border-orange-500/60 rounded-xl space-y-1.5 shadow-md" onClick={(e) => e.stopPropagation()}>
+                  <div className="text-[10px] font-extrabold text-orange-300 uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
+                      Missed Order Actions
+                    </span>
+                    <span className="text-[9px] font-mono font-bold text-orange-400/80">Date: {order.delivery_date}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px] font-black">
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'delivered')}
+                      className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Mark as delivered"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Delivered</span>
+                    </button>
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'on_hold')}
+                      className="py-1.5 px-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Move to On Hold"
+                    >
+                      <PauseCircle className="w-3 h-3" />
+                      <span>On Hold</span>
+                    </button>
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                      className="py-1.5 px-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Cancel Order"
+                    >
+                      <XCircle className="w-3 h-3" />
+                      <span>Cancel</span>
+                    </button>
+                    <button
+                      onClick={() => onEditOrder && onEditOrder(order)}
+                      className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Reassign Delivery Partner or Edit"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Reassign</span>
+                    </button>
+                  </div>
                 </div>
               )}
 

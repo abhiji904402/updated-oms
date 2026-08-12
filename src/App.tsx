@@ -1,19 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { OMSProvider, useOMS } from './lib/store';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LoginPage } from './components/LoginPage';
-import { PasswordManagerModal } from './components/PasswordManagerModal';
 import { AdminDashboard } from './pages/AdminDashboard';
-import { OutletDashboard } from './pages/OutletDashboard';
-import { DeliveryDashboard } from './pages/DeliveryDashboard';
-import { AnalyticsPage } from './pages/AnalyticsPage';
-import { AlertsPage } from './pages/AlertsPage';
-import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 import { AddOrderModal } from './components/AddOrderModal';
-import { ThermalPrintModal } from './components/ThermalPrintModal';
-import { SheetSyncModal } from './components/SheetSyncModal';
 import { Order } from './types';
+
+// Lazy-loaded secondary pages & modals for maximum initial load performance
+const OutletDashboard = lazy(() => import('./pages/OutletDashboard').then(m => ({ default: m.OutletDashboard })));
+const DeliveryDashboard = lazy(() => import('./pages/DeliveryDashboard').then(m => ({ default: m.DeliveryDashboard })));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
+const AlertsPage = lazy(() => import('./pages/AlertsPage').then(m => ({ default: m.AlertsPage })));
+const GoogleSheetsPage = lazy(() => import('./pages/GoogleSheetsPage').then(m => ({ default: m.GoogleSheetsPage })));
+
+const PasswordManagerModal = lazy(() => import('./components/PasswordManagerModal').then(m => ({ default: m.PasswordManagerModal })));
+const ThermalPrintModal = lazy(() => import('./components/ThermalPrintModal').then(m => ({ default: m.ThermalPrintModal })));
+const SheetSyncModal = lazy(() => import('./components/SheetSyncModal').then(m => ({ default: m.SheetSyncModal })));
+
+function PageFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px] text-purple-400">
+      <div className="flex items-center gap-3 bg-slate-900/80 border border-purple-500/30 px-5 py-3 rounded-xl shadow-lg backdrop-blur">
+        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm font-medium">Loading page...</span>
+      </div>
+    </div>
+  );
+}
 
 function OMSAppContent() {
   const { session, isAuthenticated } = useOMS();
@@ -78,48 +92,64 @@ function OMSAppContent() {
 
           {/* Instant Active Page Rendering */}
           <main className="flex-1 pb-12 relative">
-            {(activeTab === 'dashboard' || activeTab === 'admin') && (
-              <AdminDashboard
-                onOpenAddModal={() => setIsAddModalOpen(true)}
-                onOpenThermalModal={() => setIsThermalModalOpen(true)}
-                onOpenDeliveryModal={handleOpenDeliveryModal}
-                onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
-              />
-            )}
+            <Suspense fallback={<PageFallback />}>
+              {(activeTab === 'dashboard' || activeTab === 'admin') && (
+                <AdminDashboard
+                  onOpenAddModal={() => setIsAddModalOpen(true)}
+                  onOpenThermalModal={() => setIsThermalModalOpen(true)}
+                  onOpenDeliveryModal={handleOpenDeliveryModal}
+                  onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
+                />
+              )}
 
-            {activeTab === 'outlet' && session.role !== 'outlet' && <OutletDashboard />}
+              {activeTab === 'outlet' && session.role !== 'outlet' && <OutletDashboard />}
 
-            {activeTab === 'delivery' && session.role !== 'outlet' && <DeliveryDashboard />}
+              {activeTab === 'delivery' && session.role !== 'outlet' && <DeliveryDashboard />}
 
-            {activeTab === 'analytics' && <AnalyticsPage />}
+              {activeTab === 'analytics' && <AnalyticsPage />}
 
-            {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
+              {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
 
-            {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
+              {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
+            </Suspense>
           </main>
         </div>
       </div>
 
-      {/* Global Modals */}
-      <AddOrderModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-      />
+      {/* Global Modals - Unmounted when closed for zero overhead */}
+      {isAddModalOpen && (
+        <AddOrderModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+        />
+      )}
 
-      <ThermalPrintModal
-        isOpen={isThermalModalOpen}
-        onClose={() => setIsThermalModalOpen(false)}
-      />
+      {isThermalModalOpen && (
+        <Suspense fallback={null}>
+          <ThermalPrintModal
+            isOpen={isThermalModalOpen}
+            onClose={() => setIsThermalModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <SheetSyncModal
-        isOpen={isSheetModalOpen}
-        onClose={() => setIsSheetModalOpen(false)}
-      />
+      {isSheetModalOpen && (
+        <Suspense fallback={null}>
+          <SheetSyncModal
+            isOpen={isSheetModalOpen}
+            onClose={() => setIsSheetModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <PasswordManagerModal
-        isOpen={isPasswordModalOpen}
-        onClose={() => setIsPasswordModalOpen(false)}
-      />
+      {isPasswordModalOpen && (
+        <Suspense fallback={null}>
+          <PasswordManagerModal
+            isOpen={isPasswordModalOpen}
+            onClose={() => setIsPasswordModalOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
