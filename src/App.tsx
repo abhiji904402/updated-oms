@@ -116,13 +116,11 @@ function OMSAppContent() {
         </div>
       </div>
 
-      {/* Global Modals - Unmounted when closed for zero overhead */}
-      {isAddModalOpen && (
-        <AddOrderModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
-        />
-      )}
+      {/* Global Modals */}
+      <AddOrderModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+      />
 
       {isThermalModalOpen && (
         <Suspense fallback={null}>
