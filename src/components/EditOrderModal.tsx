@@ -333,8 +333,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     if (!order) return;
 
     if (isOutletUser) {
-      const calculatedAdvance = paymentType === 'full' ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
-      const calculatedRemaining = paymentType === 'full' ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
+      const isFullPay = paymentType === 'full' || paymentType === 'cash' || paymentType === 'upi' || paymentType === 'online' || (paymentType as string) === 'full_paid';
+      const calculatedAdvance = isFullPay ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
+      const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
       updateOrder(order.id, {
         status,
         payment_type: paymentType,
@@ -357,8 +358,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       return;
     }
 
-    const calculatedAdvance = paymentType === 'full' ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
-    const calculatedRemaining = paymentType === 'full' ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
+    const isFullPay = paymentType === 'full' || paymentType === 'cash' || paymentType === 'upi' || paymentType === 'online' || (paymentType as string) === 'full_paid';
+    const calculatedAdvance = isFullPay ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
+    const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
 
     updateOrder(order.id, {
       outlet,

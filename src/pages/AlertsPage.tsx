@@ -1,5 +1,6 @@
 import React from 'react';
 import { useOMS } from '../lib/store';
+import { isPaymentPending } from '../lib/orderLogic';
 import { Bell, AlertTriangle, CheckCircle2, Clock, Info, ShieldAlert } from 'lucide-react';
 
 export const AlertsPage = React.memo(() => {
@@ -18,7 +19,7 @@ export const AlertsPage = React.memo(() => {
     return isPastDate;
   });
 
-  const duePaymentOrders = safeOrders.filter((o) => o.remaining_balance > 0);
+  const duePaymentOrders = safeOrders.filter(isPaymentPending);
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">

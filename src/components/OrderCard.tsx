@@ -90,8 +90,20 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
 
   const renderPaymentDropdown = () => {
     const total = order.total_amount ?? 0;
-    const advance = order.advance_amount ?? 0;
-    const remaining = typeof order.remaining_balance === 'number' ? order.remaining_balance : Math.max(0, total - advance);
+    const pType = String(order.payment_type || '').toLowerCase().trim();
+    const isPaidFull = pType === 'full' || pType === 'full_paid' || pType === 'paid' || pType === 'cash' || pType === 'upi' || pType === 'online';
+
+    const advance = isPaidFull
+      ? total
+      : (pType === 'due' ? 0 : (order.advance_amount ?? 0));
+
+    const remaining = isPaidFull
+      ? 0
+      : (pType === 'due'
+          ? total
+          : (typeof order.remaining_balance === 'number' && order.remaining_balance >= 0
+              ? order.remaining_balance
+              : Math.max(0, total - advance)));
 
     return (
       <div className="space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
@@ -107,16 +119,18 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
                   payment_changed_by: session.name || session.role || 'Admin',
                   payment_changed_at: new Date().toISOString()
                 };
-                if (newType === 'full' || (newType as string) === 'full_paid') {
-                  updates.payment_type = 'full';
+                const cleanNew = String(newType).toLowerCase().trim();
+                if (cleanNew === 'full' || cleanNew === 'full_paid' || cleanNew === 'paid' || cleanNew === 'cash' || cleanNew === 'upi' || cleanNew === 'online') {
+                  updates.payment_type = newType;
                   updates.advance_amount = total;
                   updates.remaining_balance = 0;
                   updates.due_amount = 0;
-                } else if (newType === 'due') {
+                } else if (cleanNew === 'due') {
+                  updates.payment_type = 'due';
                   updates.advance_amount = 0;
                   updates.remaining_balance = total;
                   updates.due_amount = total;
-                } else if (newType === 'part' || (newType as string) === 'part_payment') {
+                } else if (cleanNew === 'part' || cleanNew === 'partial' || cleanNew === 'part_payment') {
                   updates.payment_type = 'part';
                   const adv = order.advance_amount && order.advance_amount < total ? order.advance_amount : Math.round(total / 2);
                   updates.advance_amount = adv;
@@ -126,9 +140,9 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
                 updateOrder(order.id, updates);
               }}
               className={`text-[11px] font-black uppercase px-2 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition shadow-sm truncate min-w-0 max-w-full flex-1 ${
-                order.payment_type === 'full'
+                isPaidFull
                   ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
-                  : order.payment_type === 'part' || order.payment_type === 'part_payment'
+                  : pType === 'part' || pType === 'partial' || pType === 'part_payment'
                   ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
                   : 'bg-rose-950/90 text-rose-300 border-rose-500/50'
               }`}

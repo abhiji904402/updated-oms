@@ -263,7 +263,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Notifications
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
 
-  // Helper to strip out undefined values so Firestore setDoc never fails
+  // Helper to strip out undefined values so Firestore setDoc never fails and normalize payment fields
   const sanitizeOrderForFirestore = (order: Record<string, any>): Order => {
     const clean: Record<string, any> = {};
     for (const [key, val] of Object.entries(order)) {
@@ -271,6 +271,25 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clean[key] = val;
       }
     }
+
+    const pType = String(clean.payment_type || '').toLowerCase().trim();
+    const total = typeof clean.total_amount === 'number' ? clean.total_amount : Number(clean.total_amount) || 0;
+
+    if (pType === 'full' || pType === 'full_paid' || pType === 'paid' || pType === 'cash' || pType === 'upi' || pType === 'online') {
+      clean.payment_type = clean.payment_type || 'full';
+      clean.advance_amount = total;
+      clean.remaining_balance = 0;
+      clean.due_amount = 0;
+    } else if (pType === 'due') {
+      clean.advance_amount = 0;
+      clean.remaining_balance = total;
+      clean.due_amount = total;
+    } else if (pType === 'part' || pType === 'partial' || pType === 'part_payment') {
+      const adv = typeof clean.advance_amount === 'number' ? clean.advance_amount : 0;
+      clean.remaining_balance = Math.max(0, total - adv);
+      clean.due_amount = clean.remaining_balance;
+    }
+
     return clean as Order;
   };
 

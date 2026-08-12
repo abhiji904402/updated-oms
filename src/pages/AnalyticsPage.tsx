@@ -22,12 +22,27 @@ import {
   DollarSign
 } from 'lucide-react';
 import { getDeliveryTimeInfo, formatTo12Hour } from '../lib/timeUtils';
-import { matchesOutlet } from '../lib/outletUtils';
+import { matchesOutlet, formatOutletDisplayName } from '../lib/outletUtils';
 
 export const AnalyticsPage = React.memo(() => {
-  const { orders = [], session } = useOMS();
+  const { orders = [], outletLocations = [], session } = useOMS();
   const isOutletUser = session?.role === 'outlet';
   const assignedOutlet = session?.outlet || 'Sector 31';
+
+  // Dynamically collect all available outlets across locations and orders
+  const allOutlets = useMemo(() => {
+    const set = new Set<string>();
+    (outletLocations || []).forEach((loc) => {
+      if (loc.name) set.add(formatOutletDisplayName(loc.name));
+    });
+    ['Sector 31', 'Sector 15', 'Sector 46', 'Sector 21', 'Sector 35', 'Sector 42', 'Sector 88'].forEach((o) => set.add(o));
+    (orders || []).forEach((o) => {
+      if (o.outlet) {
+        set.add(formatOutletDisplayName(o.outlet));
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [outletLocations, orders]);
 
   const safeOrders = useMemo(() => {
     const raw = orders || [];
@@ -136,43 +151,55 @@ export const AnalyticsPage = React.memo(() => {
 
   // 2. Outlet Breakdown (Date)
   const outletBreakdownData = useMemo(() => {
-    const outlets = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
-    const outletColors: Record<string, string> = {
+    const defaultColors: Record<string, string> = {
       'Sector 31': '#8b5cf6',
+      'Sector 15': '#3b82f6',
+      'Sector 46': '#06b6d4',
+      'Sector 21': '#10b981',
       'Sector 35': '#f59e0b',
       'Sector 42': '#10b981',
       'Sector 88': '#ec4899'
     };
+    const fallbackColors = ['#8b5cf6', '#f59e0b', '#10b981', '#ec4899', '#3b82f6', '#06b6d4', '#e11d48'];
 
-    const map: Record<string, { count: number; value: number }> = {
-      'Sector 31': { count: 0, value: 0 },
-      'Sector 35': { count: 0, value: 0 },
-      'Sector 42': { count: 0, value: 0 },
-      'Sector 88': { count: 0, value: 0 }
-    };
+    const outletsSet = new Set<string>(allOutlets);
+    filteredOrders.forEach((o) => {
+      outletsSet.add(formatOutletDisplayName(o.outlet));
+    });
+    const outletsList = Array.from(outletsSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const outletColors: Record<string, string> = {};
+    outletsList.forEach((o, idx) => {
+      outletColors[o] = defaultColors[o] || fallbackColors[idx % fallbackColors.length];
+    });
+
+    const map: Record<string, { count: number; value: number }> = {};
+    outletsList.forEach((o) => {
+      map[o] = { count: 0, value: 0 };
+    });
 
     filteredOrders.forEach((o) => {
-      const name = o.outlet || 'Sector 31';
+      const name = formatOutletDisplayName(o.outlet);
       if (!map[name]) map[name] = { count: 0, value: 0 };
       map[name].count += 1;
       map[name].value += o.total_amount || 0;
     });
 
-    const pieSlices = outlets.map((o) => ({
+    const pieSlices = outletsList.map((o) => ({
       name: o,
-      value: map[o].count,
-      color: outletColors[o] || '#3b82f6'
+      value: map[o]?.count || 0,
+      color: outletColors[o]
     })).filter(d => d.value > 0);
 
-    return { map, pieSlices, outlets, outletColors };
-  }, [filteredOrders]);
+    return { map, pieSlices, outlets: outletsList, outletColors };
+  }, [filteredOrders, allOutlets]);
 
   // 3. Row 2 Pie Charts
   // a) Revenue by Outlet
   const revenueByOutletPie = useMemo(() => {
     return outletBreakdownData.outlets.map((o) => ({
       name: o,
-      value: outletBreakdownData.map[o].value,
+      value: outletBreakdownData.map[o]?.value || 0,
       color: outletBreakdownData.outletColors[o]
     })).filter(d => d.value > 0);
   }, [outletBreakdownData]);
@@ -218,12 +245,13 @@ export const AnalyticsPage = React.memo(() => {
   const outletSummaryRows = useMemo(() => {
     const map: Record<string, { total: number; del: number; pend: number; canc: number; due: number; rev: number }> = {};
     
+    // Include all active & known outlets
     outletBreakdownData.outlets.forEach((outletName) => {
       map[outletName] = { total: 0, del: 0, pend: 0, canc: 0, due: 0, rev: 0 };
     });
 
     filteredOrders.forEach((o) => {
-      const outletName = o.outlet || 'Sector 31';
+      const outletName = formatOutletDisplayName(o.outlet);
       if (!map[outletName]) {
         map[outletName] = { total: 0, del: 0, pend: 0, canc: 0, due: 0, rev: 0 };
       }
@@ -242,11 +270,24 @@ export const AnalyticsPage = React.memo(() => {
       }
     });
 
-    return outletBreakdownData.outlets.map((outletName) => ({
+    return Object.keys(map).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((outletName) => ({
       outlet: outletName,
       ...map[outletName]
     }));
   }, [filteredOrders, outletBreakdownData.outlets]);
+
+  // Total summary row for table footer mathematically computed from rows
+  const outletTotals = useMemo(() => {
+    return outletSummaryRows.reduce((acc, row) => {
+      acc.total += row.total;
+      acc.del += row.del;
+      acc.pend += row.pend;
+      acc.canc += row.canc;
+      acc.due += row.due;
+      acc.rev += row.rev;
+      return acc;
+    }, { total: 0, del: 0, pend: 0, canc: 0, due: 0, rev: 0 });
+  }, [outletSummaryRows]);
 
   // Export handlers
   const handleExportExcel = () => {
@@ -369,10 +410,11 @@ export const AnalyticsPage = React.memo(() => {
               className="w-full bg-[#12162a] border border-indigo-950 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {!isOutletUser && <option value="ALL">All Outlets</option>}
-              <option value="Sector 31">Sector 31</option>
-              <option value="Sector 35">Sector 35</option>
-              <option value="Sector 42">Sector 42</option>
-              <option value="Sector 88">Sector 88</option>
+              {allOutlets.map((outletName) => (
+                <option key={outletName} value={outletName}>
+                  {outletName}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -721,15 +763,13 @@ export const AnalyticsPage = React.memo(() => {
                 {/* TOTAL Row */}
                 <tr className="bg-[#070914] font-extrabold text-indigo-300 text-xs">
                   <td className="py-3.5 px-4 text-indigo-300 uppercase tracking-wider">TOTAL</td>
-                  <td className="py-3.5 px-4 text-center text-indigo-300 text-sm">{totalOrdersCount}</td>
-                  <td className="py-3.5 px-4 text-center text-emerald-400 text-sm">{statusCounts.delivered}</td>
-                  <td className="py-3.5 px-4 text-center text-amber-400 text-sm">{statusCounts.pending + statusCounts.processing}</td>
-                  <td className="py-3.5 px-4 text-center text-rose-400 text-sm">{statusCounts.cancelled}</td>
-                  <td className="py-3.5 px-4 text-center text-purple-300 text-sm">
-                    {filteredOrders.filter(o => (o.remaining_balance || 0) > 0).length}
-                  </td>
+                  <td className="py-3.5 px-4 text-center text-indigo-300 text-sm">{outletTotals.total}</td>
+                  <td className="py-3.5 px-4 text-center text-emerald-400 text-sm">{outletTotals.del}</td>
+                  <td className="py-3.5 px-4 text-center text-amber-400 text-sm">{outletTotals.pend}</td>
+                  <td className="py-3.5 px-4 text-center text-rose-400 text-sm">{outletTotals.canc}</td>
+                  <td className="py-3.5 px-4 text-center text-purple-300 text-sm">{outletTotals.due}</td>
                   <td className="py-3.5 px-4 text-right text-indigo-300 text-sm">
-                    ₹{totalRevenue.toLocaleString('en-IN')}
+                    ₹{outletTotals.rev.toLocaleString('en-IN')}
                   </td>
                 </tr>
               </tbody>

@@ -162,14 +162,16 @@ export const OutletDashboard = React.memo(() => {
 
       // 6. Payment Status Filter
       if (filterPaymentStatus !== 'ALL') {
-        const remaining = o.remaining_balance ?? 0;
+        const pType = String(o.payment_type || '').toLowerCase().trim();
+        const isFull = pType === 'full' || pType === 'full_paid' || pType === 'paid' || pType === 'cash' || pType === 'upi' || pType === 'online';
         const total = o.total_amount ?? 0;
-        const advance = o.advance_amount ?? 0;
+        const advance = isFull ? total : (o.advance_amount ?? 0);
+        const remaining = isFull ? 0 : (pType === 'due' ? total : (o.remaining_balance ?? Math.max(0, total - advance)));
 
         if (filterPaymentStatus === 'paid') {
-          if (remaining > 0 || o.payment_type === 'due') return false;
+          if (remaining > 0 || pType === 'due') return false;
         } else if (filterPaymentStatus === 'due') {
-          if (remaining <= 0 && o.payment_type !== 'due') return false;
+          if (remaining <= 0 && pType !== 'due') return false;
         } else if (filterPaymentStatus === 'partial') {
           if (advance <= 0 || remaining <= 0) return false;
         }

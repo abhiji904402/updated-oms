@@ -448,8 +448,9 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       return;
     }
 
-    const calculatedAdvance = paymentType === 'full' ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
-    const calculatedRemaining = paymentType === 'full' ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
+    const isFullPay = paymentType === 'full' || paymentType === 'cash' || paymentType === 'upi' || paymentType === 'online' || (paymentType as string) === 'full_paid';
+    const calculatedAdvance = isFullPay ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
+    const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
 
     // Derive final customer name from informedBy or customerName or phone
     const finalCustomerName = customerName.trim() || informedBy.trim() || `Customer #${nextOrderNumber}`;

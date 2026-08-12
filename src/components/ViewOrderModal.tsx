@@ -47,8 +47,11 @@ export const ViewOrderModal: React.FC<ViewOrderModalProps> = ({
   };
 
   const totalVal = order.total_amount ?? 0;
-  const advanceVal = order.advance_amount ?? 0;
-  const remainingVal = order.remaining_balance ?? 0;
+  const pType = String(order.payment_type || '').toLowerCase().trim();
+  const isPaidFull = pType === 'full' || pType === 'full_paid' || pType === 'paid' || pType === 'cash' || pType === 'upi' || pType === 'online';
+
+  const advanceVal = isPaidFull ? totalVal : (pType === 'due' ? 0 : (order.advance_amount ?? 0));
+  const remainingVal = isPaidFull ? 0 : (pType === 'due' ? totalVal : (order.remaining_balance ?? Math.max(0, totalVal - advanceVal)));
 
   const itemDetails = `${order.item_type}${order.quantity ? ` (${order.quantity})` : ''}`;
   const delDate = order.delivery_date || 'Today';
