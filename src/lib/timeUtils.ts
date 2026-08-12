@@ -280,9 +280,9 @@ export function getCountdownInfo(order: Order, nowTime: number = Date.now()): Co
  */
 export function sortOrdersByDeliveryPriority(orders: Order[]): Order[] {
   return [...orders].sort((a, b) => {
-    // Delivered / Cancelled go to the bottom
-    const aDone = a.status === 'delivered' || a.status === 'cancelled';
-    const bDone = b.status === 'delivered' || b.status === 'cancelled';
+    // Delivered / Cancelled / Rider Delivered / Confirmation Pending go to the bottom
+    const aDone = a.status === 'delivered' || a.status === 'cancelled' || Boolean(a.rider_delivered) || Boolean(a.delivery_confirmation_pending);
+    const bDone = b.status === 'delivered' || b.status === 'cancelled' || Boolean(b.rider_delivered) || Boolean(b.delivery_confirmation_pending);
     if (aDone && !bDone) return 1;
     if (!aDone && bDone) return -1;
 

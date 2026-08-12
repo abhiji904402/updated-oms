@@ -617,18 +617,50 @@ export const DeliveryDashboard = React.memo(() => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setSelectedOrder(order);
-                      setOtpInput('');
-                      setProofPhotoUrl(null);
-                      setErrorMessage(null);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Verify Delivery & Submit Proof
-                  </button>
+                  {order.rider_delivered || order.status === 'delivered' || order.delivery_confirmation_pending ? (
+                    <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-xs flex items-center justify-between shadow-inner">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <div>
+                          <div className="font-extrabold text-emerald-300 text-[11px]">
+                            {order.delivery_confirmation_pending
+                              ? 'Delivered (Awaiting Outlet Approval)'
+                              : 'Delivered Successfully'}
+                          </div>
+                          {order.actual_delivery_time && (
+                            <div className="text-[10px] text-emerald-400/80 font-mono">
+                              At {new Date(order.actual_delivery_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setOtpInput(order.otp || '');
+                          setProofPhotoUrl(order.delivery_photo_url || null);
+                          setErrorMessage(null);
+                        }}
+                        className="text-[10px] font-bold text-emerald-400 underline hover:text-emerald-200 px-2 py-1 rounded bg-emerald-900/40 border border-emerald-700/50 shrink-0"
+                      >
+                        View Proof
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setSelectedOrder(order);
+                        setOtpInput('');
+                        setProofPhotoUrl(null);
+                        setErrorMessage(null);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Verify Delivery & Submit Proof
+                    </button>
+                  )}
                 </div>
               );
             })}

@@ -1014,7 +1014,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date().toISOString();
     const updatedOrder: Order = {
       ...targetOrder,
-      status: targetOrder.status === 'delivered' ? 'delivered' : (targetOrder.status || 'out_for_delivery'),
+      status: 'delivered',
       delivery_photo_url: photoUrl || targetOrder.delivery_photo_url || '',
       actual_delivery_time: now,
       delivered_by: session.name || targetOrder.delivery_partner || 'Delivery Partner',
