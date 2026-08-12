@@ -194,7 +194,8 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
   // WhatsApp Templates
   const itemDetails = `${order.item_type}${order.quantity ? ` (${order.quantity})` : ''}`;
   const delDate = order.delivery_date || 'Today';
-  const delTime = order.delivery_time_expected || '11:00 am';
+  const rawTime = order.delivery_time_expected || order.order_time || '11:00 AM';
+  const delTime = formatTo12Hour(rawTime) || rawTime;
 
   const confirmMsg = `Thank you so much for your recent order from Broomies! Your order number is (${order.order_number}).
 
@@ -202,6 +203,9 @@ We're thrilled to have the opportunity to serve you and hope you enjoy every del
 
 Order Details:
 Item: ${itemDetails}
+Total Amount: ₹${totalVal}
+Advance Paid: ₹${advanceVal}
+Remaining Balance: ₹${remainingVal}
 Delivery Date: ${delDate}
 Delivery Time: ${delTime}
 

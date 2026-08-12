@@ -4,6 +4,7 @@ import { Order, OutletName, DeliveryType, PaymentType } from '../types';
 import { ITEM_PRESETS } from '../data/mockData';
 import { compressImage } from '../lib/imageCompressor';
 import { WhatsAppPopup } from './WhatsAppPopup';
+import { formatTo12Hour } from '../lib/timeUtils';
 import {
   X,
   Package,
@@ -37,7 +38,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     const d = new Date();
     let hours = d.getHours();
     const minutes = d.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'pm' : 'am';
+    const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     hours = hours ? hours : 12; // 0 becomes 12
     return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
@@ -456,7 +457,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     const newOrder = addOrder({
       outlet,
       order_date: orderDate || todayStr,
-      order_time: orderTime || currentTimeStr,
+      order_time: formatTo12Hour(orderTime || currentTimeStr) || currentTimeStr,
       mobile_number: mobileNumber,
       customer_name: finalCustomerName,
       informed_by: informedBy || undefined,
@@ -474,7 +475,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       remarks: remarks || '',
       status: 'pending',
       delivery_date: deliveryDate || todayStr,
-      delivery_time_expected: expectedDeliveryTime || '11:00 am',
+      delivery_time_expected: formatTo12Hour(expectedDeliveryTime) || '11:00 AM',
       item_image_url: itemImageUrl || undefined
     });
 

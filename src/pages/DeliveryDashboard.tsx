@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useOMS } from '../lib/store';
 import { Order, DeliveryPartner } from '../types';
 import { compressImage } from '../lib/imageCompressor';
-import { sortOrdersByDeliveryPriority, getCountdownInfo } from '../lib/timeUtils';
+import { sortOrdersByDeliveryPriority, getCountdownInfo, formatTo12Hour } from '../lib/timeUtils';
 import { matchesOutlet, formatOutletDisplayName, isOrderForToday } from '../lib/outletUtils';
 import {
   Truck,
@@ -591,7 +591,7 @@ export const DeliveryDashboard = React.memo(() => {
                       <a
                         href={formattedWhatsAppUrl(
                           order.mobile_number,
-                          `Hi ${order.customer_name},\n\nI am ${activePartner?.name || 'your rider'} from Broomies Bakery bringing your order #${order.order_number}!\n\nDelivery Date: ${order.delivery_date}\nDelivery Time: ${order.delivery_time_expected || '11:00 am'}\n\nThank you!`
+                          `Hi ${order.customer_name},\n\nI am ${activePartner?.name || 'your rider'} from Broomies Bakery bringing your order #${order.order_number}!\n\nDelivery Date: ${order.delivery_date}\nDelivery Time: ${formatTo12Hour(order.delivery_time_expected) || '11:00 AM'}\n\nThank you!`
                         )}
                         target="_blank"
                         rel="noreferrer"
@@ -759,7 +759,7 @@ export const DeliveryDashboard = React.memo(() => {
                       <div className="text-slate-400 flex items-center justify-between">
                         <span>Rider: <strong className="text-purple-300">{o.delivery_partner || o.delivered_by || 'Assigned Rider'}</strong></span>
                         <span className="text-[10px] text-slate-500">
-                          {o.actual_delivery_time ? new Date(o.actual_delivery_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Delivered'}
+                          {o.actual_delivery_time ? new Date(o.actual_delivery_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Delivered'}
                         </span>
                       </div>
                     </div>

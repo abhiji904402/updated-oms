@@ -103,5 +103,9 @@ export function isOrderForToday(o: Order, todayISO?: string): boolean {
     return false;
   };
 
-  return checkSingle(dDate) || checkSingle(oDate);
+  // Prioritize delivery_date. Evaluate order_date ONLY if delivery_date is not specified.
+  if (dDate) {
+    return checkSingle(dDate);
+  }
+  return checkSingle(oDate);
 }

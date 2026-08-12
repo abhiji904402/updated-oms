@@ -12,13 +12,20 @@ interface WhatsAppPopupProps {
 export function buildWhatsAppConfirmationMessage(order: Order): string {
   const itemDetails = `${order.item_type || ''}${order.quantity ? ` (${order.quantity})` : ''}`;
   const delDate = order.delivery_date || order.order_date || 'Today';
-  const rawTime = order.delivery_time_expected || order.order_time || '11:00 am';
+  const rawTime = order.delivery_time_expected || order.order_time || '11:00 AM';
   const delTime = formatTo12Hour(rawTime) || rawTime;
+
+  const totalVal = order.total_amount ?? 0;
+  const advanceVal = order.advance_amount ?? 0;
+  const remainingVal = order.remaining_balance ?? 0;
 
   let msg = `Thank you so much for your recent order from Broomies! Your order number is (${order.order_number}).\n\n`;
   msg += `We're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.\n\n`;
   msg += `Order Details:\n`;
   msg += `Item: ${itemDetails}\n`;
+  msg += `Total Amount: ₹${totalVal}\n`;
+  msg += `Advance Paid: ₹${advanceVal}\n`;
+  msg += `Remaining Balance: ₹${remainingVal}\n`;
   msg += `Delivery Date: ${delDate}\n`;
   msg += `Delivery Time: ${delTime}\n`;
 

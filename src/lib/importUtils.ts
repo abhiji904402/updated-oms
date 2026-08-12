@@ -1,4 +1,5 @@
 import { Order, OrderStatus, PaymentType, DeliveryType, OutletName } from '../types';
+import { formatTo12Hour, getCurrentTime12Hour } from './timeUtils';
 
 /**
  * Parses raw CSV text into array of string rows while supporting quoted values with commas/newlines.
@@ -167,7 +168,7 @@ export function parseCSVToOrders(csvText: string): Partial<Order>[] {
       payment_type: paymentType,
       delivery_type: deliveryType,
       delivery_date: deliveryDate || new Date().toISOString().split('T')[0],
-      delivery_time_expected: expectedTime || '17:00',
+      delivery_time_expected: formatTo12Hour(expectedTime) || '05:00 PM',
       informed_by: informedBy || 'Walk-in',
       advance_bill_number: advBill || '',
       final_bill_number: finalBill || '',
@@ -175,7 +176,7 @@ export function parseCSVToOrders(csvText: string): Partial<Order>[] {
       remarks: remarks || '',
       address: address || (deliveryType === 'pickup' ? 'Store Pickup' : 'Customer Address'),
       order_date: orderDate,
-      order_time: orderTime
+      order_time: formatTo12Hour(orderTime) || getCurrentTime12Hour()
     };
 
     orders.push(parsedOrder);
@@ -222,14 +223,14 @@ export function parseJSONToOrders(jsonText: string): Partial<Order>[] {
         payment_type: normalizePaymentType(item.payment_type || item.payment),
         delivery_type: normalizeDeliveryType(item.delivery_type || item.type),
         delivery_date: String(item.delivery_date || item.del_date || new Date().toISOString().split('T')[0]),
-        delivery_time_expected: String(item.delivery_time_expected || item.expected_time || item.time || '18:00'),
+        delivery_time_expected: formatTo12Hour(String(item.delivery_time_expected || item.expected_time || item.time || '06:00 PM')),
         informed_by: String(item.informed_by || 'App'),
         address: String(item.address || 'Address'),
         remarks: String(item.remarks || item.notes || ''),
         advance_bill_number: String(item.advance_bill_number || item.adv_bill_number || item.adv_bill || item.advance_bill || ''),
         final_bill_number: String(item.final_bill_number || item.final_bill_no || item.final_bill || item.bill_number || item.bill_no || item.bill || ''),
         order_date: String(item.order_date || new Date().toISOString().split('T')[0]),
-        order_time: String(item.order_time || new Date().toTimeString().slice(0, 5))
+        order_time: formatTo12Hour(String(item.order_time || getCurrentTime12Hour()))
       };
     });
   } catch (err) {

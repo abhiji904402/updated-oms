@@ -1,6 +1,7 @@
 import React from 'react';
 import { useOMS } from '../lib/store';
 import { isPaymentPending } from '../lib/orderLogic';
+import { formatTo12Hour } from '../lib/timeUtils';
 import { Bell, AlertTriangle, CheckCircle2, Clock, Info, ShieldAlert } from 'lucide-react';
 
 export const AlertsPage = React.memo(() => {
@@ -95,7 +96,7 @@ export const AlertsPage = React.memo(() => {
                   Order #{o.order_number} ({o.item_type}) Overdue!
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  Expected on {o.delivery_date} at {o.delivery_time_expected} • Outlet: {o.outlet} • Customer: {o.customer_name}
+                  Expected on {o.delivery_date} at {formatTo12Hour(o.delivery_time_expected)} • Outlet: {o.outlet} • Customer: {o.customer_name}
                 </div>
               </div>
             </div>

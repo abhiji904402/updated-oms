@@ -3,6 +3,7 @@ import { useOMS } from '../lib/store';
 import { Order, OutletName, DeliveryType, PaymentType, OrderStatus } from '../types';
 import { ITEM_PRESETS } from '../data/mockData';
 import { compressImage } from '../lib/imageCompressor';
+import { formatTo12Hour } from '../lib/timeUtils';
 import {
   X,
   Package,
@@ -128,7 +129,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     if (order && isOpen) {
       setOutlet(order.outlet);
       setOrderDate(order.order_date || '');
-      setOrderTime(order.order_time || '');
+      setOrderTime(formatTo12Hour(order.order_time) || order.order_time || '');
       setMobileNumber(order.mobile_number || '');
       setCustomerName(order.customer_name || '');
       setInformedBy(order.informed_by || '');
@@ -136,7 +137,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       setQuantity(order.quantity?.toString() || '1 kg');
       setDeliveryType(order.delivery_type || 'pickup');
       setDeliveryDate(order.delivery_date || '');
-      setExpectedDeliveryTime(order.delivery_time_expected || '');
+      setExpectedDeliveryTime(formatTo12Hour(order.delivery_time_expected) || order.delivery_time_expected || '');
       setTotalAmountStr((order.total_amount ?? 0).toString());
       setPaymentType(order.payment_type || 'full');
       setAdvanceAmountStr((order.advance_amount ?? 0).toString());
@@ -365,7 +366,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     updateOrder(order.id, {
       outlet,
       order_date: orderDate,
-      order_time: orderTime,
+      order_time: formatTo12Hour(orderTime) || orderTime,
       mobile_number: mobileNumber,
       customer_name: customerName.trim() || `Customer #${order.order_number}`,
       informed_by: informedBy || undefined,
@@ -384,7 +385,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       status,
       delivery_partner: deliveryPartner || undefined,
       delivery_date: deliveryDate,
-      delivery_time_expected: expectedDeliveryTime,
+      delivery_time_expected: formatTo12Hour(expectedDeliveryTime) || expectedDeliveryTime,
       item_image_url: itemImageUrl || undefined,
       otp: otp || undefined
     });

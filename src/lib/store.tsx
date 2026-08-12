@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Order, DeliveryPartner, DeliveryPartnerLocation, OutletLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
+import { formatTo12Hour, getCurrentTime12Hour } from './timeUtils';
 
 export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
   {
@@ -817,7 +818,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         payment_type: item.payment_type || 'full',
         delivery_type: item.delivery_type || 'delivery',
         delivery_date: item.delivery_date || now.split('T')[0],
-        delivery_time_expected: item.delivery_time_expected || '18:00',
+        delivery_time_expected: formatTo12Hour(item.delivery_time_expected) || '06:00 PM',
         status: item.status || 'pending',
         informed_by: item.informed_by || 'CSV/JSON Import',
         address: item.address || 'Address',
@@ -826,7 +827,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         final_bill_number: item.final_bill_number || (item as any).final_bill_no || (item as any).final_bill || (item as any).bill_number || (item as any).bill_no || (item as any).bill || '',
         item_image_url: item.item_image_url || '',
         order_date: item.order_date || now.split('T')[0],
-        order_time: item.order_time || now.slice(11, 16),
+        order_time: formatTo12Hour(item.order_time) || getCurrentTime12Hour(),
         otp: item.otp || Math.floor(1000 + Math.random() * 9000).toString(),
         created_at: item.created_at || now,
         updated_at: now
