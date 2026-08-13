@@ -147,9 +147,9 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
         <div style="font-size: 10px; color: #475569; margin-top: 3px;">Pay: ${o.payment_type.toUpperCase()}</div>
       </td>
       <td>
-        <div style="font-weight: 600;">${o.delivery_partner || '—'}</div>
-        ${o.delivered_by ? `<div style="font-size: 10px; color: #64748b;">By: ${o.delivered_by}</div>` : ''}
-        ${o.otp ? `<div style="font-size: 10px; color: #d97706; font-weight: bold;">OTP: ${o.otp}</div>` : ''}
+        <div style="font-weight: 700; color: #0f172a; font-size: 11px;">
+          ${o.delivered_by || o.delivery_partner || '—'}
+        </div>
       </td>
       <td>
         ${billCellHtml}
@@ -230,7 +230,7 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
               <th style="width: 11%;">Time Tracking</th>
               <th style="width: 10%;">Payment (₹)</th>
               <th style="width: 9%;">Status</th>
-              <th style="width: 8%;">Delivery / OTP</th>
+              <th style="width: 8%;">Delivered By</th>
               <th style="width: 8%;">Bill No(s)</th>
             </tr>
           </thead>
