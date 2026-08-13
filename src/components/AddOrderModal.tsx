@@ -796,6 +796,10 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 placeholder="e.g. 1/2 kg, 1 kg, 2 Pcs, 500g..."
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
+                onFocus={() => {
+                  setShowCustomerSuggestions(false);
+                  setShowItemSuggestions(false);
+                }}
                 className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm font-semibold focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
               />
               {/* Quick Weight & Unit Presets */}

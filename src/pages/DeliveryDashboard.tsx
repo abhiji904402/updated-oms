@@ -485,6 +485,7 @@ export const DeliveryDashboard = React.memo(() => {
                   placeholder="Search Order ID #, Customer, Phone..."
                   value={queueSearch}
                   onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   onChange={(e) => {
                     setQueueSearch(e.target.value);
                     setShowSuggestions(true);

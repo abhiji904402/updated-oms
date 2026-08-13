@@ -72,6 +72,21 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
   // Focus Refs
   const itemInputRef = useRef<HTMLInputElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
+  const customerWrapperRef = useRef<HTMLDivElement>(null);
+  const itemWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (customerWrapperRef.current && !customerWrapperRef.current.contains(e.target as Node)) {
+        setShowCustomerSuggestions(false);
+      }
+      if (itemWrapperRef.current && !itemWrapperRef.current.contains(e.target as Node)) {
+        setShowItemSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Item Suggestions list computation
   const itemSuggestions = useMemo(() => {
@@ -571,7 +586,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
 
           {/* Customer Details & Informed By */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div className="relative">
+            <div className="relative" ref={customerWrapperRef}>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                 Mobile Number *
               </label>
@@ -585,6 +600,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                   setCustomerHighlightIndex(0);
                 }}
                 onFocus={() => !isOutletUser && setShowCustomerSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
                 onKeyDown={handleCustomerKeyDown}
                 placeholder="e.g. 9876543210"
                 required
@@ -596,7 +612,16 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 <div className="absolute left-0 right-0 top-full mt-1 bg-[#0f1222] border border-indigo-500/50 rounded-xl shadow-2xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-xl">
                   <div className="px-3 py-1.5 bg-indigo-950/60 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center justify-between border-b border-indigo-900/40">
                     <span>Past Customers ({matchedCustomers.length})</span>
-                    <span className="text-slate-400 font-normal">↑↓ navigate • Tab/Enter select</span>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setShowCustomerSuggestions(false);
+                      }}
+                      className="text-slate-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
                   </div>
                   {matchedCustomers.map((c, idx) => {
                     const isHighlighted = idx === customerHighlightIndex;
@@ -644,6 +669,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                   setCustomerHighlightIndex(0);
                 }}
                 onFocus={() => !isOutletUser && setShowCustomerSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
                 onKeyDown={handleCustomerKeyDown}
                 placeholder="e.g. Rahul Sharma"
                 className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
@@ -659,6 +685,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 value={informedBy}
                 disabled={isOutletUser}
                 onChange={(e) => setInformedBy(e.target.value)}
+                onFocus={() => {
+                  setShowCustomerSuggestions(false);
+                  setShowItemSuggestions(false);
+                }}
                 placeholder="Staff name (not customer)"
                 className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3.5 py-2 text-xs text-purple-200 focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
@@ -666,7 +696,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
           </div>
 
           {/* Item Description & Quantity */}
-          <div className="space-y-2">
+          <div className="space-y-2" ref={itemWrapperRef}>
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
                 Bakery Item / Cake Description *
@@ -703,6 +733,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                     setItemHighlightIndex(0);
                   }}
                   onFocus={() => !isOutletUser && setShowItemSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
                   onKeyDown={handleItemKeyDown}
                   placeholder="e.g. 1kg Chocolate Truffle Cake, Vanilla Cake..."
                   required
@@ -714,7 +745,16 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                   <div className="absolute left-0 right-0 top-full mt-1 bg-[#0f1222] border border-purple-500/60 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-xl">
                     <div className="px-3 py-1.5 bg-purple-950/60 text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center justify-between border-b border-purple-900/40">
                       <span>Suggestions ({itemSuggestions.length})</span>
-                      <span className="text-slate-400 font-normal">↑↓ navigate • Tab/Enter select</span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setShowItemSuggestions(false);
+                        }}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        ✕
+                      </button>
                     </div>
                     {itemSuggestions.map((s, idx) => {
                       const isHighlighted = idx === itemHighlightIndex;
