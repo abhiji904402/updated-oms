@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   FileUp,
   FileCode,
+  ShieldCheck,
   X
 } from 'lucide-react';
 
@@ -553,8 +554,9 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
 };
 
 export const GoogleSheetsPage = React.memo(() => {
-  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, clearAllOrders } = useOMS();
+  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, clearAllOrders, repairAndEnforceUniqueOrderNumbers } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isVerifyingIDs, setIsVerifyingIDs] = useState(false);
   const [urlInput, setUrlInput] = useState(sheetConfig.sheet_url);
   const [copied, setCopied] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -569,6 +571,14 @@ export const GoogleSheetsPage = React.memo(() => {
     setTimeout(() => {
       setIsSyncing(false);
     }, 1200);
+  };
+
+  const handleVerifyUniqueIDs = async () => {
+    setIsVerifyingIDs(true);
+    await repairAndEnforceUniqueOrderNumbers();
+    setTimeout(() => {
+      setIsVerifyingIDs(false);
+    }, 800);
   };
 
   const handleClearAllOrdersRequest = () => {
@@ -680,14 +690,26 @@ export const GoogleSheetsPage = React.memo(() => {
 
         <div className="flex items-center gap-2.5">
           {orders.length > 0 && (
-            <button
-              onClick={handleClearAllOrdersRequest}
-              className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
-              title="Clear all order data to replace with new data"
-            >
-              <Trash2 className="w-4 h-4 text-rose-400" />
-              <span>Clear All Data ({orders.length})</span>
-            </button>
+            <>
+              <button
+                onClick={handleVerifyUniqueIDs}
+                disabled={isVerifyingIDs}
+                className="px-3.5 py-2.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-800/80 text-purple-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
+                title="Audit and guarantee 100% unique sequential Order IDs"
+              >
+                <ShieldCheck className={`w-4 h-4 text-purple-400 ${isVerifyingIDs ? 'animate-spin' : ''}`} />
+                <span>{isVerifyingIDs ? 'Auditing IDs...' : 'Verify Unique IDs'}</span>
+              </button>
+
+              <button
+                onClick={handleClearAllOrdersRequest}
+                className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
+                title="Clear all order data to replace with new data"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Clear All Data ({orders.length})</span>
+              </button>
+            </>
           )}
 
           <button

@@ -5,6 +5,7 @@ import { ITEM_PRESETS } from '../data/mockData';
 import { compressImage } from '../lib/imageCompressor';
 import { WhatsAppPopup } from './WhatsAppPopup';
 import { formatTo12Hour } from '../lib/timeUtils';
+import { getNextUniqueOrderNumber } from '../lib/orderLogic';
 import {
   X,
   Package,
@@ -26,11 +27,9 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
   const { orders, addOrder, session } = useOMS();
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Compute Next Order Number dynamically
+  // Compute Next Order Number dynamically and guaranteed unique
   const nextOrderNumber = useMemo(() => {
-    if (!orders || orders.length === 0) return 1;
-    const maxNum = Math.max(...orders.map((o) => o.order_number || 0), 0);
-    return maxNum + 1;
+    return getNextUniqueOrderNumber(orders || []);
   }, [orders]);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);

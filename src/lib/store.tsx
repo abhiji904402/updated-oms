@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Order, DeliveryPartner, DeliveryPartnerLocation, OutletLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
 import { formatTo12Hour, getCurrentTime12Hour } from './timeUtils';
+import { deduplicateAndEnsureUniqueOrderNumbers } from './orderLogic';
 
 export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
   {
@@ -79,6 +80,7 @@ interface OMSContextType {
   updateOrderStatus: (id: string, status: OrderStatus, deliveryPartner?: string) => void;
   markDelivered: (id: string, photoUrl?: string, otpInput?: string) => { success: boolean; message: string };
   confirmRiderDelivery: (id: string) => void;
+  repairAndEnforceUniqueOrderNumbers: () => Promise<void>;
 
   // Delivery Partners
   partners: DeliveryPartner[];
@@ -188,17 +190,22 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return DEFAULT_PASSWORDS;
   });
 
-  // Orders State
+  // Orders State (Guaranteed 100% Unique Order IDs)
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY_ORDERS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const { sanitizedOrders } = deduplicateAndEnsureUniqueOrderNumbers(parsed);
+          return sanitizedOrders;
+        }
       } catch (e) {
         console.error('Failed to parse saved orders', e);
       }
     }
-    return INITIAL_ORDERS;
+    const { sanitizedOrders } = deduplicateAndEnsureUniqueOrderNumbers(INITIAL_ORDERS);
+    return sanitizedOrders;
   });
 
   // Delivery Partners State
@@ -335,9 +342,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((idbOrders) => {
       if (idbOrders && Array.isArray(idbOrders) && idbOrders.length > 0) {
+        const { sanitizedOrders } = deduplicateAndEnsureUniqueOrderNumbers(idbOrders);
         setOrders((current) => {
-          if (!current || current.length < idbOrders.length) {
-            return idbOrders;
+          if (!current || current.length < sanitizedOrders.length) {
+            return sanitizedOrders;
           }
           return current;
         });
@@ -345,49 +353,66 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // 1. Real-time Firestore Sync for Orders
+  // 1. Real-time Firestore Sync for Orders with Auto-Deduplication & Repair
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
       (snapshot) => {
         if (snapshot.metadata.hasPendingWrites) return;
 
-        const list: Order[] = [];
+        const rawList: Order[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ ...docSnap.data(), id: docSnap.id } as Order);
+          rawList.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        if (list.length > 0) {
-          list.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
+        if (rawList.length > 0) {
+          // Strictly guarantee every order has a unique positive order_number
+          const { sanitizedOrders, hasDuplicates, repairedOrders } = deduplicateAndEnsureUniqueOrderNumbers(rawList);
+
+          sanitizedOrders.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
           setOrders((prev) => {
-            if (prev.length === list.length) {
+            if (prev.length === sanitizedOrders.length) {
               const matches = prev.every(
                 (p, idx) =>
-                  p.id === list[idx]?.id &&
-                  p.updated_at === list[idx]?.updated_at &&
-                  p.status === list[idx]?.status &&
-                  p.delivery_confirmation_pending === list[idx]?.delivery_confirmation_pending
+                  p.id === sanitizedOrders[idx]?.id &&
+                  p.order_number === sanitizedOrders[idx]?.order_number &&
+                  p.updated_at === sanitizedOrders[idx]?.updated_at &&
+                  p.status === sanitizedOrders[idx]?.status &&
+                  p.delivery_confirmation_pending === sanitizedOrders[idx]?.delivery_confirmation_pending
               );
               if (matches) return prev;
             }
-            return list;
+            return sanitizedOrders;
           });
           try {
-            localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(list));
-            idbSet(LOCAL_STORAGE_KEY_ORDERS, list);
+            localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(sanitizedOrders));
+            idbSet(LOCAL_STORAGE_KEY_ORDERS, sanitizedOrders);
           } catch (e) {}
+
+          // If duplicates existed in Firestore, repair them permanently in Firestore!
+          if (hasDuplicates && repairedOrders.length > 0) {
+            console.info(`[OMS Uniqueness Engine] Repaired and cleaned ${repairedOrders.length} duplicate order numbers in Firestore.`);
+            const batch = writeBatch(db);
+            repairedOrders.forEach((ord) => {
+              const clean = sanitizeOrderForFirestore(ord);
+              batch.set(doc(db, 'orders', clean.id), clean, { merge: true });
+            });
+            batch.commit().catch((err) => console.warn('Batch repair Firestore failed:', err));
+          }
         } else if (!snapshot.metadata.fromCache) {
           const seeded = localStorage.getItem('orders_firestore_seeded_v2');
           if (!seeded) {
             localStorage.setItem('orders_firestore_seeded_v2', 'true');
             setOrders((currentLocal) => {
               if (currentLocal && currentLocal.length > 0) {
+                const { sanitizedOrders } = deduplicateAndEnsureUniqueOrderNumbers(currentLocal);
                 const batch = writeBatch(db);
-                currentLocal.forEach((ord) => {
+                sanitizedOrders.forEach((ord) => {
                   const clean = sanitizeOrderForFirestore(ord);
                   batch.set(doc(db, 'orders', clean.id), clean);
                 });
                 batch.commit().catch((err) => console.warn('Batch seed failed:', err));
+                return sanitizedOrders;
               }
               return currentLocal;
             });
@@ -749,15 +774,34 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [logSync, showNotification]);
 
   const addOrder = useCallback((orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'updated_at'>): Order => {
-    const currentOrders = ordersRef.current;
-    const maxOrderNum = currentOrders.length > 0 ? currentOrders.reduce((max, o) => Math.max(max, o.order_number || 0), 0) : 2159;
-    const newOrderNumber = maxOrderNum > 0 ? maxOrderNum + 1 : 2160;
+    const currentOrders = ordersRef.current || [];
+    const allocatedNumbers = new Set<number>();
+    let currentMax = 2159;
+
+    currentOrders.forEach((o) => {
+      const num = Number(o.order_number);
+      if (!isNaN(num) && num > 0 && Number.isInteger(num)) {
+        allocatedNumbers.add(num);
+        if (num > currentMax) {
+          currentMax = num;
+        }
+      }
+    });
+
+    let candidate = currentMax + 1;
+    while (allocatedNumbers.has(candidate)) {
+      candidate += 1;
+    }
+
+    const newOrderNumber = candidate;
+    allocatedNumbers.add(newOrderNumber);
+
     const now = new Date().toISOString();
     const randomOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     const rawOrder: Order = {
       ...orderData,
-      id: `ord-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: `ord-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       order_number: newOrderNumber,
       otp: randomOtp,
       payment_changed_by: session.name || 'Admin',
@@ -768,7 +812,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newOrder = sanitizeOrderForFirestore(rawOrder);
 
-    // Instant local state update; debounced effect handles storage persistence
+    // Instant synchronous update to ordersRef to prevent race conditions
+    ordersRef.current = [newOrder, ...currentOrders.filter((o) => o.id !== newOrder.id)];
+
+    // Instant local state update
     setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
 
     // Write to Firestore
@@ -786,17 +833,36 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const importOrders = useCallback((imported: Partial<Order>[], overwrite = false) => {
     const now = new Date().toISOString();
-    let currentMaxNumber = overwrite
-      ? 100
-      : orders.reduce((max, o) => Math.max(max, o.order_number || 0), 100);
+    const existingOrders = overwrite ? [] : (ordersRef.current || []);
+    const usedNumbers = new Set<number>();
+    let maxSequence = overwrite ? 100 : 2159;
+
+    existingOrders.forEach((o) => {
+      const num = Number(o.order_number);
+      if (!isNaN(num) && num > 0 && Number.isInteger(num)) {
+        usedNumbers.add(num);
+        if (num > maxSequence) {
+          maxSequence = num;
+        }
+      }
+    });
 
     const formattedOrders: Order[] = imported.map((item, idx) => {
-      let orderNum = item.order_number;
-      if (!orderNum || isNaN(orderNum)) {
-        currentMaxNumber += 1;
-        orderNum = currentMaxNumber;
+      let orderNum = Number(item.order_number);
+      const isExplicitValid = !isNaN(orderNum) && orderNum > 0 && Number.isInteger(orderNum);
+
+      if (isExplicitValid && !usedNumbers.has(orderNum)) {
+        usedNumbers.add(orderNum);
+        if (orderNum > maxSequence) {
+          maxSequence = orderNum;
+        }
       } else {
-        currentMaxNumber = Math.max(currentMaxNumber, orderNum);
+        maxSequence += 1;
+        while (usedNumbers.has(maxSequence)) {
+          maxSequence += 1;
+        }
+        orderNum = maxSequence;
+        usedNumbers.add(orderNum);
       }
 
       const totalAmt = typeof item.total_amount === 'number' ? item.total_amount : Number(item.total_amount) || 0;
@@ -804,7 +870,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const remBal = typeof item.remaining_balance === 'number' ? item.remaining_balance : Math.max(0, totalAmt - advAmt);
 
       return {
-        id: item.id || `ord-imp-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+        id: item.id || `ord-imp-${Date.now()}-${idx}-${Math.floor(Math.random() * 10000)}`,
         order_number: orderNum,
         customer_name: item.customer_name || 'Valued Customer',
         mobile_number: item.mobile_number || '9876543210',
@@ -836,6 +902,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (overwrite) {
       setOrders(formattedOrders);
+      ordersRef.current = formattedOrders;
       localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(formattedOrders));
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders);
 
@@ -862,9 +929,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Firestore overwrite import error:', err);
       });
 
-      showNotification(`Replaced all orders with ${formattedOrders.length} imported orders!`);
+      showNotification(`Replaced all orders with ${formattedOrders.length} unique imported orders!`);
     } else {
       setOrders((prev) => [...formattedOrders, ...prev]);
+      ordersRef.current = [...formattedOrders, ...existingOrders];
       // Persist new imported orders to Firestore
       for (let i = 0; i < formattedOrders.length; i += 400) {
         const chunk = formattedOrders.slice(i, i + 400);
@@ -872,13 +940,36 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
         batch.commit().catch(() => {});
       }
-      showNotification(`Successfully imported ${formattedOrders.length} new orders!`);
+      showNotification(`Successfully imported ${formattedOrders.length} new unique orders!`);
     }
 
     if (sheetConfig.sheet_url && sheetConfig.sheet_url.startsWith('http')) {
       triggerGoogleSheetSync();
     }
-  }, [orders, showNotification, sheetConfig.sheet_url, triggerGoogleSheetSync]);
+  }, [showNotification, sheetConfig.sheet_url, triggerGoogleSheetSync]);
+
+  const repairAndEnforceUniqueOrderNumbers = useCallback(async () => {
+    const current = ordersRef.current || [];
+    const { sanitizedOrders, hasDuplicates, repairedOrders } = deduplicateAndEnsureUniqueOrderNumbers(current);
+    if (hasDuplicates && repairedOrders.length > 0) {
+      sanitizedOrders.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
+      setOrders(sanitizedOrders);
+      ordersRef.current = sanitizedOrders;
+      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(sanitizedOrders));
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, sanitizedOrders);
+
+      const batch = writeBatch(db);
+      repairedOrders.forEach((rep) => {
+        const clean = sanitizeOrderForFirestore(rep);
+        batch.set(doc(db, 'orders', rep.id), clean, { merge: true });
+      });
+      await batch.commit();
+
+      showNotification(`🛡️ Repaired ${repairedOrders.length} duplicate Order IDs. All orders are now strictly unique!`);
+    } else {
+      showNotification('✅ All Order IDs are already 100% unique.');
+    }
+  }, [showNotification]);
 
   const updateOrder = useCallback((id: string, updates: Partial<Order>) => {
     const target = ordersRef.current.find((o) => o.id === id);
@@ -1188,6 +1279,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,
+      repairAndEnforceUniqueOrderNumbers,
       partners: partners || [],
       addPartner,
       deletePartner,
@@ -1235,6 +1327,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,
+      repairAndEnforceUniqueOrderNumbers,
       partners,
       addPartner,
       deletePartner,

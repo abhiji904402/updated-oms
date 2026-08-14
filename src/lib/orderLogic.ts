@@ -169,3 +169,90 @@ export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrow
     on_hold
   };
 };
+
+/**
+ * Calculates the next strictly unique order number that is not taken by any existing order.
+ */
+export function getNextUniqueOrderNumber(ordersList: Order[]): number {
+  if (!ordersList || ordersList.length === 0) return 1;
+  const used = new Set<number>();
+  let max = 0;
+  ordersList.forEach((o) => {
+    const num = Number(o.order_number);
+    if (!isNaN(num) && num > 0 && Number.isInteger(num)) {
+      used.add(num);
+      if (num > max) max = num;
+    }
+  });
+  let candidate = max + 1;
+  while (used.has(candidate)) {
+    candidate += 1;
+  }
+  return candidate;
+}
+
+/**
+ * Guarantees that every order in the array has a strictly unique, valid positive integer order_number.
+ * If any duplicate order_numbers or missing/invalid numbers are detected:
+ * - Keeps the earliest created order with its original order_number.
+ * - Auto-allocates the next available max unique numbers for duplicates.
+ * Returns the sanitized array along with the list of modified/repaired orders so they can be synced to Firestore & Local Storage.
+ */
+export function deduplicateAndEnsureUniqueOrderNumbers(ordersList: Order[]): {
+  sanitizedOrders: Order[];
+  hasDuplicates: boolean;
+  repairedOrders: Order[];
+} {
+  if (!ordersList || ordersList.length === 0) {
+    return { sanitizedOrders: [], hasDuplicates: false, repairedOrders: [] };
+  }
+
+  // 1. Sort chronologically by created_at (or ID fallback) so original first order keeps its order_number
+  const sorted = [...ordersList].sort((a, b) => {
+    const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
+  });
+
+  // 2. Find the current highest valid order number in the system
+  let maxOrderNum = 2159;
+  sorted.forEach((o) => {
+    const num = Number(o.order_number);
+    if (!isNaN(num) && num > 0 && Number.isInteger(num)) {
+      if (num > maxOrderNum) {
+        maxOrderNum = num;
+      }
+    }
+  });
+
+  const seenNumbers = new Set<number>();
+  const repairedOrders: Order[] = [];
+  let hasDuplicates = false;
+
+  const sanitizedOrders = sorted.map((ord) => {
+    let num = Number(ord.order_number);
+    const isValidPositive = !isNaN(num) && num > 0 && Number.isInteger(num);
+
+    if (!isValidPositive || seenNumbers.has(num)) {
+      hasDuplicates = true;
+      maxOrderNum += 1;
+      while (seenNumbers.has(maxOrderNum)) {
+        maxOrderNum += 1;
+      }
+      const repaired: Order = {
+        ...ord,
+        order_number: maxOrderNum,
+        updated_at: new Date().toISOString()
+      };
+      seenNumbers.add(maxOrderNum);
+      repairedOrders.push(repaired);
+      return repaired;
+    }
+
+    seenNumbers.add(num);
+    return ord;
+  });
+
+  return { sanitizedOrders, hasDuplicates, repairedOrders };
+}
