@@ -122,6 +122,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
 
   // Tab definitions
   const tabs: { id: DashboardTab; label: string; icon: React.FC<{ className?: string }>; count: number | string; color: string }[] = [
+    { id: 'all', label: 'ALL ORDERS', icon: ShoppingBag, count: counts.all, color: 'text-violet-400' },
     { id: 'today', label: 'TODAY ORDERS', icon: Calendar, count: counts.today, color: 'text-purple-400' },
     { id: 'tomorrow', label: 'TOMORROW ORDERS', icon: CalendarDays, count: counts.tomorrow, color: 'text-indigo-400' },
     { id: 'future', label: 'FUTURE ORDERS', icon: Clock3, count: counts.future, color: 'text-blue-400' },
@@ -138,7 +139,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     { id: 'on_hold', label: 'ON HOLD', icon: PauseCircle, count: counts.on_hold, color: 'text-slate-400' }
   ];
 
-  // Filtered Orders Logic based on 8 Dashboard Tabs + Outlet / Search filters
+  // Filtered Orders Logic based on Dashboard Tabs + Outlet / Search filters
   const filteredOrders = useMemo(() => {
     const raw = safeOrders.filter((o) => {
       // 1. Search query filter
@@ -171,6 +172,10 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       }
 
       // 4. Tab Specific Filter
+      if (activeTab === 'all') {
+        return true;
+      }
+
       if (activeTab === 'today') {
         const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
         return (

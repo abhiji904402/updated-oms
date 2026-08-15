@@ -1,6 +1,7 @@
 import { Order, OrderStatus } from '../types';
 
 export type DashboardTab =
+  | 'all'
   | 'today'
   | 'tomorrow'
   | 'future'
@@ -89,6 +90,11 @@ export const sortOrdersByTab = (orders: Order[], tab: DashboardTab): Order[] => 
     const numA = a.order_number || 0;
     const numB = b.order_number || 0;
 
+    if (tab === 'all') {
+      // Strictly by Order # descending (Order #2607, #2606...)
+      return numB - numA;
+    }
+
     if (tab === 'delivered_history') {
       // Recently delivered / newest delivery date on top (DESCENDING)
       if (timeA !== timeB) return timeB - timeA;
@@ -114,9 +120,10 @@ export const sortOrdersByTab = (orders: Order[], tab: DashboardTab): Order[] => 
 };
 
 /**
- * Compute badge counts for all 8 tabs
+ * Compute badge counts for all tabs
  */
 export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrowStr: string) => {
+  let all = safeOrders.length;
   let today = 0, tomorrow = 0, future = 0, delivered_history = 0, pending_payment = 0, pending_payment_amount = 0, cancelled = 0, missed = 0, on_hold = 0;
 
   safeOrders.forEach((o) => {
@@ -158,6 +165,7 @@ export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrow
   });
 
   return {
+    all,
     today,
     tomorrow,
     future,

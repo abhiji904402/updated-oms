@@ -197,12 +197,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const maxNum = parsed.reduce((max: number, o: Order) => Math.max(max, Number(o.order_number) || 0), 0);
-          if (maxNum > parsed.length) {
-            const reseq = resequenceOrderNumbers(parsed, 1);
-            reseq.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
-            return reseq;
-          }
+          parsed.sort((a: Order, b: Order) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
           return parsed;
         }
       } catch (e) {
@@ -346,14 +341,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((idbOrders) => {
       if (idbOrders && Array.isArray(idbOrders) && idbOrders.length > 0) {
-        const maxNum = idbOrders.reduce((max, o) => Math.max(max, Number(o.order_number) || 0), 0);
-        const finalOrders = maxNum > idbOrders.length
-          ? resequenceOrderNumbers(idbOrders, 1)
-          : idbOrders;
-        finalOrders.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
+        idbOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
         setOrders((current) => {
-          if (!current || current.length < finalOrders.length) {
-            return finalOrders;
+          if (!current || current.length < idbOrders.length) {
+            return idbOrders;
           }
           return current;
         });
