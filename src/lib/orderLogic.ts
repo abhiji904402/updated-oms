@@ -171,88 +171,47 @@ export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrow
 };
 
 /**
- * Calculates the next strictly unique order number that is not taken by any existing order.
+ * Calculates the next sequential order number based on existing orders.
  */
-export function getNextUniqueOrderNumber(ordersList: Order[]): number {
-  if (!ordersList || ordersList.length === 0) return 1;
-  const used = new Set<number>();
+export function getNextOrderNumber(ordersList: Order[], defaultStart: number = 1): number {
+  if (!ordersList || ordersList.length === 0) return defaultStart;
   let max = 0;
   ordersList.forEach((o) => {
     const num = Number(o.order_number);
     if (!isNaN(num) && num > 0 && Number.isInteger(num)) {
-      used.add(num);
       if (num > max) max = num;
     }
   });
-  let candidate = max + 1;
-  while (used.has(candidate)) {
-    candidate += 1;
-  }
-  return candidate;
+  return max > 0 ? max + 1 : defaultStart;
 }
 
 /**
- * Guarantees that every order in the array has a strictly unique, valid positive integer order_number.
- * If any duplicate order_numbers or missing/invalid numbers are detected:
- * - Keeps the earliest created order with its original order_number.
- * - Auto-allocates the next available max unique numbers for duplicates.
- * Returns the sanitized array along with the list of modified/repaired orders so they can be synced to Firestore & Local Storage.
+ * Re-sequences orders starting from a custom starting number (e.g. 1, 101, 2160, 2500)
+ * in chronological order of creation.
  */
-export function deduplicateAndEnsureUniqueOrderNumbers(ordersList: Order[]): {
-  sanitizedOrders: Order[];
-  hasDuplicates: boolean;
-  repairedOrders: Order[];
-} {
-  if (!ordersList || ordersList.length === 0) {
-    return { sanitizedOrders: [], hasDuplicates: false, repairedOrders: [] };
-  }
-
-  // 1. Sort chronologically by created_at (or ID fallback) so original first order keeps its order_number
+export function resequenceOrderNumbers(ordersList: Order[], startNumber: number = 1): Order[] {
+  if (!ordersList || ordersList.length === 0) return [];
   const sorted = [...ordersList].sort((a, b) => {
+    const numA = Number(a.order_number) || 0;
+    const numB = Number(b.order_number) || 0;
+    if (numA !== 0 && numB !== 0 && numA !== numB) return numA - numB;
     const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
     const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
     if (timeA !== timeB) return timeA - timeB;
     return a.id.localeCompare(b.id);
   });
 
-  // 2. Find the current highest valid order number in the system
-  let maxOrderNum = 2159;
-  sorted.forEach((o) => {
-    const num = Number(o.order_number);
-    if (!isNaN(num) && num > 0 && Number.isInteger(num)) {
-      if (num > maxOrderNum) {
-        maxOrderNum = num;
-      }
-    }
+  let currentNum = Math.max(1, Math.floor(startNumber));
+  const now = new Date().toISOString();
+
+  return sorted.map((ord) => {
+    const updated: Order = {
+      ...ord,
+      order_number: currentNum,
+      updated_at: now
+    };
+    currentNum += 1;
+    return updated;
   });
-
-  const seenNumbers = new Set<number>();
-  const repairedOrders: Order[] = [];
-  let hasDuplicates = false;
-
-  const sanitizedOrders = sorted.map((ord) => {
-    let num = Number(ord.order_number);
-    const isValidPositive = !isNaN(num) && num > 0 && Number.isInteger(num);
-
-    if (!isValidPositive || seenNumbers.has(num)) {
-      hasDuplicates = true;
-      maxOrderNum += 1;
-      while (seenNumbers.has(maxOrderNum)) {
-        maxOrderNum += 1;
-      }
-      const repaired: Order = {
-        ...ord,
-        order_number: maxOrderNum,
-        updated_at: new Date().toISOString()
-      };
-      seenNumbers.add(maxOrderNum);
-      repairedOrders.push(repaired);
-      return repaired;
-    }
-
-    seenNumbers.add(num);
-    return ord;
-  });
-
-  return { sanitizedOrders, hasDuplicates, repairedOrders };
 }
+

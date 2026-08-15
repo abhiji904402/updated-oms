@@ -5,7 +5,7 @@ import { ITEM_PRESETS } from '../data/mockData';
 import { compressImage } from '../lib/imageCompressor';
 import { WhatsAppPopup } from './WhatsAppPopup';
 import { formatTo12Hour } from '../lib/timeUtils';
-import { getNextUniqueOrderNumber } from '../lib/orderLogic';
+import { getNextOrderNumber } from '../lib/orderLogic';
 import {
   X,
   Package,
@@ -27,9 +27,9 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
   const { orders, addOrder, session } = useOMS();
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Compute Next Order Number dynamically and guaranteed unique
+  // Compute Next Order Number dynamically from actual existing orders
   const nextOrderNumber = useMemo(() => {
-    return getNextUniqueOrderNumber(orders || []);
+    return getNextOrderNumber(orders || [], 1);
   }, [orders]);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -454,6 +454,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     const finalCustomerName = customerName.trim() || informedBy.trim() || `Customer #${nextOrderNumber}`;
 
     const newOrder = addOrder({
+      order_number: nextOrderNumber,
       outlet,
       order_date: orderDate || todayStr,
       order_time: formatTo12Hour(orderTime || currentTimeStr) || currentTimeStr,
@@ -540,12 +541,14 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
           className="p-6 space-y-5 max-h-[82vh] overflow-y-auto"
         >
           {/* Order Number Banner */}
-          <div className="bg-[#121524] border border-indigo-900/40 rounded-xl p-4 flex items-center gap-3">
-            <span className="text-2xl font-black text-purple-500/60 leading-none">#</span>
-            <div>
-              <div className="text-xs font-semibold text-slate-400">Order Number (Auto)</div>
-              <div className="text-2xl font-black text-purple-400 tracking-wide mt-0.5">
-                #{nextOrderNumber}
+          <div className="bg-[#121524] border border-indigo-900/40 rounded-xl p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-black text-purple-500/60 leading-none">#</span>
+              <div>
+                <div className="text-xs font-semibold text-slate-400">Order Number (Auto Serial)</div>
+                <div className="text-2xl font-black text-purple-400 tracking-wide mt-0.5 font-mono">
+                  #{nextOrderNumber}
+                </div>
               </div>
             </div>
           </div>

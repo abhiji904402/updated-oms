@@ -60,6 +60,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
   const [deliveryPartner, setDeliveryPartner] = useState<string>('');
   const [itemImageUrl, setItemImageUrl] = useState<string | null>(null);
   const [otp, setOtp] = useState<string>('');
+  const [orderNumberStr, setOrderNumberStr] = useState<string>('');
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
 
   // Suggestions State
@@ -164,6 +165,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       setDeliveryPartner(order.delivery_partner || '');
       setItemImageUrl(order.item_image_url || null);
       setOtp(order.otp || '');
+      setOrderNumberStr(order.order_number ? order.order_number.toString() : '');
     }
   }, [order, isOpen]);
 
@@ -378,7 +380,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     const calculatedAdvance = isFullPay ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
     const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
 
+    const finalOrderNumber = orderNumberStr && !isNaN(Number(orderNumberStr)) && Number(orderNumberStr) > 0
+      ? Number(orderNumberStr)
+      : order.order_number;
+
     updateOrder(order.id, {
+      order_number: finalOrderNumber,
       outlet,
       order_date: orderDate,
       order_time: formatTo12Hour(orderTime) || orderTime,
@@ -472,8 +479,22 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
             </div>
           )}
 
-          {/* Outlet & Status Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Order Number & Outlet & Status Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                Order Number (#)
+              </label>
+              <input
+                type="number"
+                disabled={isOutletUser}
+                value={orderNumberStr}
+                onChange={(e) => setOrderNumberStr(e.target.value)}
+                className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-xs text-purple-300 font-black focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                placeholder={order.order_number.toString()}
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Outlet Location
