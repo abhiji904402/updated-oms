@@ -734,11 +734,19 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Log sync immediately for instant UI responsiveness
     logSync(order.order_number, action, true);
 
+    const sanitized = sanitizeOrderForSync(order);
+
     fetch(targetUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action, order: sanitizeOrderForSync(order) })
+      body: JSON.stringify({
+        action,
+        order_number: order.order_number,
+        outlet: order.outlet,
+        ...sanitized,
+        order: sanitized
+      })
     }).catch((err) => console.warn('Push to sheet error:', err));
   }, [logSync]);
 
@@ -782,7 +790,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(chunk)
+          body: JSON.stringify({
+            bulk: true,
+            action: 'bulk',
+            orders: chunk
+          })
         });
       }
 

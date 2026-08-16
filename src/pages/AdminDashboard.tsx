@@ -96,16 +96,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
   const [currentPage, setCurrentPage] = useState(1);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
-  const [isResequenceModalOpen, setIsResequenceModalOpen] = useState(false);
-  const [isResequencing, setIsResequencing] = useState(false);
-  const [resequenceStartNum, setResequenceStartNum] = useState(1);
-
-  const handleExecuteResequence = async (startNum: number) => {
-    setIsResequencing(true);
-    await resequenceAllOrders(startNum);
-    setIsResequencing(false);
-    setIsResequenceModalOpen(false);
-  };
 
   // Dates
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -404,25 +394,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
               <span>Map View</span>
             </button>
           </div>
-
-          {!isOutletUser && orders.length > 0 && (
-            <button
-              onClick={() => setIsResequenceModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-800/80 text-purple-200 font-bold text-xs shadow-md flex items-center gap-1.5 transition cursor-pointer"
-              title="Fix and re-number order sequence cleanly"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-              <span>Fix Series</span>
-            </button>
-          )}
-
-          <button
-            onClick={onOpenAddModal}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-950/50 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            + New Order
-          </button>
         </div>
       </div>
 
@@ -938,118 +909,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
         isOpen={!!editingOrder}
         onClose={() => setEditingOrder(null)}
       />
-
-      {/* Resequence / Fix Order Series Modal */}
-      {isResequenceModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#101426] border border-purple-900/50 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-950/80 border border-purple-800 rounded-xl text-purple-400">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Fix & Reset Order ID Series</h3>
-                  <p className="text-xs text-slate-400">Total {orders.length} orders in system</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsResequenceModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">
-              This tool sorts all {orders.length} orders in <strong className="text-purple-300">descending order based on Order Date &amp; Time</strong> (newest punched orders first) and updates all <strong className="text-purple-300">Order IDs sequentially</strong> without touching or modifying the <strong className="text-emerald-400">delivery_date</strong> field in any way.
-            </p>
-
-            {/* Presets */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-purple-300 uppercase tracking-wider">
-                Choose Starting Order Number:
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setResequenceStartNum(1)}
-                  className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                    resequenceStartNum === 1
-                      ? 'bg-purple-950/80 border-purple-500 text-white shadow'
-                      : 'bg-[#151930] border-slate-800 text-slate-300 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="text-xs font-black">Start from #1</div>
-                  <div className="text-[11px] text-slate-400">#1 to #{orders.length}</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setResequenceStartNum(2160)}
-                  className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                    resequenceStartNum === 2160
-                      ? 'bg-purple-950/80 border-purple-500 text-white shadow'
-                      : 'bg-[#151930] border-slate-800 text-slate-300 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="text-xs font-black">Start from #2160</div>
-                  <div className="text-[11px] text-slate-400">#2160 to #{2160 + orders.length - 1}</div>
-                </button>
-              </div>
-
-              {/* Custom start number input */}
-              <div className="mt-3">
-                <label className="block text-[11px] text-slate-400 mb-1">
-                  Or enter custom start number:
-                </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-black text-purple-400">#</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={resequenceStartNum}
-                    onChange={(e) => setResequenceStartNum(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="w-full bg-[#151930] border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white font-bold focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Live Preview Box */}
-            <div className="bg-purple-950/40 border border-purple-800/40 rounded-xl p-3.5 text-xs text-purple-200">
-              <div className="font-bold text-purple-300">Series Preview:</div>
-              <div className="mt-1 font-mono text-sm font-black text-white">
-                #{resequenceStartNum} ➔ #{resequenceStartNum + Math.max(0, orders.length - 1)}
-              </div>
-              <div className="text-[11px] text-purple-300/80 mt-1">
-                All {orders.length} existing orders will be cleanly updated in local storage and Firestore.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsResequenceModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isResequencing}
-                onClick={() => handleExecuteResequence(resequenceStartNum)}
-                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-950/50 flex items-center gap-2 transition cursor-pointer"
-              >
-                {isResequencing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                <span>{isResequencing ? 'Applying Series...' : 'Apply Series Re-Sequencing'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 });

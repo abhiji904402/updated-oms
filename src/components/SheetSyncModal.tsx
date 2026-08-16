@@ -7,29 +7,153 @@ interface SheetSyncModalProps {
   onClose: () => void;
 }
 
-const APPS_SCRIPT_CODE = `// ===================================================
-// BROOMIES BAKERY – Google Apps Script
-// Multi-Outlet Separate Sheets + Master Sheet Auto-Routing
-// Sorted Strictly by Order # (Column 1) - No S.No needed
-// ===================================================
+const APPS_SCRIPT_CODE = `// =============================================
+// BROOMIES BAKERY — Google Apps Script
+// Outlet-wise sheets + Smart missing data sync
+// =============================================
+
+var OUTLET_SHEET_MAP = {
+  "sector_31": "Sector 31",
+  "Sector 31": "Sector 31",
+  "sector_42": "Sector 42",
+  "Sector 42": "Sector 42",
+  "sector_35": "Sector 35",
+  "Sector 35": "Sector 35",
+  "sector_88": "Sector 88",
+  "Sector 88": "Sector 88"
+};
+
+var HEADERS = [
+  "Order#", "Order Date", "Order Time", "Mobile", "Customer Name",
+  "Item", "Qty", "Delivery Type", "Informed By", "Amount",
+  "Advance", "Remaining", "Payment", "Adv Bill No.", "Final Bill No.",
+  "Status", "Delivery Date", "Expected Time", "Actual Time", "Partner",
+  "Address", "Remarks", "Image URL", "Last Updated"
+];
+
+function getOrCreateSheet(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(HEADERS);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, HEADERS.length)
+      .setBackground("#6345ED")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold");
+  } else if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADERS);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, HEADERS.length)
+      .setBackground("#6345ED")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold");
+  }
+  return sheet;
+}
+
+function upsertRow(sheet, orderNum, rowData) {
+  var values = sheet.getDataRange().getValues();
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(orderNum)) {
+      sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
+      return;
+    }
+  }
+  sheet.appendRow(rowData);
+}
+
+function deleteRow(sheet, orderNum) {
+  var values = sheet.getDataRange().getValues();
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(orderNum)) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
+}
+
+function buildRow(d) {
+  return [
+    d.order_number || "",
+    d.order_date || "",
+    d.order_time || "",
+    d.mobile_number || "",
+    d.customer_name || "",
+    d.item_type || "",
+    d.quantity || "",
+    d.delivery_type || "",
+    d.informed_by || "",
+    Number(d.total_amount) || 0,
+    Number(d.advance_amount) || 0,
+    Number(d.remaining_balance) || 0,
+    d.payment_type || "",
+    d.advance_bill_number || "",
+    d.final_bill_number || "",
+    d.status || "",
+    d.delivery_date || "",
+    d.delivery_time_expected || "",
+    d.actual_delivery_time || "",
+    d.delivery_partner || "",
+    d.address || "",
+    d.remarks || "",
+    d.item_image_url || "",
+    new Date().toLocaleString("en-IN")
+  ];
+}
 
 function doPost(e) {
   try {
+    var data = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var contents = e.postData.contents;
-    var data = JSON.parse(contents);
+    var action = data.action;
 
-    if (data && data.action === "delete") {
-      deleteOrderFromAllSheets(ss, data.order || data);
-    } else if (Array.isArray(data)) {
-      data.forEach(function(order) { syncOrderToSheets(ss, order); });
-    } else if (data && data.order) {
-      syncOrderToSheets(ss, data.order);
-    } else if (data) {
-      syncOrderToSheets(ss, data);
+    // Handle bulk sync (array of orders)
+    if (data.bulk && Array.isArray(data.orders)) {
+      var allSheet = getOrCreateSheet(ss, "All Orders");
+      data.orders.forEach(function(order) {
+        var outletKey = order.outlet ? String(order.outlet).trim() : "Sector 31";
+        var sheetName = OUTLET_SHEET_MAP[outletKey] || OUTLET_SHEET_MAP[outletKey.toLowerCase().replace(/\\s+/g, '_')] || outletKey || "Other";
+        var sheet = getOrCreateSheet(ss, sheetName);
+        var rowData = buildRow(order);
+        upsertRow(sheet, order.order_number, rowData);
+        upsertRow(allSheet, order.order_number, rowData);
+      });
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", count: data.orders.length }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Orders routed & sorted by Order #" }))
+    if (Array.isArray(data)) {
+      var allSheet = getOrCreateSheet(ss, "All Orders");
+      data.forEach(function(order) {
+        var outletKey = order.outlet ? String(order.outlet).trim() : "Sector 31";
+        var sheetName = OUTLET_SHEET_MAP[outletKey] || OUTLET_SHEET_MAP[outletKey.toLowerCase().replace(/\\s+/g, '_')] || outletKey || "Other";
+        var sheet = getOrCreateSheet(ss, sheetName);
+        var rowData = buildRow(order);
+        upsertRow(sheet, order.order_number, rowData);
+        upsertRow(allSheet, order.order_number, rowData);
+      });
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", count: data.length }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Single order sync
+    var orderData = data.order || data;
+    var outletKey = orderData.outlet ? String(orderData.outlet).trim() : "Sector 31";
+    var sheetName = OUTLET_SHEET_MAP[outletKey] || OUTLET_SHEET_MAP[outletKey.toLowerCase().replace(/\\s+/g, '_')] || outletKey || "Other";
+    var sheet = getOrCreateSheet(ss, sheetName);
+    var allSheet = getOrCreateSheet(ss, "All Orders");
+    var rowData = buildRow(orderData);
+
+    if (action === "delete") {
+      deleteRow(sheet, orderData.order_number);
+      deleteRow(allSheet, orderData.order_number);
+    } else {
+      upsertRow(sheet, orderData.order_number, rowData);
+      upsertRow(allSheet, orderData.order_number, rowData);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", error: err.toString() }))
@@ -37,134 +161,8 @@ function doPost(e) {
   }
 }
 
-function getOrCreateSheet(ss, sheetName) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-  }
-  
-  // Auto-create Header row if sheet is empty
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      "Order #", "Customer Name", "Phone", "Outlet", "Item Type", "Quantity/Weight",
-      "Informed By", "Delivery Type", "Delivery Date", "Time", "Total (₹)", "Advance (₹)",
-      "Remaining (₹)", "Payment Type", "Adv Bill No.", "Final Bill No.", "Status", "Cake Photo URL", "Remarks", "Last Updated"
-    ]);
-    sheet.getRange(1, 1, 1, 20).setFontWeight("bold").setBackground("#d9ead3");
-  } else {
-    // Auto-remove old S.No column if present so Order # becomes Column 1
-    var firstCell = String(sheet.getRange(1, 1).getValue()).trim();
-    if (firstCell === "S.No." || firstCell === "S.No") {
-      sheet.deleteColumn(1);
-    }
-  }
-  return sheet;
-}
-
-function syncOrderToSheets(ss, order) {
-  if (!order || !order.order_number) return;
-  var outletName = order.outlet ? String(order.outlet).trim() : "Sector 31";
-
-  // 1. Sync to Master Sheet ("All Orders")
-  var masterSheet = getOrCreateSheet(ss, "All Orders");
-  appendOrUpdateOrder(masterSheet, order);
-
-  // 2. Sync to Outlet Sheet (e.g. "Sector 31", "Sector 35", "Sector 42", "Sector 88")
-  var outletSheet = getOrCreateSheet(ss, outletName);
-  appendOrUpdateOrder(outletSheet, order);
-
-  // 3. Clean up from other outlet tabs if order outlet was moved
-  var sheets = ss.getSheets();
-  var orderNum = order.order_number;
-  for (var i = 0; i < sheets.length; i++) {
-    var sName = sheets[i].getName();
-    if (sName !== "All Orders" && sName !== outletName) {
-      deleteOrderFromSheet(sheets[i], orderNum);
-    }
-  }
-}
-
-function appendOrUpdateOrder(sheet, order) {
-  var rows = sheet.getDataRange().getValues();
-  var numVal = Number(order.order_number);
-  var orderNum = (!isNaN(numVal) && String(order.order_number).trim() !== "") ? numVal : (order.order_number || "");
-  var rowIndex = -1;
-
-  for (var i = 1; i < rows.length; i++) {
-    var existingNum = Number(rows[i][0]);
-    var compareVal = (!isNaN(existingNum) && String(rows[i][0]).trim() !== "") ? existingNum : rows[i][0];
-    if (compareVal == orderNum && orderNum !== "" && orderNum !== undefined) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-
-  var rowData = [
-    orderNum,
-    order.customer_name || "",
-    order.mobile_number || "",
-    order.outlet || "",
-    order.item_type || "",
-    order.quantity || "",
-    order.informed_by || "",
-    order.delivery_type || "",
-    order.delivery_date || "",
-    order.delivery_time_expected || "",
-    Number(order.total_amount) || 0,
-    Number(order.advance_amount) || 0,
-    Number(order.remaining_balance) || 0,
-    order.payment_type || "",
-    order.advance_bill_number || "",
-    order.final_bill_number || "",
-    order.status || "",
-    order.cake_photo_url || "",
-    order.remarks || "",
-    new Date().toLocaleString("en-IN")
-  ];
-
-  if (rowIndex > 0) {
-    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
-  } else {
-    sheet.appendRow(rowData);
-  }
-
-  // Keep sheet sorted by Column 1 (Order #) in Ascending Order
-  sortSheetByOrderNumber(sheet);
-}
-
-function sortSheetByOrderNumber(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).sort({column: 1, ascending: true});
-  }
-}
-
-function deleteOrderFromSheet(sheet, orderNum) {
-  var rows = sheet.getDataRange().getValues();
-  var numToDel = Number(orderNum);
-  var targetNum = (!isNaN(numToDel) && String(orderNum).trim() !== "") ? numToDel : orderNum;
-
-  for (var i = 1; i < rows.length; i++) {
-    var existingNum = Number(rows[i][0]);
-    var compareVal = (!isNaN(existingNum) && String(rows[i][0]).trim() !== "") ? existingNum : rows[i][0];
-    if (compareVal == targetNum) {
-      sheet.deleteRow(i + 1);
-      break;
-    }
-  }
-  sortSheetByOrderNumber(sheet);
-}
-
-function deleteOrderFromAllSheets(ss, order) {
-  var sheets = ss.getSheets();
-  var orderNum = typeof order === 'object' ? order.order_number : order;
-  for (var s = 0; s < sheets.length; s++) {
-    deleteOrderFromSheet(sheets[s], orderNum);
-  }
-}
-
 function doGet(e) {
-  return ContentService.createTextOutput("Bakery OMS Multi-Outlet Google Sheets Sync Webhook Active!");
+  return ContentService.createTextOutput("Broomies Bakery Google Sheets Webhook Active!");
 }`;
 
 export const SheetSyncModal: React.FC<SheetSyncModalProps> = ({ isOpen, onClose }) => {
