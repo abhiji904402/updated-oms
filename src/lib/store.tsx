@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Order, DeliveryPartner, DeliveryPartnerLocation, OutletLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
 import { formatTo12Hour, getCurrentTime12Hour } from './timeUtils';
 import { getNextOrderNumber, resequenceOrderNumbers } from './orderLogic';
@@ -40,7 +40,7 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
 import { db } from './firebase';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from 'firebase/firestore';
 
 export interface AuthPasswords {
   admin: string;
@@ -122,6 +122,9 @@ interface OMSContextType {
   // Notifications / Live Event Banner
   recentNotification: string | null;
   dismissNotification: () => void;
+
+  // Cloud & Quota status
+  isFirestoreQuotaExceeded: boolean;
 }
 
 const OMSContext = createContext<OMSContextType | undefined>(undefined);
@@ -312,6 +315,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_ALERTS || [];
   });
 
+  // Firestore Quota & Offline Status State
+  const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState(false);
+  const quotaNotifiedRef = useRef(false);
+  const quotaExceededRef = useRef(false);
+
   // Sync Logs
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
 
@@ -333,6 +341,28 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRecentNotification(null);
     }, 5000);
   }, []);
+
+  const handleFirestoreWriteError = useCallback((err: any, operationName = 'write') => {
+    const errStr = String(err?.message || err || '');
+    const isQuota = errStr.includes('resource-exhausted') || errStr.includes('Quota exceeded') || errStr.includes('Quota limit');
+    
+    if (isQuota) {
+      quotaExceededRef.current = true;
+      setIsFirestoreQuotaExceeded(true);
+      // Disable Firestore background network retries to prevent backoff spam
+      try {
+        disableNetwork(db).catch(() => {});
+      } catch (e) {}
+
+      if (!quotaNotifiedRef.current) {
+        quotaNotifiedRef.current = true;
+        console.warn(`[Firestore Quota Reached] Operation "${operationName}" was saved locally in IndexedDB & LocalStorage.`);
+        showNotification('⚡ Daily Firestore write quota reached. Running smoothly in Offline-First mode (IndexedDB + Google Sheets active).');
+      }
+    } else {
+      console.warn(`Firestore ${operationName} error:`, err);
+    }
+  }, [showNotification]);
 
   // Helper to strip out undefined values so Firestore setDoc never fails and normalize payment fields
   const sanitizeOrderForFirestore = (order: Record<string, any>): Order => {
@@ -446,7 +476,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (err) => {
-        console.warn('Firestore orders sync error:', err);
+        handleFirestoreWriteError(err, 'orders snapshot sync');
       }
     );
     return () => unsub();
@@ -476,16 +506,18 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const seeded = localStorage.getItem('delivery_partners_seeded_v2');
           if (!seeded) {
             safeLocalStorageSet('delivery_partners_seeded_v2', 'true');
-            const batch = writeBatch(db);
-            INITIAL_DELIVERY_PARTNERS.forEach((p) => {
-              batch.set(doc(db, 'delivery_partners', p.id), p);
-            });
-            batch.commit().catch((err) => console.warn('Batch partners seed failed:', err));
+            if (!quotaExceededRef.current) {
+              const batch = writeBatch(db);
+              INITIAL_DELIVERY_PARTNERS.forEach((p) => {
+                batch.set(doc(db, 'delivery_partners', p.id), p);
+              });
+              batch.commit().catch((err) => handleFirestoreWriteError(err, 'seed delivery partners'));
+            }
           }
         }
       },
       (err) => {
-        console.warn('Firestore partners sync error:', err);
+        handleFirestoreWriteError(err, 'partners snapshot sync');
       }
     );
     return () => unsub();
@@ -792,10 +824,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Instant local state update
     setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
 
-    // Write to Firestore
-    setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
-      console.warn('Firestore setDoc failed:', err);
-    });
+    // Write to Firestore if quota not exceeded
+    if (!quotaExceededRef.current) {
+      setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
+        handleFirestoreWriteError(err, 'create order');
+      });
+    }
 
     showNotification(`✨ New Order #${newOrderNumber} created at ${newOrder.outlet}!`);
 
@@ -824,6 +858,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         id: item.id || `ord-imp-${Date.now()}-${idx}-${Math.floor(Math.random() * 10000)}`,
         order_number: orderNum,
+        order_id: orderNum,
         customer_name: item.customer_name || 'Valued Customer',
         mobile_number: item.mobile_number || '9876543210',
         outlet: item.outlet || 'Sector 31',
@@ -837,7 +872,13 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         delivery_type: item.delivery_type || 'delivery',
         delivery_date: item.delivery_date || now.split('T')[0],
         delivery_time_expected: formatTo12Hour(item.delivery_time_expected) || '06:00 PM',
+        actual_delivery_time: item.actual_delivery_time || '',
         status: item.status || 'pending',
+        delivery_partner: item.delivery_partner || (item as any).rider || '',
+        delivered_by: item.delivered_by || '',
+        payment_changed_by: item.payment_changed_by || '',
+        payment_changed_at: item.payment_changed_at || '',
+        rider_delivered: Boolean(item.rider_delivered || item.status === 'delivered' || item.delivered_by),
         informed_by: item.informed_by || 'CSV/JSON Import',
         address: item.address || 'Address',
         remarks: item.remarks || '',
@@ -859,38 +900,42 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders);
 
       // Clear Firestore existing orders atomically with writeBatch
-      getDocs(collection(db, 'orders')).then(async (snap) => {
-        if (!snap.empty) {
-          const docs = snap.docs;
-          for (let i = 0; i < docs.length; i += 400) {
-            const chunk = docs.slice(i, i + 400);
+      if (!quotaExceededRef.current) {
+        getDocs(collection(db, 'orders')).then(async (snap) => {
+          if (!snap.empty) {
+            const docs = snap.docs;
+            for (let i = 0; i < docs.length; i += 400) {
+              const chunk = docs.slice(i, i + 400);
+              const batch = writeBatch(db);
+              chunk.forEach((d) => batch.delete(d.ref));
+              await batch.commit();
+            }
+          }
+
+          // Persist all newly imported orders to Firestore in batches
+          for (let i = 0; i < formattedOrders.length; i += 400) {
+            const chunk = formattedOrders.slice(i, i + 400);
             const batch = writeBatch(db);
-            chunk.forEach((d) => batch.delete(d.ref));
+            chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
             await batch.commit();
           }
-        }
-
-        // Persist all newly imported orders to Firestore in batches
-        for (let i = 0; i < formattedOrders.length; i += 400) {
-          const chunk = formattedOrders.slice(i, i + 400);
-          const batch = writeBatch(db);
-          chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
-          await batch.commit();
-        }
-      }).catch((err) => {
-        console.warn('Firestore overwrite import error:', err);
-      });
+        }).catch((err) => {
+          handleFirestoreWriteError(err, 'overwrite import');
+        });
+      }
 
       showNotification(`Replaced all orders with ${formattedOrders.length} imported orders!`);
     } else {
       setOrders((prev) => [...formattedOrders, ...prev]);
       ordersRef.current = [...formattedOrders, ...existingOrders];
       // Persist new imported orders to Firestore
-      for (let i = 0; i < formattedOrders.length; i += 400) {
-        const chunk = formattedOrders.slice(i, i + 400);
-        const batch = writeBatch(db);
-        chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
-        batch.commit().catch(() => {});
+      if (!quotaExceededRef.current) {
+        for (let i = 0; i < formattedOrders.length; i += 400) {
+          const chunk = formattedOrders.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+          batch.commit().catch((err) => handleFirestoreWriteError(err, 'import orders batch'));
+        }
       }
       showNotification(`Successfully imported ${formattedOrders.length} new orders!`);
     }
@@ -916,14 +961,20 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     idbSet(LOCAL_STORAGE_KEY_ORDERS, resequenced);
 
     // Save to Firestore in chunks without modifying delivery_date
-    for (let i = 0; i < resequenced.length; i += 400) {
-      const chunk = resequenced.slice(i, i + 400);
-      const batch = writeBatch(db);
-      chunk.forEach((ord) => {
-        const clean = sanitizeOrderForFirestore(ord);
-        batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-      });
-      await batch.commit();
+    if (!quotaExceededRef.current) {
+      try {
+        for (let i = 0; i < resequenced.length; i += 400) {
+          const chunk = resequenced.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((ord) => {
+            const clean = sanitizeOrderForFirestore(ord);
+            batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+          });
+          await batch.commit();
+        }
+      } catch (err) {
+        handleFirestoreWriteError(err, 'resequence batch');
+      }
     }
 
     showNotification(`🔢 Order IDs sorted in descending order of punch date/time and updated sequentially!`);
@@ -965,9 +1016,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
 
-    setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
+    if (!quotaExceededRef.current) {
+      setDoc(doc(db, 'orders', id), updated, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update order'));
+    }
     pushToSheet(updated, 'update');
-  }, [session.name, session.role, pushToSheet]);
+  }, [session.name, session.role, pushToSheet, handleFirestoreWriteError]);
 
   const deleteOrder = useCallback((id: string) => {
     const target = ordersRef.current.find((o) => o.id === id);
@@ -977,9 +1030,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setOrders((prev) => prev.filter((o) => o.id !== id));
-    deleteDoc(doc(db, 'orders', id)).catch(() => {});
+    if (!quotaExceededRef.current) {
+      deleteDoc(doc(db, 'orders', id)).catch((err) => handleFirestoreWriteError(err, 'delete order'));
+    }
     setSelectedOrderIds((prev) => prev.filter((item) => item !== id));
-  }, [showNotification, pushToSheet]);
+  }, [showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const clearAllOrders = useCallback(async () => {
     // 1. Immediately update UI state & local persistent storages
@@ -988,24 +1043,28 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     safeSaveOrdersToLocalStorage([]);
     idbSet(LOCAL_STORAGE_KEY_ORDERS, []);
 
-    // 2. Perform atomic batch delete on Firestore collection
-    try {
-      const snap = await getDocs(collection(db, 'orders'));
-      if (!snap.empty) {
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += 400) {
-          const chunk = docs.slice(i, i + 400);
-          const batch = writeBatch(db);
-          chunk.forEach((d) => batch.delete(d.ref));
-          await batch.commit();
+    // 2. Perform atomic batch delete on Firestore collection if quota available
+    if (!quotaExceededRef.current) {
+      try {
+        const snap = await getDocs(collection(db, 'orders'));
+        if (!snap.empty) {
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const chunk = docs.slice(i, i + 400);
+            const batch = writeBatch(db);
+            chunk.forEach((d) => batch.delete(d.ref));
+            await batch.commit();
+          }
         }
+        showNotification('🗑️ All orders permanently deleted! Ready for fresh data.');
+      } catch (err) {
+        handleFirestoreWriteError(err, 'clear orders');
+        showNotification('All orders cleared locally!');
       }
-      showNotification('🗑️ All orders permanently deleted! Ready for fresh data.');
-    } catch (err) {
-      console.error('Error clearing Firestore orders:', err);
-      showNotification('All orders cleared locally!');
+    } else {
+      showNotification('🗑️ All orders permanently cleared locally!');
     }
-  }, [showNotification]);
+  }, [showNotification, handleFirestoreWriteError]);
 
   const updateOrderStatus = useCallback((id: string, status: OrderStatus, deliveryPartner?: string) => {
     const target = ordersRef.current.find((o) => o.id === id);
@@ -1036,10 +1095,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
 
-    setDoc(doc(db, 'orders', id), updated, { merge: true }).catch(() => {});
+    if (!quotaExceededRef.current) {
+      setDoc(doc(db, 'orders', id), updated, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update order status'));
+    }
     showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
     pushToSheet(updated, 'update');
-  }, [session.name, showNotification, pushToSheet]);
+  }, [session.name, showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const markDelivered = useCallback((id: string, photoUrl?: string, otpInput?: string) => {
     const targetOrder = ordersRef.current.find((o) => o.id === id);
@@ -1065,7 +1126,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setOrders((prev) => prev.map((o) => (o.id === id ? updatedOrder : o)));
-    setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch(() => {});
+    if (!quotaExceededRef.current) {
+      setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'mark delivered'));
+    }
 
     pushToSheet(updatedOrder, 'update');
 
@@ -1075,7 +1138,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prev.map((p) => {
           if (p.name === targetOrder.delivery_partner || p.id === session.deliveryPartnerId) {
             const updatedP = { ...p, total_deliveries: p.total_deliveries + 1, status: 'available' };
-            setDoc(doc(db, 'delivery_partners', p.id), updatedP, { merge: true }).catch(() => {});
+            if (!quotaExceededRef.current) {
+              setDoc(doc(db, 'delivery_partners', p.id), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner delivery count'));
+            }
             return updatedP;
           }
           return p;
@@ -1085,7 +1150,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     showNotification(`🚀 Order #${targetOrder.order_number} delivered by rider! Waiting for Outlet confirmation.`);
     return { success: true, message: 'Delivered marked! Waiting for Outlet/Admin confirmation.' };
-  }, [session.name, session.deliveryPartnerId, showNotification, pushToSheet]);
+  }, [session.name, session.deliveryPartnerId, showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const confirmRiderDelivery = useCallback((id: string) => {
     setOrders((prev) =>
@@ -1102,10 +1167,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return ord;
       })
     );
-    const targetDoc = doc(db, 'orders', id);
-    setDoc(targetDoc, { status: 'delivered', rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch(() => {});
+    if (!quotaExceededRef.current) {
+      const targetDoc = doc(db, 'orders', id);
+      setDoc(targetDoc, { status: 'delivered', rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
+    }
     showNotification(`✅ Order delivery confirmed by Outlet!`);
-  }, [showNotification]);
+  }, [showNotification, handleFirestoreWriteError]);
 
   const updatePartnerLocation = useCallback((partnerId: string, location: Omit<DeliveryPartnerLocation, 'updated_at'>) => {
     const updatedAt = new Date().toISOString();
@@ -1120,13 +1187,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               updated_at: updatedAt
             }
           };
-          setDoc(doc(db, 'delivery_partners', partnerId), updatedP, { merge: true }).catch(() => {});
+          if (!quotaExceededRef.current) {
+            setDoc(doc(db, 'delivery_partners', partnerId), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner location'));
+          }
           return updatedP;
         }
         return p;
       })
     );
-  }, []);
+  }, [handleFirestoreWriteError]);
 
   const addPartner = useCallback((partnerData: Omit<DeliveryPartner, 'id' | 'total_deliveries'>) => {
     const newPartner: DeliveryPartner = {
@@ -1135,9 +1204,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total_deliveries: 0
     };
     setPartners((prev) => [...prev, newPartner]);
-    setDoc(doc(db, 'delivery_partners', newPartner.id), newPartner).catch(() => {});
+    if (!quotaExceededRef.current) {
+      setDoc(doc(db, 'delivery_partners', newPartner.id), newPartner).catch((err) => handleFirestoreWriteError(err, 'add partner'));
+    }
     showNotification(`Added new delivery partner: ${newPartner.name}`);
-  }, [showNotification]);
+  }, [showNotification, handleFirestoreWriteError]);
 
   const deletePartner = useCallback((id: string) => {
     setPartners((prev) => {
@@ -1147,21 +1218,25 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev.filter((p) => p.id !== id);
     });
-    deleteDoc(doc(db, 'delivery_partners', id)).catch(() => {});
-  }, [showNotification]);
+    if (!quotaExceededRef.current) {
+      deleteDoc(doc(db, 'delivery_partners', id)).catch((err) => handleFirestoreWriteError(err, 'delete partner'));
+    }
+  }, [showNotification, handleFirestoreWriteError]);
 
   const updatePartnerStatus = useCallback((id: string, status: DeliveryPartner['status']) => {
     setPartners((prev) =>
       prev.map((p) => {
         if (p.id === id) {
           const updated = { ...p, status };
-          setDoc(doc(db, 'delivery_partners', id), { status }, { merge: true }).catch(() => {});
+          if (!quotaExceededRef.current) {
+            setDoc(doc(db, 'delivery_partners', id), { status }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner status'));
+          }
           return updated;
         }
         return p;
       })
     );
-  }, []);
+  }, [handleFirestoreWriteError]);
 
   const updateOutletLocation = useCallback((id: string, updates: Partial<OutletLocation>) => {
     setOutletLocations((prev) => {
@@ -1264,7 +1339,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dateRangeFilter,
       setDateRangeFilter,
       recentNotification,
-      dismissNotification: () => setRecentNotification(null)
+      dismissNotification: () => setRecentNotification(null),
+      isFirestoreQuotaExceeded
     }),
     [
       session,
@@ -1306,7 +1382,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       selectedOutletFilter,
       selectedStatusFilter,
       dateRangeFilter,
-      recentNotification
+      recentNotification,
+      isFirestoreQuotaExceeded
     ]
   );
 

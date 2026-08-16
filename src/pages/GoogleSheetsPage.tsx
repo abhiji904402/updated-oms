@@ -487,44 +487,84 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
           </div>
 
           {/* Preview Table */}
-          <div className="overflow-x-auto max-h-52 scrollbar-thin rounded-lg border border-indigo-950/60">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto max-h-64 scrollbar-thin rounded-lg border border-indigo-950/60">
+            <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-[#0b0e1b] text-slate-400 border-b border-indigo-950 font-semibold">
-                  <th className="py-2 px-3">Order#</th>
-                  <th className="py-2 px-3">Customer</th>
-                  <th className="py-2 px-3">Outlet</th>
-                  <th className="py-2 px-3">Item Details</th>
-                  <th className="py-2 px-3 text-center">Qty</th>
-                  <th className="py-2 px-3">Total (₹)</th>
-                  <th className="py-2 px-3">Status</th>
-                  <th className="py-2 px-3">Delivery Date</th>
+                  <th className="py-2.5 px-3">Order #</th>
+                  <th className="py-2.5 px-3">Outlet</th>
+                  <th className="py-2.5 px-3">Order Date &amp; Time</th>
+                  <th className="py-2.5 px-3">Delivery Date &amp; Time</th>
+                  <th className="py-2.5 px-3">Actual Del.</th>
+                  <th className="py-2.5 px-3">Customer &amp; Mobile</th>
+                  <th className="py-2.5 px-3">Address</th>
+                  <th className="py-2.5 px-3">Item Details</th>
+                  <th className="py-2.5 px-3 text-center">Qty</th>
+                  <th className="py-2.5 px-3">Type</th>
+                  <th className="py-2.5 px-3">Total (₹)</th>
+                  <th className="py-2.5 px-3">Advance (₹)</th>
+                  <th className="py-2.5 px-3">Remaining (₹)</th>
+                  <th className="py-2.5 px-3">Payment</th>
+                  <th className="py-2.5 px-3">Adv Bill#</th>
+                  <th className="py-2.5 px-3">Final Bill#</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Delivery Partner</th>
+                  <th className="py-2.5 px-3">Delivered By</th>
+                  <th className="py-2.5 px-3">Payment Modified</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-indigo-950/40 text-slate-300">
-                {parsedOrders.slice(0, 8).map((ord, i) => (
-                  <tr key={i} className="hover:bg-indigo-950/20">
+              <tbody className="divide-y divide-indigo-950/40 text-slate-300 text-[11px]">
+                {parsedOrders.slice(0, 10).map((ord, i) => (
+                  <tr key={i} className="hover:bg-indigo-950/20 transition">
                     <td className="py-2 px-3 font-mono text-purple-300 font-bold">
                       #{ord.order_number || 'Auto'}
                     </td>
-                    <td className="py-2 px-3 font-medium text-white">{ord.customer_name}</td>
-                    <td className="py-2 px-3 text-slate-400">{ord.outlet}</td>
-                    <td className="py-2 px-3 text-slate-300">{ord.item_type}</td>
-                    <td className="py-2 px-3 text-center font-bold">{ord.quantity}</td>
+                    <td className="py-2 px-3 text-slate-300 font-medium">{ord.outlet}</td>
+                    <td className="py-2 px-3 text-slate-400 font-mono">
+                      {ord.order_date} <span className="text-slate-500">{ord.order_time}</span>
+                    </td>
+                    <td className="py-2 px-3 text-slate-400 font-mono">
+                      {ord.delivery_date} <span className="text-indigo-400 font-semibold">{ord.delivery_time_expected}</span>
+                    </td>
+                    <td className="py-2 px-3 text-emerald-400 font-mono">
+                      {ord.actual_delivery_time || '—'}
+                    </td>
+                    <td className="py-2 px-3 font-medium text-white">
+                      {ord.customer_name} <span className="text-slate-400 font-mono text-[10px]">({ord.mobile_number})</span>
+                    </td>
+                    <td className="py-2 px-3 text-slate-400 max-w-[160px] truncate" title={ord.address}>
+                      {ord.address}
+                    </td>
+                    <td className="py-2 px-3 text-slate-200">{ord.item_type}</td>
+                    <td className="py-2 px-3 text-center font-bold text-slate-100">{ord.quantity}</td>
+                    <td className="py-2 px-3 uppercase text-[10px] font-bold text-slate-400">{ord.delivery_type}</td>
                     <td className="py-2 px-3 font-bold text-white">₹{ord.total_amount}</td>
-                    <td className="py-2 px-3 capitalize font-semibold text-xs text-amber-300">
+                    <td className="py-2 px-3 text-emerald-400 font-medium">₹{ord.advance_amount}</td>
+                    <td className="py-2 px-3 text-rose-400 font-medium">₹{ord.remaining_balance}</td>
+                    <td className="py-2 px-3 uppercase text-[10px] font-semibold text-sky-400">{ord.payment_type}</td>
+                    <td className="py-2 px-3 font-mono text-slate-400">{ord.advance_bill_number || '—'}</td>
+                    <td className="py-2 px-3 font-mono text-slate-400">{ord.final_bill_number || '—'}</td>
+                    <td className="py-2 px-3 capitalize font-semibold text-amber-300">
                       {ord.status}
                     </td>
-                    <td className="py-2 px-3 text-slate-400 font-mono">{ord.delivery_date}</td>
+                    <td className="py-2 px-3 text-slate-300 font-medium">
+                      {ord.delivery_partner || '—'}
+                    </td>
+                    <td className="py-2 px-3 text-slate-300">
+                      {ord.delivered_by || '—'}
+                    </td>
+                    <td className="py-2 px-3 text-slate-400 text-[10px]">
+                      {ord.payment_changed_by ? `${ord.payment_changed_by} (${ord.payment_changed_at || ''})` : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {parsedOrders.length > 8 && (
+          {parsedOrders.length > 10 && (
             <div className="text-center text-[11px] text-slate-400 italic">
-              + {parsedOrders.length - 8} more orders will be imported
+              + {parsedOrders.length - 10} more orders ready to import
             </div>
           )}
 

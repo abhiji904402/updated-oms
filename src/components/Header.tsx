@@ -45,7 +45,8 @@ export const Header = React.memo<HeaderProps>(({
     setDateRangeFilter,
     recentNotification,
     dismissNotification,
-    sheetConfig
+    sheetConfig,
+    isFirestoreQuotaExceeded
   } = useOMS();
 
   // Outlets list
@@ -221,12 +222,20 @@ export const Header = React.memo<HeaderProps>(({
           {session.role !== 'delivery' && (
             <button
               onClick={onOpenSheetModal}
-              title="24/7 Google Sheets & Cloud Auto-Sync is ACTIVE. Click to configure."
-              className="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 transition text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              title={
+                isFirestoreQuotaExceeded
+                  ? 'Firestore daily quota reached (resets daily). Offline-First local storage (IndexedDB) & Google Sheets Auto-Sync are ACTIVE.'
+                  : '24/7 Google Sheets & Cloud Auto-Sync is ACTIVE. Click to configure.'
+              }
+              className={`px-3 py-1.5 rounded-xl border transition text-xs font-bold flex items-center gap-1.5 shadow-sm ${
+                isFirestoreQuotaExceeded
+                  ? 'bg-amber-950/70 hover:bg-amber-900/80 border-amber-500/50 text-amber-300'
+                  : 'bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-500/50 text-emerald-300'
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>24/7 AUTO SYNC</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <Sparkles className={`w-3.5 h-3.5 ${isFirestoreQuotaExceeded ? 'text-amber-400' : 'text-emerald-400'} animate-pulse`} />
+              <span>{isFirestoreQuotaExceeded ? 'OFFLINE-FIRST (IDB)' : '24/7 AUTO SYNC'}</span>
+              <span className={`w-2 h-2 rounded-full ${isFirestoreQuotaExceeded ? 'bg-amber-400' : 'bg-emerald-400'} animate-ping`} />
             </button>
           )}
 
