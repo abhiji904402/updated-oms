@@ -134,6 +134,63 @@ const LOCAL_STORAGE_KEY_SESSION = 'broomies_oms_session_v3';
 const LOCAL_STORAGE_KEY_AUTH = 'broomies_oms_auth_v1';
 const LOCAL_STORAGE_KEY_PASSWORDS = 'broomies_oms_passwords_v1';
 
+/**
+ * Quota-safe helper for writing data to localStorage without crashing the application.
+ */
+export function safeLocalStorageSet(key: string, value: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`localStorage quota exceeded or write failed for key "${key}":`, err);
+  }
+}
+
+/**
+ * Specialized quota-resilient helper for saving orders to localStorage.
+ * Automatically strips large base64/data URLs on quota limits and falls back cleanly.
+ */
+export function safeSaveOrdersToLocalStorage(ordersToSave: Order[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(ordersToSave));
+  } catch (e) {
+    console.warn('LocalStorage quota exceeded! Stripping large image payloads for localStorage fallback:', e);
+    try {
+      // 1. Strip images & delivery photos which consume 90%+ of quota
+      const lightweightOrders = ordersToSave.map((o) => {
+        const hasLargeImage = o.item_image_url && o.item_image_url.length > 200;
+        const hasLargePhoto = o.delivery_photo_url && o.delivery_photo_url.length > 200;
+        if (hasLargeImage || hasLargePhoto) {
+          return {
+            ...o,
+            item_image_url: hasLargeImage ? '' : o.item_image_url,
+            delivery_photo_url: hasLargePhoto ? '' : o.delivery_photo_url
+          };
+        }
+        return o;
+      });
+      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(lightweightOrders));
+    } catch (e2) {
+      console.warn('LocalStorage still exceeded quota, saving most recent 50 orders only:', e2);
+      try {
+        // 2. Fallback to latest 50 orders without images
+        const recentOrders = ordersToSave.slice(0, 50).map((o) => ({
+          ...o,
+          item_image_url: '',
+          delivery_photo_url: ''
+        }));
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(recentOrders));
+      } catch (e3) {
+        console.warn('LocalStorage completely full. IndexedDB will serve as the primary storage layer.', e3);
+        try {
+          localStorage.removeItem(LOCAL_STORAGE_KEY_ORDERS);
+        } catch (e4) {}
+      }
+    }
+  }
+}
+
 const DEFAULT_PASSWORDS: AuthPasswords = {
   admin: 'admin123',
   outlets: {
@@ -270,6 +327,13 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Notifications
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
 
+  const showNotification = useCallback((msg: string) => {
+    setRecentNotification(msg);
+    setTimeout(() => {
+      setRecentNotification(null);
+    }, 5000);
+  }, []);
+
   // Helper to strip out undefined values so Firestore setDoc never fails and normalize payment fields
   const sanitizeOrderForFirestore = (order: Record<string, any>): Order => {
     const clean: Record<string, any> = {};
@@ -278,6 +342,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clean[key] = val;
       }
     }
+
+    const assignedNum = clean.order_id !== undefined ? Number(clean.order_id) : (clean.order_number !== undefined ? Number(clean.order_number) : 1);
+    clean.order_number = assignedNum || 1;
+    clean.order_id = assignedNum || 1;
 
     const pType = String(clean.payment_type || '').toLowerCase().trim();
     const total = typeof clean.total_amount === 'number' ? clean.total_amount : Number(clean.total_amount) || 0;
@@ -352,7 +420,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // 1. Real-time Firestore Sync for Orders (Optimized, lightweight, non-blocking)
+  // 1. Real-time Firestore Sync for Orders
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
@@ -365,8 +433,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         if (rawList.length > 0) {
-          rawList.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
-          
+          rawList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
           setOrders((prev) => {
             if (prev && prev.length === rawList.length && prev[0]?.id === rawList[0]?.id && prev[0]?.updated_at === rawList[0]?.updated_at) {
               return prev;
@@ -374,9 +441,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return rawList;
           });
           ordersRef.current = rawList;
-
-          // Asynchronous non-blocking storage in IndexedDB
           idbSet(LOCAL_STORAGE_KEY_ORDERS, rawList).catch(() => {});
+          safeSaveOrdersToLocalStorage(rawList);
         }
       },
       (err) => {
@@ -409,7 +475,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else if (!snapshot.metadata.fromCache) {
           const seeded = localStorage.getItem('delivery_partners_seeded_v2');
           if (!seeded) {
-            localStorage.setItem('delivery_partners_seeded_v2', 'true');
+            safeLocalStorageSet('delivery_partners_seeded_v2', 'true');
             const batch = writeBatch(db);
             INITIAL_DELIVERY_PARTNERS.forEach((p) => {
               batch.set(doc(db, 'delivery_partners', p.id), p);
@@ -429,40 +495,18 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const timer = setTimeout(() => {
       idbSet(LOCAL_STORAGE_KEY_ORDERS, orders);
-
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(orders));
-      } catch (e) {
-        console.warn('LocalStorage quota exceeded! Stripping large image payloads for localStorage fallback:', e);
-        try {
-          const lightweightOrders = orders.map((o) => {
-            const hasLargeImage = o.item_image_url && o.item_image_url.length > 300;
-            const hasLargePhoto = o.delivery_photo_url && o.delivery_photo_url.length > 300;
-            if (hasLargeImage || hasLargePhoto) {
-              return {
-                ...o,
-                item_image_url: hasLargeImage ? '' : o.item_image_url,
-                delivery_photo_url: hasLargePhoto ? '' : o.delivery_photo_url
-              };
-            }
-            return o;
-          });
-          localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(lightweightOrders));
-        } catch (e2) {
-          console.error('Failed to write to localStorage even after image stripping:', e2);
-        }
-      }
+      safeSaveOrdersToLocalStorage(orders);
     }, 50);
 
     return () => clearTimeout(timer);
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_PARTNERS, JSON.stringify(partners));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_PARTNERS, JSON.stringify(partners));
   }, [partners]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_SHEET, JSON.stringify(sheetConfig));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_SHEET, JSON.stringify(sheetConfig));
   }, [sheetConfig]);
 
   // Background Auto-Sync for Google Sheets & Cloud Sync (Lightweight, non-flooding)
@@ -500,28 +544,30 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [sheetConfig.auto_sync, sheetConfig.sheet_url]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(session));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(session));
   }, [session]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_AUTH, String(isAuthenticated));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_AUTH, String(isAuthenticated));
   }, [isAuthenticated]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_PASSWORDS, JSON.stringify(authPasswords));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_PASSWORDS, JSON.stringify(authPasswords));
   }, [authPasswords]);
 
   const login = useCallback((userSession: UserSession) => {
     setSessionState(userSession);
     setIsAuthenticated(true);
-    localStorage.setItem(LOCAL_STORAGE_KEY_AUTH, 'true');
-    localStorage.setItem(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(userSession));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_AUTH, 'true');
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(userSession));
   }, []);
 
   const logout = useCallback(() => {
     setIsAuthenticated(false);
-    localStorage.setItem(LOCAL_STORAGE_KEY_AUTH, 'false');
-    localStorage.removeItem(LOCAL_STORAGE_KEY_SESSION);
+    safeLocalStorageSet(LOCAL_STORAGE_KEY_AUTH, 'false');
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY_SESSION);
+    } catch (e) {}
   }, []);
 
   const updateAdminPassword = useCallback((newPass: string) => {
@@ -598,13 +644,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     [authPasswords, partners]
   );
-
-  const showNotification = useCallback((msg: string) => {
-    setRecentNotification(msg);
-    setTimeout(() => {
-      setRecentNotification(null);
-    }, 5000);
-  }, []);
 
   const setSession = useCallback((newSession: UserSession) => {
     setSessionState(newSession);
@@ -816,7 +855,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (overwrite) {
       setOrders(formattedOrders);
       ordersRef.current = formattedOrders;
-      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(formattedOrders));
+      safeSaveOrdersToLocalStorage(formattedOrders);
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders);
 
       // Clear Firestore existing orders atomically with writeBatch
@@ -868,15 +907,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    // Sort descending by order_date, then descending by order_time, and assign sequential order_id/order_number
     const resequenced = resequenceOrderNumbers(current, startNumber);
-    resequenced.sort((a, b) => (b.order_number || 0) - (a.order_number || 0));
 
     setOrders(resequenced);
     ordersRef.current = resequenced;
-    localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(resequenced));
+    safeSaveOrdersToLocalStorage(resequenced);
     idbSet(LOCAL_STORAGE_KEY_ORDERS, resequenced);
 
-    // Save to Firestore in chunks
+    // Save to Firestore in chunks without modifying delivery_date
     for (let i = 0; i < resequenced.length; i += 400) {
       const chunk = resequenced.slice(i, i + 400);
       const batch = writeBatch(db);
@@ -887,7 +926,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await batch.commit();
     }
 
-    showNotification(`🔢 All orders re-sequenced starting from #${startNumber}!`);
+    showNotification(`🔢 Order IDs sorted in descending order of punch date/time and updated sequentially!`);
   }, [showNotification]);
 
   const updateOrder = useCallback((id: string, updates: Partial<Order>) => {
@@ -946,7 +985,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 1. Immediately update UI state & local persistent storages
     setOrders([]);
     setSelectedOrderIds([]);
-    localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, '[]');
+    safeSaveOrdersToLocalStorage([]);
     idbSet(LOCAL_STORAGE_KEY_ORDERS, []);
 
     // 2. Perform atomic batch delete on Firestore collection

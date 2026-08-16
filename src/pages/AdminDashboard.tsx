@@ -963,7 +963,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              This tool sorts all {orders.length} orders in exact chronological order (from oldest to newest) and renumbers them sequentially without gaps or duplicates.
+              This tool sorts all {orders.length} orders in <strong className="text-purple-300">descending order based on Order Date &amp; Time</strong> (newest punched orders first) and updates all <strong className="text-purple-300">Order IDs sequentially</strong> without touching or modifying the <strong className="text-emerald-400">delivery_date</strong> field in any way.
             </p>
 
             {/* Presets */}

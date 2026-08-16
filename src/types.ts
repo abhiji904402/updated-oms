@@ -27,6 +27,7 @@ export type PaymentType = 'cash' | 'online' | 'upi' | 'part' | 'full' | 'due';
 export interface Order {
   id: string;
   order_number: number;
+  order_id?: number | string;
   outlet: OutletName;
   order_date: string; // YYYY-MM-DD
   order_time: string; // HH:MM
