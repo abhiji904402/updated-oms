@@ -58,15 +58,43 @@ export const isOrderForToday = (order: Order, todayStr: string): boolean => {
 };
 
 /**
- * Helper to get timestamp for sorting orders by date/time
+ * Helper to get the expected delivery timestamp (epoch milliseconds) of an order.
+ * Prioritizes delivery_date and delivery_time_expected over punch order_date/time.
+ */
+export const getExpectedDeliveryTimestamp = (order: Order): number => {
+  const delDate = getNormalizedOrderDateStr(order.delivery_date) || getNormalizedOrderDateStr(order.order_date);
+  const delTime = order.delivery_time_expected || order.order_time || '';
+  if (delDate) {
+    const ts = parseSafeDateTime(delDate, delTime);
+    if (ts > 0) return ts;
+  }
+  if (delTime) {
+    const mins = getOrderTimeInMinutes(delTime);
+    if (mins > 0) return mins;
+  }
+  return 0;
+};
+
+/**
+ * Gets expected delivery time in minutes from midnight (0-1439).
+ * If no delivery time is provided, returns 1440 (end of day) so untimed orders appear at the bottom.
+ */
+export const getExpectedDeliveryMinutes = (order: Order): number => {
+  const timeStr = order.delivery_time_expected || order.order_time;
+  if (!timeStr || !timeStr.trim()) return 1440;
+  return getOrderTimeInMinutes(timeStr);
+};
+
+/**
+ * Helper to get timestamp for sorting delivered / audit orders by date/time
  */
 export const getOrderTimestamp = (order: Order): number => {
   if (order.actual_delivery_time) {
     const t = new Date(order.actual_delivery_time).getTime();
     if (!isNaN(t) && t > 0) return t;
   }
-  const dateStr = order.order_date || order.delivery_date;
-  const timeStr = order.order_time || order.delivery_time_expected;
+  const dateStr = order.delivery_date || order.order_date;
+  const timeStr = order.delivery_time_expected || order.order_time;
   if (dateStr) {
     const ts = parseSafeDateTime(dateStr, timeStr);
     if (ts > 0) return ts;
@@ -79,41 +107,117 @@ export const getOrderTimestamp = (order: Order): number => {
 };
 
 /**
- * Sorts orders based on active tab so recently dated / newest orders appear on top
+ * Sorts orders based on active tab so earliest due deliveries appear first on Today/Tomorrow/Future
  */
 export const sortOrdersByTab = (orders: Order[], tab: DashboardTab): Order[] => {
   return [...orders].sort((a, b) => {
-    const timeA = getOrderTimestamp(a);
-    const timeB = getOrderTimestamp(b);
     const numA = a.order_number || 0;
     const numB = b.order_number || 0;
 
     if (tab === 'all') {
       // Strictly by Order # descending (Order #2607, #2606...)
       if (numB !== numA) return numB - numA;
-      return timeB - timeA;
+      const punchA = getOrderChronologicalTime(a);
+      const punchB = getOrderChronologicalTime(b);
+      return punchB - punchA;
+    }
+
+    if (tab === 'today') {
+      // TODAY DELIVERIES: Earliest expected delivery time first (ASCENDING)
+      // E.g., 09:00 AM before 11:30 AM before 02:00 PM before 07:00 PM
+      const minsA = getExpectedDeliveryMinutes(a);
+      const minsB = getExpectedDeliveryMinutes(b);
+
+      if (minsA !== minsB) {
+        return minsA - minsB; // ASCENDING: earliest delivery first
+      }
+
+      // If delivery time is identical, show earlier punch order first (or lower order number)
+      const punchA = getOrderChronologicalTime(a);
+      const punchB = getOrderChronologicalTime(b);
+      if (punchA !== punchB && punchA > 0 && punchB > 0) {
+        return punchA - punchB;
+      }
+      return numA - numB;
+    }
+
+    if (tab === 'tomorrow') {
+      // TOMORROW DELIVERIES: Earliest expected delivery time first (ASCENDING)
+      const minsA = getExpectedDeliveryMinutes(a);
+      const minsB = getExpectedDeliveryMinutes(b);
+
+      if (minsA !== minsB) {
+        return minsA - minsB; // ASCENDING: earliest delivery first
+      }
+
+      const punchA = getOrderChronologicalTime(a);
+      const punchB = getOrderChronologicalTime(b);
+      if (punchA !== punchB && punchA > 0 && punchB > 0) {
+        return punchA - punchB;
+      }
+      return numA - numB;
+    }
+
+    if (tab === 'future') {
+      // FUTURE DELIVERIES: Earliest future delivery date & time first (ASCENDING)
+      const dateA = getNormalizedOrderDateStr(a.delivery_date || a.order_date);
+      const dateB = getNormalizedOrderDateStr(b.delivery_date || b.order_date);
+
+      if (dateA !== dateB) {
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA.localeCompare(dateB); // Ascending: earliest future date first
+      }
+
+      const minsA = getExpectedDeliveryMinutes(a);
+      const minsB = getExpectedDeliveryMinutes(b);
+      if (minsA !== minsB) {
+        return minsA - minsB;
+      }
+
+      return numA - numB;
+    }
+
+    if (tab === 'missed') {
+      // MISSED DELIVERIES: Earliest missed delivery date first to clear oldest backlog
+      const dateA = getNormalizedOrderDateStr(a.delivery_date);
+      const dateB = getNormalizedOrderDateStr(b.delivery_date);
+
+      if (dateA !== dateB) {
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA.localeCompare(dateB); // Ascending
+      }
+
+      const minsA = getExpectedDeliveryMinutes(a);
+      const minsB = getExpectedDeliveryMinutes(b);
+      if (minsA !== minsB) {
+        return minsA - minsB;
+      }
+
+      return numA - numB;
     }
 
     if (tab === 'delivered_history') {
       // Recently delivered / newest delivery date on top (DESCENDING)
+      const timeA = getOrderTimestamp(a);
+      const timeB = getOrderTimestamp(b);
       if (timeA !== timeB) return timeB - timeA;
       return numB - numA;
     }
 
-    if (tab === 'future') {
-      // Recently dated / newest future date on top (DESCENDING)
-      if (timeA !== timeB) return timeB - timeA;
-      return numB - numA;
-    }
-
-    if (tab === 'pending_payment' || tab === 'cancelled' || tab === 'missed' || tab === 'on_hold') {
+    if (tab === 'pending_payment' || tab === 'cancelled' || tab === 'on_hold') {
       // Newest date / order number first
+      const timeA = getOrderTimestamp(a);
+      const timeB = getOrderTimestamp(b);
       if (timeA !== timeB) return timeB - timeA;
       return numB - numA;
     }
 
-    // For TODAY and TOMORROW orders: sort newest punched / highest order number first, or by time
-    if (timeA !== timeB) return timeB - timeA;
+    // Default fallback: earliest delivery first
+    const minsA = getExpectedDeliveryMinutes(a);
+    const minsB = getExpectedDeliveryMinutes(b);
+    if (minsA !== minsB) return minsA - minsB;
     return numB - numA;
   });
 };

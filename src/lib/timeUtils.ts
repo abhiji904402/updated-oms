@@ -20,46 +20,70 @@ export interface CountdownInfo {
  */
 function parseDateTime(dateStr: string, timeStr: string): Date | null {
   if (!dateStr) return null;
-  const cleanDate = dateStr.trim();
-  if (!timeStr) {
-    const d = new Date(cleanDate);
-    return isNaN(d.getTime()) ? null : d;
+  let cleanDate = dateStr.trim();
+  if (cleanDate.includes('T')) {
+    cleanDate = cleanDate.split('T')[0];
   }
 
-  const cleanTime = timeStr.trim();
+  let year = 0;
+  let month = 0;
+  let day = 0;
 
-  // Try parsing ISO or standard date string
-  if (cleanTime.includes('T')) {
-    const d = new Date(cleanTime);
-    if (!isNaN(d.getTime())) return d;
+  // Match DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  const dmy = cleanDate.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (dmy) {
+    day = parseInt(dmy[1], 10);
+    month = parseInt(dmy[2], 10) - 1;
+    let yr = dmy[3];
+    if (yr.length === 2) yr = `20${yr}`;
+    year = parseInt(yr, 10);
+  } else {
+    // Match YYYY-MM-DD or YYYY/MM/DD
+    const ymd = cleanDate.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if (ymd) {
+      year = parseInt(ymd[1], 10);
+      month = parseInt(ymd[2], 10) - 1;
+      day = parseInt(ymd[3], 10);
+    }
   }
 
-  // Parse HH:MM or HH:MM AM/PM
-  let hours = 0;
+  if (!year || isNaN(year)) {
+    const rawParsed = new Date(cleanDate).getTime();
+    if (!isNaN(rawParsed) && rawParsed > 0) {
+      const dt = new Date(rawParsed);
+      year = dt.getFullYear();
+      month = dt.getMonth();
+      day = dt.getDate();
+    } else {
+      return null;
+    }
+  }
+
+  let hours = 18;
   let minutes = 0;
 
-  const isPM = /pm/i.test(cleanTime);
-  const isAM = /am/i.test(cleanTime);
-  const digits = cleanTime.replace(/[^0-9:]/g, '').split(':');
+  if (timeStr) {
+    let cleanTime = timeStr.trim().toUpperCase();
+    cleanTime = cleanTime.replace(/(\d+)\.(\d+)/, '$1:$2');
+    const isPM = cleanTime.includes('PM');
+    const isAM = cleanTime.includes('AM');
+    const digits = cleanTime.replace(/[^0-9:]/g, '').split(':');
 
-  if (digits.length >= 1) {
-    hours = parseInt(digits[0], 10) || 0;
+    if (digits.length >= 1 && digits[0]) {
+      hours = parseInt(digits[0], 10) || 0;
+    }
+    if (digits.length >= 2 && digits[1]) {
+      minutes = parseInt(digits[1], 10) || 0;
+    }
+
+    if (isPM && hours < 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+    hours = Math.min(23, Math.max(0, hours));
+    minutes = Math.min(59, Math.max(0, minutes));
   }
-  if (digits.length >= 2) {
-    minutes = parseInt(digits[1], 10) || 0;
-  }
 
-  if (isPM && hours < 12) hours += 12;
-  if (isAM && hours === 12) hours = 0;
-
-  const yearParts = cleanDate.split('-').map(Number);
-  if (yearParts.length === 3) {
-    const [y, m, d] = yearParts;
-    return new Date(y, m - 1, d, hours, minutes, 0);
-  }
-
-  const fallback = new Date(`${cleanDate} ${hours}:${minutes}:00`);
-  return isNaN(fallback.getTime()) ? null : fallback;
+  const result = new Date(year, month, day, hours, minutes, 0);
+  return isNaN(result.getTime()) ? null : result;
 }
 
 /**
