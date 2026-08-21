@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useCallback, Suspense, lazy } from 'react';
 import { OMSProvider, useOMS } from './lib/store';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -34,9 +34,33 @@ function OMSAppContent() {
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState<boolean>(false);
-  const handleSelectTab = (tab: string) => {
+  const handleSelectTab = useCallback((tab: string) => {
     setActiveTab(tab);
-  };
+  }, []);
+
+  // Modals
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isThermalModalOpen, setIsThermalModalOpen] = useState(false);
+  const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  const openAddModal = useCallback(() => setIsAddModalOpen(true), []);
+  const closeAddModal = useCallback(() => setIsAddModalOpen(false), []);
+
+  const openThermalModal = useCallback(() => setIsThermalModalOpen(true), []);
+  const closeThermalModal = useCallback(() => setIsThermalModalOpen(false), []);
+
+  const openSheetModal = useCallback(() => setIsSheetModalOpen(true), []);
+  const closeSheetModal = useCallback(() => setIsSheetModalOpen(false), []);
+
+  const openPasswordModal = useCallback(() => setIsPasswordModalOpen(true), []);
+  const closePasswordModal = useCallback(() => setIsPasswordModalOpen(false), []);
+
+  const toggleMobileMenu = useCallback(() => setIsOpenMobile((prev) => !prev), []);
+
+  const handleOpenDeliveryModal = useCallback((_order: Order) => {
+    setActiveTab('delivery');
+  }, []);
 
   // Automatically enforce delivery page for rider role and restricted tabs for outlet role
   React.useEffect(() => {
@@ -46,16 +70,6 @@ function OMSAppContent() {
       setActiveTab('dashboard');
     }
   }, [session.role, activeTab]);
-
-  // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isThermalModalOpen, setIsThermalModalOpen] = useState(false);
-  const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-
-  const handleOpenDeliveryModal = (order: Order) => {
-    handleSelectTab('delivery');
-  };
 
   // If user is not authenticated, show Login Screen
   if (!isAuthenticated) {
@@ -74,20 +88,20 @@ function OMSAppContent() {
           setActiveTab={handleSelectTab}
           isOpenMobile={isOpenMobile}
           setIsOpenMobile={setIsOpenMobile}
-          onOpenAddModal={() => setIsAddModalOpen(true)}
-          onOpenThermalModal={() => setIsThermalModalOpen(true)}
-          onOpenSheetModal={() => setIsSheetModalOpen(true)}
-          onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
+          onOpenAddModal={openAddModal}
+          onOpenThermalModal={openThermalModal}
+          onOpenSheetModal={openSheetModal}
+          onOpenPasswordModal={openPasswordModal}
         />
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto -webkit-overflow-scrolling-touch">
           {/* Header */}
           <Header
-            onToggleMobileMenu={() => setIsOpenMobile(!isOpenMobile)}
-            onOpenAddModal={() => setIsAddModalOpen(true)}
-            onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
-            onOpenSheetModal={() => setIsSheetModalOpen(true)}
+            onToggleMobileMenu={toggleMobileMenu}
+            onOpenAddModal={openAddModal}
+            onOpenPasswordModal={openPasswordModal}
+            onOpenSheetModal={openSheetModal}
           />
 
           {/* Instant Active Page Rendering */}
@@ -95,10 +109,10 @@ function OMSAppContent() {
             <Suspense fallback={<PageFallback />}>
               {(activeTab === 'dashboard' || activeTab === 'admin') && (
                 <AdminDashboard
-                  onOpenAddModal={() => setIsAddModalOpen(true)}
-                  onOpenThermalModal={() => setIsThermalModalOpen(true)}
+                  onOpenAddModal={openAddModal}
+                  onOpenThermalModal={openThermalModal}
                   onOpenDeliveryModal={handleOpenDeliveryModal}
-                  onOpenPasswordModal={() => setIsPasswordModalOpen(true)}
+                  onOpenPasswordModal={openPasswordModal}
                 />
               )}
 
@@ -119,14 +133,14 @@ function OMSAppContent() {
       {/* Global Modals */}
       <AddOrderModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={closeAddModal}
       />
 
       {isThermalModalOpen && (
         <Suspense fallback={null}>
           <ThermalPrintModal
             isOpen={isThermalModalOpen}
-            onClose={() => setIsThermalModalOpen(false)}
+            onClose={closeThermalModal}
           />
         </Suspense>
       )}
@@ -135,7 +149,7 @@ function OMSAppContent() {
         <Suspense fallback={null}>
           <SheetSyncModal
             isOpen={isSheetModalOpen}
-            onClose={() => setIsSheetModalOpen(false)}
+            onClose={closeSheetModal}
           />
         </Suspense>
       )}
@@ -144,7 +158,7 @@ function OMSAppContent() {
         <Suspense fallback={null}>
           <PasswordManagerModal
             isOpen={isPasswordModalOpen}
-            onClose={() => setIsPasswordModalOpen(false)}
+            onClose={closePasswordModal}
           />
         </Suspense>
       )}

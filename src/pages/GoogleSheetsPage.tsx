@@ -8,6 +8,7 @@ import {
   downloadSampleCSVTemplate,
   downloadSampleJSONTemplate
 } from '../lib/importUtils';
+import { getDeliveredByDisplayName } from '../lib/orderLogic';
 import {
   FileSpreadsheet,
   RefreshCw,
@@ -549,7 +550,7 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
                       {ord.delivery_partner || '—'}
                     </td>
                     <td className="py-2 px-3 text-slate-300">
-                      {ord.delivered_by || '—'}
+                      {ord.status === 'delivered' ? getDeliveredByDisplayName(ord) : (ord.delivered_by ? getDeliveredByDisplayName(ord) : '—')}
                     </td>
                     <td className="py-2 px-3 text-slate-400 text-[10px]">
                       {ord.payment_changed_by ? `${ord.payment_changed_by} (${ord.payment_changed_at || ''})` : '—'}

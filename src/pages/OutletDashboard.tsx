@@ -6,6 +6,7 @@ import { ViewOrderModal } from '../components/ViewOrderModal';
 import { getDeliveryTimeInfo, sortOrdersByDeliveryPriority } from '../lib/timeUtils';
 import { printThermalReceipts } from '../lib/thermalPrint';
 import { matchesOutlet } from '../lib/outletUtils';
+import { getDeliveredByDisplayName } from '../lib/orderLogic';
 import { OutletName, OrderStatus, Order, DeliveryType, PaymentType } from '../types';
 import {
   Store,
@@ -322,7 +323,7 @@ export const OutletDashboard = React.memo(() => {
                     Order #{ord.order_number} • {ord.customer_name || 'Customer'}
                   </div>
                   <div className="text-[11px] text-amber-300/90 mt-0.5">
-                    Outlet: <strong>{ord.outlet}</strong> | Rider: <strong>{ord.delivered_by || ord.delivery_partner || 'Delivery Partner'}</strong>
+                    Outlet: <strong>{ord.outlet}</strong> | Rider: <strong>{getDeliveredByDisplayName(ord)}</strong>
                   </div>
                   {ord.delivery_photo_url && (
                     <div className="text-[10px] text-emerald-400 mt-0.5 font-semibold">

@@ -20,6 +20,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { getDeliveryTimeInfo, formatTo12Hour } from '../lib/timeUtils';
+import { getDeliveredByDisplayName } from '../lib/orderLogic';
 
 interface ViewOrderModalProps {
   order: Order | null;
@@ -344,9 +345,13 @@ The Broomies Team`;
               <div className="space-y-2 text-xs">
                 <div className="p-3 rounded-xl bg-[#12162a] border border-indigo-900/60 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] uppercase text-slate-400 block">Rider Name</span>
+                    <span className="text-[10px] uppercase text-slate-400 block">
+                      {order.status === 'delivered' ? 'Delivered By (Rider)' : 'Assigned Rider'}
+                    </span>
                     <p className="text-sm font-extrabold text-purple-300 mt-0.5">
-                      {order.delivery_partner || 'Not Assigned Yet'}
+                      {getDeliveredByDisplayName(order) !== '—' && getDeliveredByDisplayName(order) !== 'Unassigned'
+                        ? getDeliveredByDisplayName(order)
+                        : (order.delivery_partner || 'Not Assigned Yet')}
                     </p>
                   </div>
                   {order.otp && (

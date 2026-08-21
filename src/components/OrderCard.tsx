@@ -50,20 +50,10 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
 
   const [showImageModal, setShowImageModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [nowTime, setNowTime] = useState(Date.now());
-
-  // Live ticker for countdown timer (only for active orders, refreshed every 60 sec)
-  useEffect(() => {
-    if (order.status === 'delivered' || order.status === 'cancelled') return;
-    const timer = setInterval(() => {
-      setNowTime(Date.now());
-    }, 60000); // refresh every 60 sec
-    return () => clearInterval(timer);
-  }, [order.status]);
 
   const isSelected = selectedOrderIds.includes(order.id);
   const timeInfo = getDeliveryTimeInfo(order);
-  const countdown = getCountdownInfo(order, nowTime);
+  const countdown = getCountdownInfo(order, Date.now());
 
   const todayStr = new Date().toISOString().split('T')[0];
   const normDelDate = getNormalizedDateStr(order.delivery_date);

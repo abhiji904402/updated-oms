@@ -377,6 +377,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     clean.order_number = assignedNum || 1;
     clean.order_id = assignedNum || 1;
 
+    const isPickup = String(clean.delivery_type || '').toLowerCase().trim() === 'pickup';
+    if (!isPickup) {
+      // For delivery orders: delivered_by MUST NEVER be Broomies Central Admin or generic placeholder
+      if (typeof clean.delivered_by === 'string' && (clean.delivered_by.toLowerCase().includes('admin') || clean.delivered_by.toLowerCase().includes('central') || clean.delivered_by.toLowerCase() === 'delivery rider')) {
+        clean.delivered_by = clean.delivery_partner || '';
+      }
+    }
+
     const pType = String(clean.payment_type || '').toLowerCase().trim();
     const total = typeof clean.total_amount === 'number' ? clean.total_amount : Number(clean.total_amount) || 0;
 
@@ -450,7 +458,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // 1. Real-time Firestore Sync for Orders
+  // 1. Real-time Firestore Sync for Orders (Instant Live Sync)
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
@@ -462,14 +470,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rawList.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        if (rawList.length > 0) {
-          rawList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
-          setOrders((prev) => {
-            if (prev && prev.length === rawList.length && prev[0]?.id === rawList[0]?.id && prev[0]?.updated_at === rawList[0]?.updated_at) {
-              return prev;
-            }
-            return rawList;
-          });
+        rawList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+
+        if (rawList.length > 0 || !snapshot.metadata.fromCache) {
+          setOrders(rawList);
           ordersRef.current = rawList;
           idbSet(LOCAL_STORAGE_KEY_ORDERS, rawList).catch(() => {});
           safeSaveOrdersToLocalStorage(rawList);
@@ -480,9 +484,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
     return () => unsub();
-  }, []);
+  }, [handleFirestoreWriteError]);
 
-  // 2. Real-time Firestore Sync for Delivery Partners
+  // 2. Real-time Firestore Sync for Delivery Partners (Live GPS & Status Sync)
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'delivery_partners'),
@@ -495,13 +499,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         if (list.length > 0) {
-          setPartners((prev) => {
-            if (prev.length === list.length) {
-              const matches = prev.every((p, idx) => p.id === list[idx]?.id && p.status === list[idx]?.status);
-              if (matches) return prev;
-            }
-            return list;
-          });
+          setPartners(list);
+          idbSet(LOCAL_STORAGE_KEY_PARTNERS, list).catch(() => {});
         } else if (!snapshot.metadata.fromCache) {
           const seeded = localStorage.getItem('delivery_partners_seeded_v2');
           if (!seeded) {
@@ -521,14 +520,34 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
     return () => unsub();
+  }, [handleFirestoreWriteError]);
+
+  // 3. Real-time Firestore Sync for Outlet Locations
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'outlet_locations'),
+      (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return;
+        const list: OutletLocation[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ ...docSnap.data(), id: docSnap.id } as OutletLocation);
+        });
+        if (list.length > 0) {
+          setOutletLocations(list);
+          idbSet(LOCAL_STORAGE_KEY_OUTLETS, list).catch(() => {});
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
   }, []);
 
-  // Save changes to IndexedDB (unlimited) and localStorage (quota-safe) asynchronously
+  // Save changes to IndexedDB (unlimited) and localStorage (quota-safe) asynchronously with smooth debounce
   useEffect(() => {
     const timer = setTimeout(() => {
       idbSet(LOCAL_STORAGE_KEY_ORDERS, orders);
       safeSaveOrdersToLocalStorage(orders);
-    }, 50);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [orders]);
@@ -867,6 +886,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const advAmt = typeof item.advance_amount === 'number' ? item.advance_amount : Number(item.advance_amount) || 0;
       const remBal = typeof item.remaining_balance === 'number' ? item.remaining_balance : Math.max(0, totalAmt - advAmt);
 
+      const isPickup = String(item.delivery_type || 'delivery').toLowerCase().trim() === 'pickup';
+      let deliveredBy = item.delivered_by || '';
+      if (!isPickup && (deliveredBy.toLowerCase().includes('admin') || deliveredBy.toLowerCase() === 'delivery rider')) {
+        deliveredBy = item.delivery_partner || (item as any).rider || '';
+      }
+
       return {
         id: item.id || `ord-imp-${Date.now()}-${idx}-${Math.floor(Math.random() * 10000)}`,
         order_number: orderNum,
@@ -887,7 +912,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         actual_delivery_time: item.actual_delivery_time || '',
         status: item.status || 'pending',
         delivery_partner: item.delivery_partner || (item as any).rider || '',
-        delivered_by: item.delivered_by || '',
+        delivered_by: deliveredBy,
         payment_changed_by: item.payment_changed_by || '',
         payment_changed_at: item.payment_changed_at || '',
         rider_delivered: Boolean(item.rider_delivered || item.status === 'delivered' || item.delivered_by),
@@ -1094,7 +1119,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!target.actual_delivery_time) {
         updates.actual_delivery_time = now;
       }
-      updates.delivered_by = session.name || deliveryPartner || target.delivered_by || 'Rider';
+      const isPickup = String(target.delivery_type || '').toLowerCase().trim() === 'pickup';
+      if (isPickup) {
+        updates.delivered_by = session.role === 'outlet' ? (session.name || `${target.outlet} Staff`) : (target.delivered_by || 'Store Pickup');
+      } else {
+        // STRICT USER RULE: For delivery orders, delivered_by MUST be Rider's name, NEVER "Broomies Central Admin" or generic placeholder!
+        const riderName = deliveryPartner || target.delivery_partner || (session.role === 'rider' ? session.name : '') || (target.delivered_by && !target.delivered_by.toLowerCase().includes('admin') && target.delivered_by.toLowerCase() !== 'delivery rider' ? target.delivered_by : '') || '';
+        updates.delivered_by = riderName;
+      }
       updates.rider_delivered = true;
     } else {
       updates.rider_delivered = false;
@@ -1112,7 +1144,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
     pushToSheet(updated, 'update');
-  }, [session.name, showNotification, pushToSheet, handleFirestoreWriteError]);
+  }, [session.name, session.role, showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const markDelivered = useCallback((id: string, photoUrl?: string, otpInput?: string) => {
     const targetOrder = ordersRef.current.find((o) => o.id === id);
@@ -1124,6 +1156,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const finalPhoto = photoUrl && photoUrl.trim().length > 0 ? photoUrl : (targetOrder.delivery_photo_url || '');
     const finalOtp = (otpInput && otpInput.trim().length > 0) ? otpInput.trim() : (targetOrder.otp || '1234');
 
+    const isPickup = String(targetOrder.delivery_type || '').toLowerCase().trim() === 'pickup';
+    const riderName = targetOrder.delivery_partner || (session.role === 'rider' ? session.name : '') || (targetOrder.delivered_by && !targetOrder.delivered_by.toLowerCase().includes('admin') && targetOrder.delivered_by.toLowerCase() !== 'delivery rider' ? targetOrder.delivered_by : '') || '';
+    const deliveredBy = isPickup ? (targetOrder.delivered_by || 'Store Pickup') : riderName;
+
     const now = new Date().toISOString();
     const updatedOrder: Order = {
       ...targetOrder,
@@ -1131,7 +1167,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delivery_photo_url: finalPhoto,
       otp: targetOrder.otp || finalOtp,
       actual_delivery_time: now,
-      delivered_by: session.name || targetOrder.delivery_partner || 'Delivery Partner',
+      delivered_by: deliveredBy,
       rider_delivered: true,
       delivery_confirmation_pending: true,
       updated_at: now
@@ -1162,15 +1198,21 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     showNotification(`🚀 Order #${targetOrder.order_number} delivered by rider! Waiting for Outlet confirmation.`);
     return { success: true, message: 'Delivered marked! Waiting for Outlet/Admin confirmation.' };
-  }, [session.name, session.deliveryPartnerId, showNotification, pushToSheet, handleFirestoreWriteError]);
+  }, [session.name, session.role, session.deliveryPartnerId, showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const confirmRiderDelivery = useCallback((id: string) => {
+    const targetOrder = ordersRef.current.find((o) => o.id === id);
+    const isPickup = String(targetOrder?.delivery_type || '').toLowerCase().trim() === 'pickup';
+    const riderName = targetOrder?.delivery_partner || (targetOrder?.delivered_by && !targetOrder.delivered_by.toLowerCase().includes('admin') && targetOrder.delivered_by.toLowerCase() !== 'delivery rider' ? targetOrder.delivered_by : '') || '';
+    const deliveredBy = isPickup ? (targetOrder?.delivered_by || 'Store Pickup') : riderName;
+
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.id === id) {
           return {
             ...ord,
             status: 'delivered' as OrderStatus,
+            delivered_by: deliveredBy,
             rider_delivered: true,
             delivery_confirmation_pending: false,
             updated_at: new Date().toISOString()
@@ -1181,7 +1223,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     if (!quotaExceededRef.current) {
       const targetDoc = doc(db, 'orders', id);
-      setDoc(targetDoc, { status: 'delivered', rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
+      setDoc(targetDoc, { status: 'delivered', delivered_by: deliveredBy, rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
     }
     showNotification(`✅ Order delivery confirmed by Outlet!`);
   }, [showNotification, handleFirestoreWriteError]);

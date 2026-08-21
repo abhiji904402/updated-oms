@@ -13,7 +13,8 @@ import {
   computeTabCounts,
   DashboardTab,
   getNormalizedDateStr,
-  isOrderForToday
+  isOrderForToday,
+  getDeliveredByDisplayName
 } from '../lib/orderLogic';
 import { Order, OrderStatus } from '../types';
 import { Map, MapControls, MapMarkerData } from '../components/ui/map';
@@ -112,7 +113,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
 
   // Tab definitions
   const tabs: { id: DashboardTab; label: string; icon: React.FC<{ className?: string }>; count: number | string; color: string }[] = [
-    { id: 'all', label: 'ALL ORDERS', icon: ShoppingBag, count: counts.all, color: 'text-violet-400' },
     { id: 'today', label: 'TODAY ORDERS', icon: Calendar, count: counts.today, color: 'text-purple-400' },
     { id: 'tomorrow', label: 'TOMORROW ORDERS', icon: CalendarDays, count: counts.tomorrow, color: 'text-indigo-400' },
     { id: 'future', label: 'FUTURE ORDERS', icon: Clock3, count: counts.future, color: 'text-blue-400' },
@@ -536,7 +536,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
                     Order #{ord.order_number} • {ord.customer_name || 'Customer'}
                   </div>
                   <div className="text-[11px] text-amber-300/90 mt-0.5">
-                    Outlet: <strong>{ord.outlet}</strong> | Rider: <strong>{ord.delivered_by || ord.delivery_partner || 'Delivery Partner'}</strong>
+                    Outlet: <strong>{ord.outlet}</strong> | Rider: <strong>{getDeliveredByDisplayName(ord)}</strong>
                   </div>
                   {ord.delivery_photo_url && (
                     <div className="text-[10px] text-emerald-400 mt-0.5 font-semibold">

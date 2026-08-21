@@ -1,5 +1,6 @@
 import { Order } from '../types';
 import { formatTo12Hour, getDeliveryTimeInfo } from './timeUtils';
+import { getDeliveredByDisplayName } from './orderLogic';
 
 export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
   const headers = [
@@ -33,6 +34,7 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
     const timeInfo = getDeliveryTimeInfo(o);
     const advBill = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
     const finalBill = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
+    const deliveredByDisplay = getDeliveredByDisplayName(o);
 
     return [
       o.order_number,
@@ -56,7 +58,7 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
       `"${finalBill || 'N/A'}"`,
       o.status,
       `"${o.delivery_partner || 'Unassigned'}"`,
-      `"${o.delivered_by || o.delivery_partner || 'N/A'}"`,
+      `"${deliveredByDisplay}"`,
       `"${o.payment_changed_by || 'System'}"`,
       `"${o.payment_changed_at ? formatTo12Hour(o.payment_changed_at) : ''}"`
     ];
@@ -148,7 +150,7 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
       </td>
       <td>
         <div style="font-weight: 700; color: #0f172a; font-size: 11px;">
-          ${o.delivered_by || o.delivery_partner || '—'}
+          ${getDeliveredByDisplayName(o)}
         </div>
       </td>
       <td>

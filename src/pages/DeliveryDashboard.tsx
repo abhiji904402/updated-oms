@@ -4,6 +4,7 @@ import { Order, DeliveryPartner } from '../types';
 import { compressImage } from '../lib/imageCompressor';
 import { sortOrdersByDeliveryPriority, getCountdownInfo, formatTo12Hour } from '../lib/timeUtils';
 import { matchesOutlet, formatOutletDisplayName, isOrderForToday } from '../lib/outletUtils';
+import { getDeliveredByDisplayName } from '../lib/orderLogic';
 import {
   Truck,
   Phone,
@@ -802,7 +803,7 @@ export const DeliveryDashboard = React.memo(() => {
                         Customer: <span className="text-white">{o.customer_name}</span> ({o.mobile_number})
                       </div>
                       <div className="text-slate-400 flex items-center justify-between">
-                        <span>Rider: <strong className="text-purple-300">{o.delivery_partner || o.delivered_by || 'Assigned Rider'}</strong></span>
+                        <span>Rider: <strong className="text-purple-300">{getDeliveredByDisplayName(o)}</strong></span>
                         <span className="text-[10px] text-slate-500">
                           {o.actual_delivery_time ? new Date(o.actual_delivery_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Delivered'}
                         </span>

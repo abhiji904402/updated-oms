@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { getDeliveryTimeInfo, formatTo12Hour } from '../lib/timeUtils';
 import { matchesOutlet, formatOutletDisplayName } from '../lib/outletUtils';
+import { getDeliveredByDisplayName } from '../lib/orderLogic';
 
 export const AnalyticsPage = React.memo(() => {
   const { orders = [], outletLocations = [], session } = useOMS();
@@ -898,7 +899,7 @@ export const AnalyticsPage = React.memo(() => {
                       </td>
                       {/* DELIVERED BY */}
                       <td className="py-3 px-3 text-slate-300">
-                        {ord.delivered_by || (ord.status === 'delivered' ? (ord.delivery_partner || `${ord.outlet} Staff`) : '—')}
+                        {ord.status === 'delivered' ? getDeliveredByDisplayName(ord) : (ord.delivered_by ? getDeliveredByDisplayName(ord) : '—')}
                       </td>
                       {/* PAYMENT AUDIT */}
                       <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">

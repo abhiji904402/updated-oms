@@ -526,3 +526,64 @@ export function resequenceOrderNumbers(
   });
 }
 
+/**
+ * Resolves the display name for 'Delivered By' in reports, dashboards, and exports.
+ * - For Pickup orders (delivery_type === 'pickup'): Displays store pickup or outlet staff name.
+ * - For Delivery orders (delivery_type !== 'pickup'):
+ *   STRICTLY returns the Assigned Rider's Name (order.delivery_partner) or the rider who delivered it (order.delivered_by).
+ *   NEVER returns 'Broomies Central Admin', 'Delivery Rider', or generic placeholder tags.
+ */
+export function getDeliveredByDisplayName(order?: Partial<Order> | null): string {
+  if (!order) return '—';
+  
+  const isPickup = String(order.delivery_type || '').toLowerCase().trim() === 'pickup';
+  
+  if (isPickup) {
+    if (order.delivered_by && !order.delivered_by.toLowerCase().includes('admin')) {
+      return order.delivered_by;
+    }
+    return order.outlet ? `${order.outlet} Store Pickup` : 'Store Pickup';
+  }
+
+  // Delivery order: Must strictly be assigned rider name or delivered rider name
+  const assignedRider = (order.delivery_partner || '').trim();
+  const deliveredBy = (order.delivered_by || '').trim();
+
+  const isGeneric = (name: string) => {
+    if (!name) return true;
+    const n = name.toLowerCase().trim();
+    return (
+      n.includes('admin') ||
+      n.includes('central') ||
+      n.includes('system') ||
+      n === 'delivery rider' ||
+      n === 'delivery partner' ||
+      n === 'rider' ||
+      n === 'assigned rider' ||
+      n === 'unassigned' ||
+      n === 'n/a'
+    );
+  };
+
+  // 1. If delivered_by has a specific rider's name
+  if (deliveredBy && !isGeneric(deliveredBy)) {
+    return deliveredBy;
+  }
+
+  // 2. If delivery_partner has an assigned rider's name (e.g. Amit Kumar, Rahul Sharma)
+  if (assignedRider && !isGeneric(assignedRider)) {
+    return assignedRider;
+  }
+
+  // 3. Fallbacks
+  if (assignedRider && assignedRider.toLowerCase() !== 'unassigned') {
+    return assignedRider;
+  }
+
+  if (deliveredBy && !deliveredBy.toLowerCase().includes('admin')) {
+    return deliveredBy;
+  }
+
+  return 'Unassigned';
+}
+
