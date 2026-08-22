@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import bundledConfig from '../../firebase-applet-config.json';
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string> })?.env || {};
@@ -26,13 +26,20 @@ try {
   firestoreInstance = initializeFirestore(
     app,
     {
-      experimentalAutoDetectLongPolling: true,
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
       ignoreUndefinedProperties: true,
     },
     dbId
   );
 } catch {
-  firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  try {
+    firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  } catch (err) {
+    console.warn('Firestore fallback init:', err);
+    firestoreInstance = getFirestore(app);
+  }
 }
 
 export const db = firestoreInstance;

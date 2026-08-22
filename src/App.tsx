@@ -10,7 +10,6 @@ import { PasswordManagerModal } from './components/PasswordManagerModal';
 import { ThermalPrintModal } from './components/ThermalPrintModal';
 import { LocalStorageVaultModal } from './components/LocalStorageVaultModal';
 import { Order } from './types';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
 
 // Lazy-loaded secondary pages for maximum initial load performance
 const OutletDashboard = lazy(() => import('./pages/OutletDashboard').then(m => ({ default: m.OutletDashboard })));
@@ -113,36 +112,6 @@ function OMSAppContent() {
 
           {/* Instant Active Page Rendering */}
           <main className="flex-1 pb-12 relative">
-            {/* Firestore Daily Quota Informative Banner */}
-            {isFirestoreQuotaExceeded && (
-              <div className="mx-4 sm:mx-6 mt-4 p-3.5 rounded-xl bg-amber-950/60 border border-amber-500/50 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg animate-in fade-in">
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-                  <div>
-                    <span className="font-bold text-amber-100">Firebase Free Daily Quota Exceeded: </span>
-                    <span>Firebase daily free reads limit reached. You can use <strong>Google Sheets 2-Way Sync (Google Drive / Unlimited Storage)</strong> to sync live between Vercel and AI Studio with 0 limits!</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setActiveTab('sheets')}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer shadow"
-                  >
-                    <span>⚡ Google Sheets Sync</span>
-                  </button>
-                  <a
-                    href="https://console.firebase.google.com/project/inductive-alliance-96tp2/firestore/databases/ai-studio-updatesbroomieso-fa7b0278-13cd-46d9-bc42-38295233e2c8/data?openUpgradeDialog=true"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-[11px] flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer"
-                  >
-                    <span>Firebase Console</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-            )}
-
             <Suspense fallback={<PageFallback />}>
               {(activeTab === 'dashboard' || activeTab === 'admin') && (
                 <AdminDashboard
