@@ -506,17 +506,17 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsub = onSnapshot(
       collection(db, 'orders'),
       (snapshot) => {
-        const rawList: Order[] = [];
+        const firestoreOrders: Order[] = [];
         snapshot.forEach((docSnap) => {
-          rawList.push({ ...docSnap.data(), id: docSnap.id } as Order);
+          firestoreOrders.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
         const currentLocal = ordersRef.current || [];
 
-        // On first snapshot, if local storage has existing orders not yet in Firestore, push them up
+        // On first snapshot, if Firestore is empty but local storage has orders, push them up to Firestore
         if (!hasInitialSyncedRef.current) {
           hasInitialSyncedRef.current = true;
-          const firestoreIdSet = new Set(rawList.map((o) => o.id));
+          const firestoreIdSet = new Set(firestoreOrders.map((o) => o.id));
           const missingInFirestore = currentLocal.filter((o) => !firestoreIdSet.has(o.id));
 
           if (missingInFirestore.length > 0) {
@@ -526,18 +526,23 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 handleFirestoreWriteError(err, 'push local order to firestore');
               });
             });
+            // Combine with missing orders temporarily until snapshot re-fires
+            firestoreOrders.push(...missingInFirestore);
           }
         }
 
-        // Merge Firestore orders with current local orders without losing anything or duplicating
-        const merged = mergeAndDeduplicateOrders(currentLocal, rawList);
+        // Sort descending by order_number
+        firestoreOrders.sort((a, b) => {
+          const numA = Number(a.order_number) || 0;
+          const numB = Number(b.order_number) || 0;
+          if (numB !== numA) return numB - numA;
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        });
 
-        if (merged.length > 0 || !snapshot.metadata.fromCache) {
-          setOrders(merged);
-          ordersRef.current = merged;
-          idbSet(LOCAL_STORAGE_KEY_ORDERS, merged).catch(() => {});
-          safeSaveOrdersToLocalStorage(merged);
-        }
+        setOrders(firestoreOrders);
+        ordersRef.current = firestoreOrders;
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
+        safeSaveOrdersToLocalStorage(firestoreOrders);
       },
       (err) => {
         handleFirestoreWriteError(err, 'orders snapshot sync');
@@ -1140,26 +1145,22 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     safeSaveOrdersToLocalStorage([]);
     idbSet(LOCAL_STORAGE_KEY_ORDERS, []);
 
-    // 2. Perform atomic batch delete on Firestore collection if quota available
-    if (!quotaExceededRef.current) {
-      try {
-        const snap = await getDocs(collection(db, 'orders'));
-        if (!snap.empty) {
-          const docs = snap.docs;
-          for (let i = 0; i < docs.length; i += 400) {
-            const chunk = docs.slice(i, i + 400);
-            const batch = writeBatch(db);
-            chunk.forEach((d) => batch.delete(d.ref));
-            await batch.commit();
-          }
+    // 2. Perform atomic batch delete on Firestore collection
+    try {
+      const snap = await getDocs(collection(db, 'orders'));
+      if (!snap.empty) {
+        const docs = snap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const chunk = docs.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
         }
-        showNotification('🗑️ All orders permanently deleted! Ready for fresh data.');
-      } catch (err) {
-        handleFirestoreWriteError(err, 'clear orders');
-        showNotification('All orders cleared locally!');
       }
-    } else {
-      showNotification('🗑️ All orders permanently cleared locally!');
+      showNotification('🗑️ All orders permanently deleted! Ready for fresh data.');
+    } catch (err) {
+      handleFirestoreWriteError(err, 'clear orders');
+      showNotification('All orders cleared locally!');
     }
   }, [showNotification, handleFirestoreWriteError]);
 
