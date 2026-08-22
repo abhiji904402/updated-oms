@@ -345,6 +345,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleFirestoreWriteError = useCallback((err: any, operationName = 'write') => {
     const errStr = String(err?.message || err || '');
     const isQuota = errStr.includes('resource-exhausted') || errStr.includes('Quota exceeded') || errStr.includes('Quota limit');
+    const isUnavailable = err?.code === 'unavailable' || errStr.includes('unavailable') || errStr.includes('could not be completed') || errStr.includes('Could not reach Cloud Firestore');
+
+    if (isUnavailable) {
+      // Standard Firestore offline / reconnecting state - operations persist in IndexedDB and sync upon connection
+      return;
+    }
     
     if (isQuota) {
       quotaExceededRef.current = true;
