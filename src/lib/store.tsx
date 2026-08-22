@@ -78,6 +78,8 @@ interface OMSContextType {
   updateOrder: (id: string, updates: Partial<Order>) => void;
   deleteOrder: (id: string) => void;
   clearAllOrders: () => void;
+  loadDemoOrders: () => void;
+  pushAllOrdersToCloud: () => Promise<{ success: boolean; count: number; message?: string }>;
   updateOrderStatus: (id: string, status: OrderStatus, deliveryPartner?: string) => void;
   markDelivered: (id: string, photoUrl?: string, otpInput?: string, deliveringRiderName?: string) => { success: boolean; message: string };
   confirmRiderDelivery: (id: string) => void;
@@ -507,6 +509,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (!current || current.length === 0) return legacyOrders;
               return current;
             });
+          } else if (INITIAL_ORDERS.length > 0) {
+            // Seed INITIAL_ORDERS if fresh browser
+            setOrders((current) => {
+              if (!current || current.length === 0) return INITIAL_ORDERS;
+              return current;
+            });
           }
         }).catch(() => {});
       }
@@ -525,18 +533,34 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const currentLocal = ordersRef.current || [];
 
-        // Safe Auto-heal: Only push if Firestore is completely empty and local count is reasonable (<= 50)
-        // to prevent exhaustively burning free-tier Firestore batch limits on startup.
-        if (firestoreOrders.length === 0 && currentLocal.length > 0 && currentLocal.length <= 50 && !hasAutoSyncedLocalOrdersRef.current) {
-          hasAutoSyncedLocalOrdersRef.current = true;
-          console.log(`[Cloud Sync Auto-Heal] Pushing ${currentLocal.length} local orders to Cloud Firestore...`);
-          const batch = writeBatch(db);
-          currentLocal.forEach((ord) => {
-            const clean = sanitizeOrderForFirestore(ord);
-            batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-          });
-          batch.commit().catch((err) => handleFirestoreWriteError(err, 'auto-heal push local orders to firestore'));
-          return;
+        // Safe Auto-heal: If Firestore is empty, push local or seed orders
+        if (firestoreOrders.length === 0) {
+          if (currentLocal.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
+            hasAutoSyncedLocalOrdersRef.current = true;
+            console.log(`[Cloud Sync Auto-Heal] Pushing ${currentLocal.length} local orders to Cloud Firestore...`);
+            const batch = writeBatch(db);
+            currentLocal.forEach((ord) => {
+              const clean = sanitizeOrderForFirestore(ord);
+              batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+            });
+            batch.commit().catch((err) => handleFirestoreWriteError(err, 'auto-heal push local orders to firestore'));
+            return;
+          } else if (currentLocal.length === 0 && INITIAL_ORDERS.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
+            hasAutoSyncedLocalOrdersRef.current = true;
+            const initialList = [...INITIAL_ORDERS];
+            setOrders(initialList);
+            ordersRef.current = initialList;
+            persistToLocalVault(initialList, 'Initial Orders Seed');
+            safeSaveOrdersToLocalStorage(initialList);
+            idbSet(LOCAL_STORAGE_KEY_ORDERS, initialList).catch(() => {});
+            const batch = writeBatch(db);
+            initialList.forEach((ord) => {
+              const clean = sanitizeOrderForFirestore(ord);
+              batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+            });
+            batch.commit().catch((err) => handleFirestoreWriteError(err, 'seed initial orders to firestore'));
+            return;
+          }
         }
 
         // Sort descending by order_number
