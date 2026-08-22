@@ -486,6 +486,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return uniqueOrders;
   };
 
+  const hasAutoSyncedLocalOrdersRef = useRef(false);
+
   // Fast offline hydration from IndexedDB on startup (provides instant 0ms initial render)
   useEffect(() => {
     // Check both local vault key and legacy IDB key
@@ -519,6 +521,44 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         snapshot.forEach((docSnap) => {
           firestoreOrders.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
+
+        const currentLocal = ordersRef.current || [];
+
+        // Auto-heal: If Firestore is currently empty but local vault has orders, push them to Firestore
+        if (firestoreOrders.length === 0 && currentLocal.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
+          hasAutoSyncedLocalOrdersRef.current = true;
+          console.log(`[Cloud Sync Auto-Heal] Pushing ${currentLocal.length} local orders to Cloud Firestore...`);
+          for (let i = 0; i < currentLocal.length; i += 200) {
+            const chunk = currentLocal.slice(i, i + 200);
+            const batch = writeBatch(db);
+            chunk.forEach((ord) => {
+              const clean = sanitizeOrderForFirestore(ord);
+              batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+            });
+            batch.commit().catch((err) => handleFirestoreWriteError(err, 'auto-heal push local orders to firestore'));
+          }
+          return;
+        }
+
+        // If Firestore has orders, also check if any local orders were created offline and missing in Firestore
+        if (firestoreOrders.length > 0 && currentLocal.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
+          const firestoreIdSet = new Set(firestoreOrders.map((o) => o.id));
+          const missingInFirestore = currentLocal.filter((o) => o && o.id && !firestoreIdSet.has(o.id));
+          if (missingInFirestore.length > 0) {
+            hasAutoSyncedLocalOrdersRef.current = true;
+            console.log(`[Cloud Sync] Uploading ${missingInFirestore.length} missing offline orders to Cloud Firestore...`);
+            for (let i = 0; i < missingInFirestore.length; i += 200) {
+              const chunk = missingInFirestore.slice(i, i + 200);
+              const batch = writeBatch(db);
+              chunk.forEach((ord) => {
+                const clean = sanitizeOrderForFirestore(ord);
+                batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+              });
+              batch.commit().catch((err) => handleFirestoreWriteError(err, 'upload missing orders to firestore'));
+            }
+            firestoreOrders.push(...missingInFirestore);
+          }
+        }
 
         // Sort descending by order_number
         firestoreOrders.sort((a, b) => {
@@ -1036,13 +1076,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setOrders(formattedOrders);
       ordersRef.current = formattedOrders;
       persistToLocalVault(formattedOrders, `Import ${formattedOrders.length} Orders (Overwrite)`);
+      safeSaveOrdersToLocalStorage(formattedOrders);
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders).catch(() => {});
 
       // Clear Firestore existing orders atomically with writeBatch
       getDocs(collection(db, 'orders')).then(async (snap) => {
         if (!snap.empty) {
           const docs = snap.docs;
-          for (let i = 0; i < docs.length; i += 400) {
-            const chunk = docs.slice(i, i + 400);
+          for (let i = 0; i < docs.length; i += 200) {
+            const chunk = docs.slice(i, i + 200);
             const batch = writeBatch(db);
             chunk.forEach((d) => batch.delete(d.ref));
             await batch.commit();
@@ -1050,10 +1092,13 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         // Persist all newly imported orders to Firestore in batches
-        for (let i = 0; i < formattedOrders.length; i += 400) {
-          const chunk = formattedOrders.slice(i, i + 400);
+        for (let i = 0; i < formattedOrders.length; i += 200) {
+          const chunk = formattedOrders.slice(i, i + 200);
           const batch = writeBatch(db);
-          chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+          chunk.forEach((ord) => {
+            const clean = sanitizeOrderForFirestore(ord);
+            batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+          });
           await batch.commit();
         }
       }).catch((err) => {
@@ -1066,12 +1111,17 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setOrders(merged);
       ordersRef.current = merged;
       persistToLocalVault(merged, `Import ${formattedOrders.length} Orders`);
+      safeSaveOrdersToLocalStorage(merged);
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, merged).catch(() => {});
 
       // Persist new imported orders to Firestore
-      for (let i = 0; i < formattedOrders.length; i += 400) {
-        const chunk = formattedOrders.slice(i, i + 400);
+      for (let i = 0; i < formattedOrders.length; i += 200) {
+        const chunk = formattedOrders.slice(i, i + 200);
         const batch = writeBatch(db);
-        chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+        chunk.forEach((ord) => {
+          const clean = sanitizeOrderForFirestore(ord);
+          batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+        });
         batch.commit().catch((err) => handleFirestoreWriteError(err, 'import orders batch'));
       }
       showNotification(`Successfully imported ${formattedOrders.length} new orders!`);
