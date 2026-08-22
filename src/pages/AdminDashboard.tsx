@@ -42,6 +42,7 @@ import {
   Map as MapIcon,
   Download,
   FileText,
+  FileSpreadsheet,
   ShieldCheck,
   Check,
   RefreshCw,
@@ -53,13 +54,15 @@ interface AdminDashboardProps {
   onOpenThermalModal: () => void;
   onOpenDeliveryModal: (order: Order) => void;
   onOpenPasswordModal?: () => void;
+  onOpenSheetModal?: () => void;
 }
 
 export const AdminDashboard = React.memo<AdminDashboardProps>(({
   onOpenAddModal,
   onOpenThermalModal,
   onOpenDeliveryModal,
-  onOpenPasswordModal
+  onOpenPasswordModal,
+  onOpenSheetModal
 }) => {
   const {
     orders = [],
@@ -697,6 +700,34 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
                     <span>All payments collected — no dues</span>
                   </p>
                   <p className="text-xs text-slate-400">Every delivered order has been fully paid for.</p>
+                </div>
+              ) : safeOrders.length === 0 ? (
+                <div className="space-y-4 max-w-md mx-auto py-4">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center mx-auto text-purple-400">
+                    <ShoppingBag className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-white">No Orders Found on This Device</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      If you already have orders on another PC or in Google Sheets, you can sync or import them in 1-click below:
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    <button
+                      onClick={onOpenAddModal}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-purple-900/40 transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create New Order</span>
+                    </button>
+                    <button
+                      onClick={onOpenSheetModal}
+                      className="px-4 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span>Google Sheets Sync</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <p>No matching orders found under this tab. Try selecting another tab or clearing search.</p>

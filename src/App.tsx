@@ -112,6 +112,7 @@ function OMSAppContent() {
                   onOpenThermalModal={openThermalModal}
                   onOpenDeliveryModal={handleOpenDeliveryModal}
                   onOpenPasswordModal={openPasswordModal}
+                  onOpenSheetModal={openSheetModal}
                 />
               )}
 

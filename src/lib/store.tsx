@@ -520,12 +520,18 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const missingInFirestore = currentLocal.filter((o) => !firestoreIdSet.has(o.id));
 
           if (missingInFirestore.length > 0) {
-            missingInFirestore.forEach((ord) => {
-              const clean = sanitizeOrderForFirestore(ord);
-              setDoc(doc(db, 'orders', ord.id), clean).catch((err) => {
-                handleFirestoreWriteError(err, 'push local order to firestore');
+            // Use batch write to push up missing orders efficiently in chunks of 100
+            for (let i = 0; i < missingInFirestore.length; i += 100) {
+              const chunk = missingInFirestore.slice(i, i + 100);
+              const batch = writeBatch(db);
+              chunk.forEach((ord) => {
+                const clean = sanitizeOrderForFirestore(ord);
+                batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
               });
-            });
+              batch.commit().catch((err) => {
+                handleFirestoreWriteError(err, 'push local orders batch to firestore');
+              });
+            }
             // Combine with missing orders temporarily until snapshot re-fires
             firestoreOrders.push(...missingInFirestore);
           }
