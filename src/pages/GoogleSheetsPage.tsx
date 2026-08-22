@@ -31,6 +31,11 @@ import {
   FileCode,
   ShieldCheck,
   HardDrive,
+  AlertTriangle,
+  Lock,
+  Eye,
+  EyeOff,
+  Key,
   X
 } from 'lucide-react';
 
@@ -194,9 +199,11 @@ function doGet(e) {
 
 interface DataUploadSectionProps {
   onImport: (orders: Partial<Order>[], overwrite: boolean) => void;
+  onClearAll?: () => void;
+  existingCount?: number;
 }
 
-const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
+const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport, onClearAll, existingCount = 0 }) => {
   const [activeTab, setActiveTab] = useState<'file' | 'paste'>('file');
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -206,6 +213,11 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
   const [importMode, setImportMode] = useState<'append' | 'overwrite'>('append');
   const [isProcessing, setIsProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [overwritePassword, setOverwritePassword] = useState('');
+  const [showOverwritePassword, setShowOverwritePassword] = useState(false);
+  const [overwritePasswordError, setOverwritePasswordError] = useState<string | null>(null);
+
+  const MASTER_DELETE_PASSWORD = 'abhi9919';
 
   const handleFileProcess = async (file: File) => {
     setSelectedFile(file);
@@ -288,14 +300,25 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
 
   const handleConfirmImport = () => {
     if (parsedOrders.length === 0) return;
+    const isOverwrite = importMode === 'overwrite';
+
+    if (isOverwrite) {
+      if (overwritePassword.trim() !== MASTER_DELETE_PASSWORD) {
+        setOverwritePasswordError('Galat Master Password! Database overwrite karne ke liye password enter karein.');
+        return;
+      }
+    }
+
+    setOverwritePasswordError(null);
     setIsProcessing(true);
     setTimeout(() => {
-      onImport(parsedOrders, false);
-      setSuccessMessage(`✅ Successfully ${parsedOrders.length} orders store me load ho gaye!`);
+      onImport(parsedOrders, isOverwrite);
+      setSuccessMessage(`✅ Successfully ${parsedOrders.length} orders store aur Firestore me load ho gaye! (${isOverwrite ? 'Puraana data replace ho gaya' : 'Naye orders jud gaye'})`);
       setIsProcessing(false);
       setParsedOrders([]);
       setSelectedFile(null);
       setPastedText('');
+      setOverwritePassword('');
     }, 500);
   };
 
@@ -305,6 +328,8 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
     setParsedOrders([]);
     setParseError(null);
     setSuccessMessage(null);
+    setOverwritePassword('');
+    setOverwritePasswordError(null);
   };
 
   return (
@@ -568,24 +593,132 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
             </div>
           )}
 
+          {/* Import Mode Selector */}
+          <div className="bg-[#0b0e1b] border border-indigo-950 rounded-xl p-3 space-y-2">
+            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+              Choose Import Action:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setImportMode('append')}
+                className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                  importMode === 'append'
+                    ? 'bg-emerald-950/70 border-emerald-500 text-white shadow'
+                    : 'bg-[#12162a] border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <div className={`w-3.5 h-3.5 rounded-full mt-0.5 border flex items-center justify-center ${importMode === 'append' ? 'border-emerald-400 bg-emerald-500' : 'border-slate-600'}`}>
+                  {importMode === 'append' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-emerald-300">📥 Append & Merge</div>
+                  <div className="text-[10px] text-slate-400">Purana data safe rahega, naye orders jud jayenge</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setImportMode('overwrite')}
+                className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                  importMode === 'overwrite'
+                    ? 'bg-purple-950/70 border-purple-500 text-white shadow'
+                    : 'bg-[#12162a] border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <div className={`w-3.5 h-3.5 rounded-full mt-0.5 border flex items-center justify-center ${importMode === 'overwrite' ? 'border-purple-400 bg-purple-500' : 'border-slate-600'}`}>
+                  {importMode === 'overwrite' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-purple-300">⚡ Overwrite / Replace All</div>
+                  <div className="text-[10px] text-slate-400">Puraana data delete karke sirf yeh naya data load karega</div>
+                </div>
+              </button>
+            </div>
+
+            {/* Overwrite Master Password Prompt */}
+            {importMode === 'overwrite' && (
+              <div className="mt-3 p-3 rounded-xl bg-purple-950/40 border border-purple-800/60 space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-purple-200 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Master Admin Password Required:</span>
+                  </label>
+                  <span className="text-[10px] text-purple-300 font-medium">
+                    (Password: abhi9919)
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showOverwritePassword ? 'text' : 'password'}
+                    value={overwritePassword}
+                    onChange={(e) => {
+                      setOverwritePassword(e.target.value);
+                      if (overwritePasswordError) setOverwritePasswordError(null);
+                    }}
+                    placeholder="Enter master password to authorize overwrite..."
+                    className="w-full px-3 py-2 pr-10 rounded-lg bg-[#0d1020] border border-purple-700/60 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-purple-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOverwritePassword(!showOverwritePassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                  >
+                    {showOverwritePassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-purple-300" />}
+                  </button>
+                </div>
+                {overwritePasswordError && (
+                  <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{overwritePasswordError}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Action Footer */}
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-indigo-950">
-            <button
-              type="button"
-              onClick={handleClear}
-              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold transition"
-            >
-              Cancel / Clear
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmImport}
-              disabled={isProcessing}
-              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-950/50 flex items-center gap-2 transition"
-            >
-              <Upload className={`w-4 h-4 ${isProcessing ? 'animate-bounce' : ''}`} />
-              <span>{isProcessing ? 'Importing Data...' : `Confirm & Import ${parsedOrders.length} Orders`}</span>
-            </button>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-indigo-950">
+            {existingCount > 0 && onClearAll ? (
+              <button
+                type="button"
+                onClick={onClearAll}
+                className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800/70 text-rose-300 text-xs font-bold transition flex items-center gap-1.5"
+                title="Puraana sabhi data Firestore aur Local se saaf karein"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Clear Existing Database First ({existingCount})</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={handleClear}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold transition"
+              >
+                Cancel / Clear
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={isProcessing}
+                className={`px-6 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-lg flex items-center gap-2 transition cursor-pointer ${
+                  importMode === 'overwrite'
+                    ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-950/50'
+                    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/50'
+                }`}
+              >
+                <Upload className={`w-4 h-4 ${isProcessing ? 'animate-bounce' : ''}`} />
+                <span>
+                  {isProcessing
+                    ? 'Importing Data...'
+                    : importMode === 'overwrite'
+                    ? `⚡ Replace All with ${parsedOrders.length} Orders`
+                    : `Confirm & Import ${parsedOrders.length} Orders`}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -598,10 +731,15 @@ interface GoogleSheetsPageProps {
 }
 
 export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVaultModal }) => {
-  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, resequenceAllOrders } = useOMS();
+  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, clearAllOrders, importOrders, resequenceAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isResequencing, setIsResequencing] = useState(false);
   const [isResequenceModalOpen, setIsResequenceModalOpen] = useState(false);
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearPasswordInput, setClearPasswordInput] = useState('');
+  const [showClearPassword, setShowClearPassword] = useState(false);
+  const [clearPasswordError, setClearPasswordError] = useState<string | null>(null);
   const [resequenceStartNum, setResequenceStartNum] = useState<number>(1);
   const [urlInput, setUrlInput] = useState(sheetConfig.sheet_url);
   const [copied, setCopied] = useState(false);
@@ -610,12 +748,34 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
+  const MASTER_DELETE_PASSWORD = 'abhi9919';
+
   const handleManualSync = async () => {
     setIsSyncing(true);
     await triggerSheetSync();
     setTimeout(() => {
       setIsSyncing(false);
     }, 1200);
+  };
+
+  const handleOpenClearModal = () => {
+    setClearPasswordInput('');
+    setClearPasswordError(null);
+    setShowClearPassword(false);
+    setIsClearAllModalOpen(true);
+  };
+
+  const handleExecuteClearAll = async () => {
+    if (clearPasswordInput.trim() !== MASTER_DELETE_PASSWORD) {
+      setClearPasswordError('Galat Master Password! Database delete karne ke liye sahi password enter karein.');
+      return;
+    }
+    setClearPasswordError(null);
+    setIsClearing(true);
+    await clearAllOrders();
+    setIsClearing(false);
+    setIsClearAllModalOpen(false);
+    setClearPasswordInput('');
   };
 
   const handleExecuteResequence = async (startNum: number) => {
@@ -723,6 +883,17 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
         </div>
 
         <div className="flex items-center gap-2.5">
+          {orders.length > 0 && (
+            <button
+              onClick={handleOpenClearModal}
+              className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
+              title="Delete all orders permanently to upload fresh clean data"
+            >
+              <Trash2 className="w-4 h-4 text-rose-400" />
+              <span>Clear All Data ({orders.length})</span>
+            </button>
+          )}
+
           {orders.length > 0 && (
             <button
               onClick={() => setIsResequenceModalOpen(true)}
@@ -857,15 +1028,30 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
       </div>
 
       {/* 5. Section 3: Data Upload (CSV / JSON) */}
-      <DataUploadSection onImport={importOrders} />
+      <DataUploadSection 
+        onImport={importOrders} 
+        onClearAll={handleOpenClearModal}
+        existingCount={orders.length}
+      />
 
       {/* 6. Section 4: All Orders Table */}
       <div className="bg-[#0b0e1b] border border-indigo-950 rounded-2xl p-5 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-extrabold text-white">
-            All Orders ({sortedOrders.length})
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+            <span>All Orders ({sortedOrders.length})</span>
           </h2>
           <div className="flex items-center gap-3">
+            {orders.length > 0 && (
+              <button
+                type="button"
+                onClick={handleOpenClearModal}
+                className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                title="Puraana sabhi data Firestore aur Local se saaf karein"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Delete All Orders</span>
+              </button>
+            )}
             <span className="text-xs text-slate-400 font-medium hidden sm:inline">
               Newest first • Click to edit
             </span>
@@ -1148,6 +1334,114 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
                 className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition"
               >
                 Delete Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Orders Confirmation Modal with Password Lock */}
+      {isClearAllModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#101426] border border-rose-900/60 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-rose-400">
+                <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl">
+                  <AlertTriangle className="w-6 h-6 text-rose-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Delete All Orders Permanently?</h3>
+                  <p className="text-xs text-slate-400">Total {orders.length} orders in database</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-300 leading-relaxed bg-[#0b0e1b] border border-rose-950/60 p-3.5 rounded-xl">
+              <p>
+                Kya aap sach me sabhi <strong className="text-rose-400 font-bold">{orders.length} orders</strong> ko delete karna chahte hain?
+              </p>
+              <p className="text-slate-400 text-[11px]">
+                • <strong className="text-slate-200">Cloud Firestore:</strong> Sabhi documents permanently delete ho jayenge.<br />
+                • <strong className="text-slate-200">Local Vault &amp; IndexedDB:</strong> 100% clean reset ho jayega.<br />
+                • Iske baad aap naya CSV / JSON data fresh upload kar sakte hain.
+              </p>
+            </div>
+
+            {/* Password Authorization Box */}
+            <div className="bg-rose-950/30 border border-rose-900/50 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-rose-200 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Enter Master Admin Password:</span>
+                </label>
+                <span className="text-[10px] text-rose-300/80 font-mono bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60">
+                  Password: abhi9919
+                </span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showClearPassword ? 'text' : 'password'}
+                  value={clearPasswordInput}
+                  onChange={(e) => {
+                    setClearPasswordInput(e.target.value);
+                    if (clearPasswordError) setClearPasswordError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleExecuteClearAll();
+                    }
+                  }}
+                  placeholder="Type abhi9919 to confirm deletion..."
+                  autoFocus
+                  className="w-full px-3 py-2.5 pr-10 rounded-xl bg-[#080a14] border border-rose-700/60 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowClearPassword(!showClearPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                >
+                  {showClearPassword ? <EyeOff className="w-4 h-4 text-slate-300" /> : <Eye className="w-4 h-4 text-rose-300" />}
+                </button>
+              </div>
+
+              {clearPasswordError && (
+                <div className="p-2 rounded-lg bg-rose-900/40 border border-rose-700 text-rose-200 text-[11px] font-semibold flex items-center gap-1.5 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                  <span>{clearPasswordError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                disabled={isClearing}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isClearing || !clearPasswordInput.trim()}
+                onClick={handleExecuteClearAll}
+                className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-lg flex items-center gap-2 transition cursor-pointer ${
+                  !clearPasswordInput.trim()
+                    ? 'bg-rose-950/60 border border-rose-900 text-rose-400 cursor-not-allowed opacity-60'
+                    : 'bg-rose-600 hover:bg-rose-500 shadow-rose-950/50'
+                }`}
+              >
+                {isClearing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                <span>{isClearing ? 'Deleting Everything...' : 'Authorize & Delete All Data'}</span>
               </button>
             </div>
           </div>

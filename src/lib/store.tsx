@@ -1241,6 +1241,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const clearAllOrders = useCallback(async () => {
+    hasAutoSyncedLocalOrdersRef.current = true;
     // 1. Immediately update UI state & local persistent storages
     setOrders([]);
     ordersRef.current = [];
@@ -1254,14 +1255,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const snap = await getDocs(collection(db, 'orders'));
       if (!snap.empty) {
         const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += 400) {
-          const chunk = docs.slice(i, i + 400);
+        for (let i = 0; i < docs.length; i += 200) {
+          const chunk = docs.slice(i, i + 200);
           const batch = writeBatch(db);
           chunk.forEach((d) => batch.delete(d.ref));
           await batch.commit();
         }
       }
-      showNotification('🗑️ All orders permanently deleted! Ready for fresh data.');
+      showNotification('🗑️ All orders permanently deleted from Cloud & Local Vault! Ready for fresh upload.');
     } catch (err) {
       handleFirestoreWriteError(err, 'clear orders');
       showNotification('All orders cleared locally!');
