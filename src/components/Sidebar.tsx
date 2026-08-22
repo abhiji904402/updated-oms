@@ -16,7 +16,8 @@ import {
   Smartphone,
   Radio,
   MapPin,
-  Download
+  Download,
+  HardDrive
 } from 'lucide-react';
 import { InstallAndroidAppModal } from './InstallAndroidAppModal';
 
@@ -29,6 +30,7 @@ interface SidebarProps {
   onOpenThermalModal: () => void;
   onOpenSheetModal: () => void;
   onOpenPasswordModal?: () => void;
+  onOpenVaultModal?: () => void;
 }
 
 export const Sidebar = React.memo<SidebarProps>(({
@@ -39,7 +41,8 @@ export const Sidebar = React.memo<SidebarProps>(({
   onOpenAddModal,
   onOpenThermalModal,
   onOpenSheetModal,
-  onOpenPasswordModal
+  onOpenPasswordModal,
+  onOpenVaultModal
 }) => {
   const { session, orders = [], alerts = [], logout, switchRole, partners = [] } = useOMS();
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
@@ -315,6 +318,25 @@ export const Sidebar = React.memo<SidebarProps>(({
                     <FileSpreadsheet className="w-5 h-5" />
                     <span>Google Sheets</span>
                   </button>
+
+                  {/* Local Storage Zero-Loss Vault & Backups */}
+                  {onOpenVaultModal && (
+                    <button
+                      onClick={() => {
+                        onOpenVaultModal();
+                        setIsOpenMobile(false);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-sm text-emerald-300 hover:bg-emerald-950/40 hover:text-white border border-emerald-900/50 transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <HardDrive className="w-5 h-5 text-emerald-400" />
+                        <span>Local Vault & Backups</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[10px]">
+                        {orders.length}
+                      </span>
+                    </button>
+                  )}
 
                   {/* Password Manager Button (For Admin) */}
                   {session.role === 'admin' && onOpenPasswordModal && (

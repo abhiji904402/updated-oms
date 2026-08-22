@@ -354,6 +354,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       const isFullPay = paymentType === 'full' || paymentType === 'cash' || paymentType === 'upi' || paymentType === 'online' || (paymentType as string) === 'full_paid';
       const calculatedAdvance = isFullPay ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
       const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
+      
+      const isPickup = String(order.delivery_type || '').toLowerCase().trim() === 'pickup';
+      const delBy = status === 'delivered'
+        ? (isPickup ? (order.delivered_by || `${order.outlet || 'Store'} Pickup`) : (order.delivery_partner || order.delivered_by || session.name || `${order.outlet} Staff`))
+        : (status !== 'delivered' ? '' : order.delivered_by);
+
       updateOrder(order.id, {
         status,
         payment_type: paymentType,
@@ -362,6 +368,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
         due_amount: calculatedRemaining,
         advance_bill_number: advanceBillNumber || undefined,
         final_bill_number: finalBillNumber || undefined,
+        ...(status === 'delivered' ? { delivered_by: delBy, rider_delivered: true } : {})
       });
       onClose();
       return;
@@ -384,6 +391,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       ? Number(orderNumberStr)
       : order.order_number;
 
+    const isPickupOrder = deliveryType === 'pickup';
+    const cleanPartner = deliveryPartner ? deliveryPartner.replace(/^Rider:\s*/i, '').trim() : undefined;
+    const deliveredByVal = status === 'delivered'
+      ? (isPickupOrder ? (order.delivered_by || `${outlet || 'Store'} Pickup`) : (cleanPartner || order.delivery_partner || order.delivered_by || `${outlet} Staff`))
+      : (status !== 'delivered' ? '' : order.delivered_by);
+
     updateOrder(order.id, {
       order_number: finalOrderNumber,
       outlet,
@@ -405,7 +418,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       address: deliveryType === 'delivery' ? (deliveryAddress || 'Local Address') : 'In-Store Pickup',
       remarks: remarks || '',
       status,
-      delivery_partner: deliveryPartner || undefined,
+      delivery_partner: cleanPartner || undefined,
+      delivered_by: deliveredByVal || undefined,
       delivery_date: deliveryDate,
       delivery_time_expected: formatTo12Hour(expectedDeliveryTime) || expectedDeliveryTime,
       item_image_url: itemImageUrl || undefined,

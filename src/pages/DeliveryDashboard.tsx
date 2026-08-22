@@ -196,7 +196,8 @@ export const DeliveryDashboard = React.memo(() => {
     e.preventDefault();
     if (!selectedOrder) return;
 
-    const result = markDelivered(selectedOrder.id, proofPhotoUrl || undefined, otpInput);
+    const riderName = activePartner?.name || (session.name || '').replace(/^Rider:\s*/i, '').trim() || selectedOrder.delivery_partner || '';
+    const result = markDelivered(selectedOrder.id, proofPhotoUrl || undefined, otpInput, riderName);
     if (!result.success) {
       setErrorMessage(result.message);
       return;

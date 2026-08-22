@@ -8,6 +8,7 @@ import { AddOrderModal } from './components/AddOrderModal';
 import { SheetSyncModal } from './components/SheetSyncModal';
 import { PasswordManagerModal } from './components/PasswordManagerModal';
 import { ThermalPrintModal } from './components/ThermalPrintModal';
+import { LocalStorageVaultModal } from './components/LocalStorageVaultModal';
 import { Order } from './types';
 
 // Lazy-loaded secondary pages for maximum initial load performance
@@ -42,6 +43,7 @@ function OMSAppContent() {
   const [isThermalModalOpen, setIsThermalModalOpen] = useState(false);
   const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
 
   const openAddModal = useCallback(() => setIsAddModalOpen(true), []);
   const closeAddModal = useCallback(() => setIsAddModalOpen(false), []);
@@ -54,6 +56,9 @@ function OMSAppContent() {
 
   const openPasswordModal = useCallback(() => setIsPasswordModalOpen(true), []);
   const closePasswordModal = useCallback(() => setIsPasswordModalOpen(false), []);
+
+  const openVaultModal = useCallback(() => setIsVaultModalOpen(true), []);
+  const closeVaultModal = useCallback(() => setIsVaultModalOpen(false), []);
 
   const toggleMobileMenu = useCallback(() => setIsOpenMobile((prev) => !prev), []);
 
@@ -91,6 +96,7 @@ function OMSAppContent() {
           onOpenThermalModal={openThermalModal}
           onOpenSheetModal={openSheetModal}
           onOpenPasswordModal={openPasswordModal}
+          onOpenVaultModal={openVaultModal}
         />
 
         {/* Main Content Area */}
@@ -101,6 +107,7 @@ function OMSAppContent() {
             onOpenAddModal={openAddModal}
             onOpenPasswordModal={openPasswordModal}
             onOpenSheetModal={openSheetModal}
+            onOpenVaultModal={openVaultModal}
           />
 
           {/* Instant Active Page Rendering */}
@@ -113,6 +120,7 @@ function OMSAppContent() {
                   onOpenDeliveryModal={handleOpenDeliveryModal}
                   onOpenPasswordModal={openPasswordModal}
                   onOpenSheetModal={openSheetModal}
+                  onOpenVaultModal={openVaultModal}
                 />
               )}
 
@@ -124,7 +132,7 @@ function OMSAppContent() {
 
               {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
 
-              {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
+              {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage onOpenVaultModal={openVaultModal} />}
             </Suspense>
           </main>
         </div>
@@ -149,6 +157,11 @@ function OMSAppContent() {
       <PasswordManagerModal
         isOpen={isPasswordModalOpen}
         onClose={closePasswordModal}
+      />
+
+      <LocalStorageVaultModal
+        isOpen={isVaultModalOpen}
+        onClose={closeVaultModal}
       />
     </div>
   );

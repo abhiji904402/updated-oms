@@ -30,6 +30,7 @@ import {
   FileUp,
   FileCode,
   ShieldCheck,
+  HardDrive,
   X
 } from 'lucide-react';
 
@@ -592,7 +593,11 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport }) => {
   );
 };
 
-export const GoogleSheetsPage = React.memo(() => {
+interface GoogleSheetsPageProps {
+  onOpenVaultModal?: () => void;
+}
+
+export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVaultModal }) => {
   const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, clearAllOrders, resequenceAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isResequencing, setIsResequencing] = useState(false);
@@ -750,6 +755,17 @@ export const GoogleSheetsPage = React.memo(() => {
                 <span>Clear All Data ({orders.length})</span>
               </button>
             </>
+          )}
+
+          {onOpenVaultModal && (
+            <button
+              onClick={onOpenVaultModal}
+              className="px-3.5 py-2.5 rounded-xl bg-purple-950/70 hover:bg-purple-900 border border-purple-800/80 text-purple-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
+              title="Open Local Storage Vault & Zero-Loss Backup Folders"
+            >
+              <HardDrive className="w-4 h-4 text-purple-400" />
+              <span>Local Vault ({orders.length})</span>
+            </button>
           )}
 
           <button

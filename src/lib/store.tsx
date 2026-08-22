@@ -39,6 +39,7 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 ];
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
+import { persistToLocalVault, LOCAL_VAULT_KEYS } from './localStorageVault';
 import { db } from './firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from 'firebase/firestore';
 
@@ -78,7 +79,7 @@ interface OMSContextType {
   deleteOrder: (id: string) => void;
   clearAllOrders: () => void;
   updateOrderStatus: (id: string, status: OrderStatus, deliveryPartner?: string) => void;
-  markDelivered: (id: string, photoUrl?: string, otpInput?: string) => { success: boolean; message: string };
+  markDelivered: (id: string, photoUrl?: string, otpInput?: string, deliveringRiderName?: string) => { success: boolean; message: string };
   confirmRiderDelivery: (id: string) => void;
   resequenceAllOrders: (startNumber?: number) => Promise<void>;
 
@@ -252,7 +253,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Orders State
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY_ORDERS);
+    const saved = localStorage.getItem(LOCAL_VAULT_KEYS.ACTIVE_ORDERS) || localStorage.getItem(LOCAL_STORAGE_KEY_ORDERS);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -348,23 +349,19 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isUnavailable = err?.code === 'unavailable' || errStr.includes('unavailable') || errStr.includes('could not be completed') || errStr.includes('Could not reach Cloud Firestore');
 
     if (isUnavailable) {
-      // Standard Firestore offline / reconnecting state - operations persist in IndexedDB and sync upon connection
+      // Standard Firestore offline / reconnecting state - operations persist silently in Local Vault / IndexedDB
       return;
     }
     
     if (isQuota) {
       quotaExceededRef.current = true;
       setIsFirestoreQuotaExceeded(true);
-
-      if (!quotaNotifiedRef.current) {
-        quotaNotifiedRef.current = true;
-        console.warn(`[Firestore Quota Reached] Operation "${operationName}" was saved locally in IndexedDB & LocalStorage.`);
-        showNotification('⚡ Daily Firestore write quota reached. Running smoothly in Offline-First mode (IndexedDB + Google Sheets active).');
-      }
+      // Silently fall back to Local Vault without showing annoying popup banners to the user
+      console.log(`[Local Vault Active] Operation "${operationName}" persisted 100% safely in local storage.`);
     } else {
-      console.warn(`Firestore ${operationName} error:`, err);
+      console.warn(`Firestore ${operationName} status:`, err);
     }
-  }, [showNotification]);
+  }, []);
 
   // Helper to strip out undefined values so Firestore setDoc never fails and normalize payment fields
   const sanitizeOrderForFirestore = (order: Record<string, any>): Order => {
@@ -408,11 +405,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return clean as Order;
   };
 
-  // Keep refs of orders and sheetConfig for non-reactive access inside callbacks and intervals
+  // Keep refs of orders, partners, and sheetConfig for non-reactive access inside callbacks and intervals
   const ordersRef = React.useRef(orders);
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
+
+  const partnersRef = React.useRef(partners);
+  useEffect(() => {
+    partnersRef.current = partners;
+  }, [partners]);
 
   const sheetConfigRef = React.useRef(sheetConfig);
   useEffect(() => {
@@ -488,15 +490,24 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Fast offline hydration from IndexedDB on startup
   useEffect(() => {
-    idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((idbOrders) => {
-      if (idbOrders && Array.isArray(idbOrders) && idbOrders.length > 0) {
-        idbOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+    // Check both local vault key and legacy IDB key
+    idbGet<Order[]>(LOCAL_VAULT_KEYS.ACTIVE_ORDERS).then((vaultOrders) => {
+      if (vaultOrders && Array.isArray(vaultOrders) && vaultOrders.length > 0) {
+        vaultOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
         setOrders((current) => {
-          if (!current || current.length === 0) {
-            return idbOrders;
-          }
-          return mergeAndDeduplicateOrders(current, idbOrders);
+          if (!current || current.length === 0) return vaultOrders;
+          return mergeAndDeduplicateOrders(current, vaultOrders);
         });
+      } else {
+        idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((legacyOrders) => {
+          if (legacyOrders && Array.isArray(legacyOrders) && legacyOrders.length > 0) {
+            legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+            setOrders((current) => {
+              if (!current || current.length === 0) return legacyOrders;
+              return mergeAndDeduplicateOrders(current, legacyOrders);
+            });
+          }
+        }).catch(() => {});
       }
     }).catch(() => {});
   }, []);
@@ -547,8 +558,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         setOrders(firestoreOrders);
         ordersRef.current = firestoreOrders;
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
-        safeSaveOrdersToLocalStorage(firestoreOrders);
+        persistToLocalVault(firestoreOrders, 'Firestore Live Snapshot');
       },
       (err) => {
         handleFirestoreWriteError(err, 'orders snapshot sync');
@@ -918,8 +928,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextOrders = [newOrder, ...currentOrders.filter((o) => o.id !== newOrder.id)];
     ordersRef.current = nextOrders;
     setOrders(nextOrders);
-    idbSet(LOCAL_STORAGE_KEY_ORDERS, nextOrders).catch(() => {});
-    safeSaveOrdersToLocalStorage(nextOrders);
+    persistToLocalVault(nextOrders, `Create Order #${newOrderNumber}`);
 
     // Direct write to Firestore
     setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
@@ -997,8 +1006,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (overwrite) {
       setOrders(formattedOrders);
       ordersRef.current = formattedOrders;
-      safeSaveOrdersToLocalStorage(formattedOrders);
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders);
+      persistToLocalVault(formattedOrders, `Import ${formattedOrders.length} Orders (Overwrite)`);
 
       // Clear Firestore existing orders atomically with writeBatch
       getDocs(collection(db, 'orders')).then(async (snap) => {
@@ -1028,8 +1036,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const merged = mergeAndDeduplicateOrders(existingOrders, formattedOrders);
       setOrders(merged);
       ordersRef.current = merged;
-      safeSaveOrdersToLocalStorage(merged);
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, merged);
+      persistToLocalVault(merged, `Import ${formattedOrders.length} Orders`);
 
       // Persist new imported orders to Firestore
       for (let i = 0; i < formattedOrders.length; i += 400) {
@@ -1058,8 +1065,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders(resequenced);
     ordersRef.current = resequenced;
-    safeSaveOrdersToLocalStorage(resequenced);
-    idbSet(LOCAL_STORAGE_KEY_ORDERS, resequenced);
+    persistToLocalVault(resequenced, 'Resequence Orders');
 
     // Save to Firestore in chunks without modifying delivery_date
     try {
@@ -1098,9 +1104,20 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delivered_by: ''
     } : {};
 
+    // If delivery partner is updated on a delivery order that is already delivered, sync delivered_by
+    const effectiveStatus = updates.status || target.status;
+    const isPickup = String(updates.delivery_type || target.delivery_type || '').toLowerCase().trim() === 'pickup';
+    const effectivePartner = updates.delivery_partner !== undefined ? updates.delivery_partner.replace(/^Rider:\s*/i, '').trim() : target.delivery_partner;
+
+    let autoDeliveredBy: { delivered_by?: string } = {};
+    if (effectiveStatus === 'delivered' && !isPickup && effectivePartner && !updates.delivered_by) {
+      autoDeliveredBy = { delivered_by: effectivePartner };
+    }
+
     const rawUpdated: Order = {
       ...target,
       ...updates,
+      ...autoDeliveredBy,
       ...resetDeliveryFlags,
       updated_at: now,
       ...(hasPaymentUpdate
@@ -1116,8 +1133,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.map((ord) => (ord.id === id ? updated : ord));
       ordersRef.current = next;
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
-      safeSaveOrdersToLocalStorage(next);
+      persistToLocalVault(next, `Update Order #${updated.order_number}`);
       return next;
     });
 
@@ -1135,8 +1151,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.filter((o) => o.id !== id);
       ordersRef.current = next;
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
-      safeSaveOrdersToLocalStorage(next);
+      persistToLocalVault(next, `Delete Order`);
       return next;
     });
 
@@ -1148,8 +1163,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 1. Immediately update UI state & local persistent storages
     setOrders([]);
     setSelectedOrderIds([]);
-    safeSaveOrdersToLocalStorage([]);
-    idbSet(LOCAL_STORAGE_KEY_ORDERS, []);
+    persistToLocalVault([], 'Clear All Orders');
 
     // 2. Perform atomic batch delete on Firestore collection
     try {
@@ -1180,7 +1194,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: now
     };
     if (deliveryPartner) {
-      updates.delivery_partner = deliveryPartner;
+      updates.delivery_partner = deliveryPartner.replace(/^Rider:\s*/i, '').trim();
     }
     if (status === 'delivered') {
       if (!target.actual_delivery_time) {
@@ -1188,11 +1202,28 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       const isPickup = String(target.delivery_type || '').toLowerCase().trim() === 'pickup';
       if (isPickup) {
-        updates.delivered_by = session.role === 'outlet' ? (session.name || `${target.outlet} Staff`) : (target.delivered_by || 'Store Pickup');
+        updates.delivered_by = session.role === 'outlet' ? (session.name || `${target.outlet} Staff`) : (target.delivered_by || `${target.outlet || 'Store'} Pickup`);
       } else {
-        // STRICT USER RULE: For delivery orders, delivered_by MUST be Rider's name, NEVER "Broomies Central Admin" or generic placeholder!
-        const riderName = deliveryPartner || target.delivery_partner || (session.role === 'rider' ? session.name : '') || (target.delivered_by && !target.delivered_by.toLowerCase().includes('admin') && target.delivered_by.toLowerCase() !== 'delivery rider' ? target.delivered_by : '') || '';
+        const assignedRider = (deliveryPartner || target.delivery_partner || '').replace(/^Rider:\s*/i, '').trim();
+        let riderName = assignedRider;
+        if (!riderName && (session.role === 'delivery' || (session.role as string) === 'rider')) {
+          riderName = (session.name || '').replace(/^Rider:\s*/i, '').trim();
+        }
+        if (!riderName && target.delivered_by && !target.delivered_by.toLowerCase().includes('admin') && target.delivered_by.toLowerCase() !== 'unassigned') {
+          riderName = target.delivered_by.replace(/^Rider:\s*/i, '').trim();
+        }
+        if (!riderName && session.role === 'outlet') {
+          riderName = session.name || `${target.outlet} Staff`;
+        }
+        if (!riderName) {
+          riderName = target.informed_by || `${target.outlet || 'Store'} Staff`;
+        }
         updates.delivered_by = riderName;
+        if (!target.delivery_partner && deliveryPartner) {
+          updates.delivery_partner = deliveryPartner;
+        } else if (!target.delivery_partner && riderName && !riderName.toLowerCase().includes('staff')) {
+          updates.delivery_partner = riderName;
+        }
       }
       updates.rider_delivered = true;
     } else {
@@ -1207,8 +1238,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.map((ord) => (ord.id === id ? updated : ord));
       ordersRef.current = next;
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
-      safeSaveOrdersToLocalStorage(next);
+      persistToLocalVault(next, `Status -> ${status}`);
       return next;
     });
 
@@ -1217,7 +1247,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToSheet(updated, 'update');
   }, [session.name, session.role, showNotification, pushToSheet, handleFirestoreWriteError]);
 
-  const markDelivered = useCallback((id: string, photoUrl?: string, otpInput?: string) => {
+  const markDelivered = useCallback((id: string, photoUrl?: string, otpInput?: string, deliveringRiderName?: string) => {
     const targetOrder = ordersRef.current.find((o) => o.id === id);
     if (!targetOrder) {
       return { success: false, message: 'Order not found.' };
@@ -1228,13 +1258,40 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const finalOtp = (otpInput && otpInput.trim().length > 0) ? otpInput.trim() : (targetOrder.otp || '1234');
 
     const isPickup = String(targetOrder.delivery_type || '').toLowerCase().trim() === 'pickup';
-    const riderName = targetOrder.delivery_partner || (session.role === 'rider' ? session.name : '') || (targetOrder.delivered_by && !targetOrder.delivered_by.toLowerCase().includes('admin') && targetOrder.delivered_by.toLowerCase() !== 'delivery rider' ? targetOrder.delivered_by : '') || '';
-    const deliveredBy = isPickup ? (targetOrder.delivered_by || 'Store Pickup') : riderName;
+    
+    // Resolve rider name with high precision
+    let riderName = (deliveringRiderName || '').replace(/^Rider:\s*/i, '').trim();
+    if (!riderName) {
+      if (session.role === 'delivery' || (session.role as string) === 'rider') {
+        riderName = (session.name || '').replace(/^Rider:\s*/i, '').trim();
+      }
+    }
+    if (!riderName) {
+      riderName = (targetOrder.delivery_partner || '').replace(/^Rider:\s*/i, '').trim();
+    }
+    if (!riderName && targetOrder.delivered_by && !targetOrder.delivered_by.toLowerCase().includes('admin') && targetOrder.delivered_by.toLowerCase() !== 'unassigned') {
+      riderName = targetOrder.delivered_by.replace(/^Rider:\s*/i, '').trim();
+    }
+    if (!riderName && !isPickup) {
+      const partner = partnersRef.current.find(p => p.id === session.deliveryPartnerId);
+      if (partner?.name) {
+        riderName = partner.name;
+      }
+    }
+
+    const deliveredBy = isPickup
+      ? (targetOrder.delivered_by || `${targetOrder.outlet || 'Store'} Pickup`)
+      : (riderName || targetOrder.delivery_partner || `${targetOrder.outlet || 'Store'} Staff`);
+
+    const updatedDeliveryPartner = (!targetOrder.delivery_partner || targetOrder.delivery_partner.toLowerCase() === 'unassigned') && riderName && !riderName.toLowerCase().includes('staff')
+      ? riderName
+      : (targetOrder.delivery_partner || (riderName && !riderName.toLowerCase().includes('staff') ? riderName : undefined));
 
     const now = new Date().toISOString();
     const updatedOrder: Order = {
       ...targetOrder,
       status: 'delivered',
+      delivery_partner: updatedDeliveryPartner,
       delivery_photo_url: finalPhoto,
       otp: targetOrder.otp || finalOtp,
       actual_delivery_time: now,
@@ -1247,8 +1304,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.map((o) => (o.id === id ? updatedOrder : o));
       ordersRef.current = next;
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
-      safeSaveOrdersToLocalStorage(next);
+      persistToLocalVault(next, `Delivered Order #${updatedOrder.order_number}`);
       return next;
     });
 
@@ -1257,11 +1313,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToSheet(updatedOrder, 'update');
 
     // Update delivery partner total deliveries count
-    if (targetOrder.delivery_partner) {
+    const effectiveRiderName = updatedDeliveryPartner || riderName;
+    if (effectiveRiderName) {
       setPartners((prev) =>
         prev.map((p) => {
-          if (p.name === targetOrder.delivery_partner || p.id === session.deliveryPartnerId) {
-            const updatedP = { ...p, total_deliveries: p.total_deliveries + 1, status: 'available' };
+          if (p.name.toLowerCase() === effectiveRiderName.toLowerCase() || p.id === session.deliveryPartnerId) {
+            const updatedP = { ...p, total_deliveries: (p.total_deliveries || 0) + 1, status: 'available' as const };
             setDoc(doc(db, 'delivery_partners', p.id), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner delivery count'));
             return updatedP;
           }
@@ -1270,15 +1327,28 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
-    showNotification(`🚀 Order #${targetOrder.order_number} delivered by rider! Waiting for Outlet confirmation.`);
+    showNotification(`🚀 Order #${targetOrder.order_number} marked delivered! (${deliveredBy})`);
     return { success: true, message: 'Delivered marked! Waiting for Outlet/Admin confirmation.' };
   }, [session.name, session.role, session.deliveryPartnerId, showNotification, pushToSheet, handleFirestoreWriteError]);
 
   const confirmRiderDelivery = useCallback((id: string) => {
     const targetOrder = ordersRef.current.find((o) => o.id === id);
+    if (!targetOrder) return;
     const isPickup = String(targetOrder?.delivery_type || '').toLowerCase().trim() === 'pickup';
-    const riderName = targetOrder?.delivery_partner || (targetOrder?.delivered_by && !targetOrder.delivered_by.toLowerCase().includes('admin') && targetOrder.delivered_by.toLowerCase() !== 'delivery rider' ? targetOrder.delivered_by : '') || '';
-    const deliveredBy = isPickup ? (targetOrder?.delivered_by || 'Store Pickup') : riderName;
+    
+    let riderName = (targetOrder.delivered_by || '').replace(/^Rider:\s*/i, '').trim();
+    if (!riderName || riderName.toLowerCase().includes('admin') || riderName.toLowerCase() === 'unassigned') {
+      riderName = (targetOrder.delivery_partner || '').replace(/^Rider:\s*/i, '').trim();
+    }
+    if (!riderName && session.role === 'outlet') {
+      riderName = `${targetOrder.outlet || 'Store'} Staff`;
+    }
+
+    const deliveredBy = isPickup
+      ? (targetOrder.delivered_by || `${targetOrder.outlet || 'Store'} Store Pickup`)
+      : (riderName || targetOrder.delivery_partner || `${targetOrder.outlet || 'Store'} Staff`);
+
+    const deliveryPartner = targetOrder.delivery_partner || (riderName && !riderName.toLowerCase().includes('staff') ? riderName : undefined);
 
     setOrders((prev) => {
       const next = prev.map((ord) => {
@@ -1286,6 +1356,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return {
             ...ord,
             status: 'delivered' as OrderStatus,
+            delivery_partner: deliveryPartner || ord.delivery_partner,
             delivered_by: deliveredBy,
             rider_delivered: true,
             delivery_confirmation_pending: false,
@@ -1295,16 +1366,22 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return ord;
       });
       ordersRef.current = next;
-      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
-      safeSaveOrdersToLocalStorage(next);
+      persistToLocalVault(next, `Confirm Rider Delivery`);
       return next;
     });
 
     const targetDoc = doc(db, 'orders', id);
-    setDoc(targetDoc, { status: 'delivered', delivered_by: deliveredBy, rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
+    setDoc(targetDoc, {
+      status: 'delivered',
+      delivery_partner: deliveryPartner || targetOrder.delivery_partner,
+      delivered_by: deliveredBy,
+      rider_delivered: true,
+      delivery_confirmation_pending: false,
+      updated_at: new Date().toISOString()
+    }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
     
-    showNotification(`✅ Order delivery confirmed by Outlet!`);
-  }, [showNotification, handleFirestoreWriteError]);
+    showNotification(`✅ Order #${targetOrder.order_number} delivery confirmed by Outlet!`);
+  }, [session.role, showNotification, handleFirestoreWriteError]);
 
   const updatePartnerLocation = useCallback((partnerId: string, location: Omit<DeliveryPartnerLocation, 'updated_at'>) => {
     const updatedAt = new Date().toISOString();

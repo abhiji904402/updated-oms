@@ -531,6 +531,8 @@ export function resequenceOrderNumbers(
  * - For Pickup orders (delivery_type === 'pickup'): Displays store pickup or outlet staff name.
  * - For Delivery orders (delivery_type !== 'pickup'):
  *   STRICTLY returns the Assigned Rider's Name (order.delivery_partner) or the rider who delivered it (order.delivered_by).
+ *   If an outlet manager or admin assigns a rider, that rider's name is ALWAYS returned.
+ *   If an order was delivered by a rider without prior assignment, displays the actual delivering rider.
  *   NEVER returns 'Broomies Central Admin', 'Delivery Rider', or generic placeholder tags.
  */
 export function getDeliveredByDisplayName(order?: Partial<Order> | null): string {
@@ -539,15 +541,15 @@ export function getDeliveredByDisplayName(order?: Partial<Order> | null): string
   const isPickup = String(order.delivery_type || '').toLowerCase().trim() === 'pickup';
   
   if (isPickup) {
-    if (order.delivered_by && !order.delivered_by.toLowerCase().includes('admin')) {
-      return order.delivered_by;
+    if (order.delivered_by && !order.delivered_by.toLowerCase().includes('admin') && !order.delivered_by.toLowerCase().includes('delivery rider')) {
+      return order.delivered_by.replace(/^Rider:\s*/i, '').trim();
     }
     return order.outlet ? `${order.outlet} Store Pickup` : 'Store Pickup';
   }
 
   // Delivery order: Must strictly be assigned rider name or delivered rider name
-  const assignedRider = (order.delivery_partner || '').trim();
-  const deliveredBy = (order.delivered_by || '').trim();
+  const rawAssignedRider = (order.delivery_partner || '').replace(/^Rider:\s*/i, '').trim();
+  const rawDeliveredBy = (order.delivered_by || '').replace(/^Rider:\s*/i, '').trim();
 
   const isGeneric = (name: string) => {
     if (!name) return true;
@@ -561,27 +563,38 @@ export function getDeliveredByDisplayName(order?: Partial<Order> | null): string
       n === 'rider' ||
       n === 'assigned rider' ||
       n === 'unassigned' ||
-      n === 'n/a'
+      n === 'n/a' ||
+      n === '—' ||
+      n === '-' ||
+      n === 'null' ||
+      n === 'undefined'
     );
   };
 
-  // 1. If delivered_by has a specific rider's name
-  if (deliveredBy && !isGeneric(deliveredBy)) {
-    return deliveredBy;
+  // 1. If an outlet or admin assigned a rider (order.delivery_partner), that rider's name ALWAYS takes top priority!
+  if (rawAssignedRider && !isGeneric(rawAssignedRider)) {
+    return rawAssignedRider;
   }
 
-  // 2. If delivery_partner has an assigned rider's name (e.g. Amit Kumar, Rahul Sharma)
-  if (assignedRider && !isGeneric(assignedRider)) {
-    return assignedRider;
+  // 2. If delivered_by has a specific rider's name (e.g. from rider mobile dashboard delivery)
+  if (rawDeliveredBy && !isGeneric(rawDeliveredBy)) {
+    return rawDeliveredBy;
   }
 
-  // 3. Fallbacks
-  if (assignedRider && assignedRider.toLowerCase() !== 'unassigned') {
-    return assignedRider;
+  // 3. If the order is already marked delivered, display the outlet staff / informed_by
+  if (order.status === 'delivered') {
+    if (order.informed_by && !isGeneric(order.informed_by)) {
+      return order.informed_by;
+    }
+    if (order.outlet) {
+      return `${order.outlet} Staff`;
+    }
+    return 'Store Staff';
   }
 
-  if (deliveredBy && !deliveredBy.toLowerCase().includes('admin')) {
-    return deliveredBy;
+  // 4. If an assigned rider is present but was caught by some filter
+  if (rawAssignedRider && rawAssignedRider.toLowerCase() !== 'unassigned') {
+    return rawAssignedRider;
   }
 
   return 'Unassigned';
