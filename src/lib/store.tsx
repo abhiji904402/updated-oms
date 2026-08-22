@@ -464,13 +464,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // 1. Real-time Firestore Sync for Orders (Instant Live Sync)
+  // 1. Real-time Firestore Sync for Orders (Instant Live Sync across all devices)
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
       (snapshot) => {
-        if (snapshot.metadata.hasPendingWrites) return;
-
         const rawList: Order[] = [];
         snapshot.forEach((docSnap) => {
           rawList.push({ ...docSnap.data(), id: docSnap.id } as Order);
@@ -478,7 +476,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         rawList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
 
-        if (rawList.length > 0 || !snapshot.metadata.fromCache) {
+        if (rawList.length > 0) {
           setOrders(rawList);
           ordersRef.current = rawList;
           idbSet(LOCAL_STORAGE_KEY_ORDERS, rawList).catch(() => {});
@@ -497,8 +495,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsub = onSnapshot(
       collection(db, 'delivery_partners'),
       (snapshot) => {
-        if (snapshot.metadata.hasPendingWrites) return;
-
         const list: DeliveryPartner[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ ...docSnap.data(), id: docSnap.id } as DeliveryPartner);
@@ -533,7 +529,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsub = onSnapshot(
       collection(db, 'outlet_locations'),
       (snapshot) => {
-        if (snapshot.metadata.hasPendingWrites) return;
         const list: OutletLocation[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ ...docSnap.data(), id: docSnap.id } as OutletLocation);
@@ -855,18 +850,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newOrder = sanitizeOrderForFirestore(rawOrder);
 
-    // Instant synchronous update to ordersRef to prevent race conditions
-    ordersRef.current = [newOrder, ...currentOrders.filter((o) => o.id !== newOrder.id)];
+    const nextOrders = [newOrder, ...currentOrders.filter((o) => o.id !== newOrder.id)];
+    ordersRef.current = nextOrders;
+    setOrders(nextOrders);
+    idbSet(LOCAL_STORAGE_KEY_ORDERS, nextOrders).catch(() => {});
+    safeSaveOrdersToLocalStorage(nextOrders);
 
-    // Instant local state update
-    setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
-
-    // Write to Firestore if quota not exceeded
-    if (!quotaExceededRef.current) {
-      setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
-        handleFirestoreWriteError(err, 'create order');
-      });
-    }
+    // Direct write to Firestore
+    setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
+      handleFirestoreWriteError(err, 'create order');
+    });
 
     showNotification(`✨ New Order #${newOrderNumber} created at ${newOrder.outlet}!`);
 
@@ -1057,11 +1050,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updated = sanitizeOrderForFirestore(rawUpdated);
 
-    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
+    setOrders((prev) => {
+      const next = prev.map((ord) => (ord.id === id ? updated : ord));
+      ordersRef.current = next;
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
+      safeSaveOrdersToLocalStorage(next);
+      return next;
+    });
 
-    if (!quotaExceededRef.current) {
-      setDoc(doc(db, 'orders', id), updated, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update order'));
-    }
+    setDoc(doc(db, 'orders', id), updated, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update order'));
     pushToSheet(updated, 'update');
   }, [session.name, session.role, pushToSheet, handleFirestoreWriteError]);
 
@@ -1072,10 +1069,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pushToSheet(target, 'delete');
     }
 
-    setOrders((prev) => prev.filter((o) => o.id !== id));
-    if (!quotaExceededRef.current) {
-      deleteDoc(doc(db, 'orders', id)).catch((err) => handleFirestoreWriteError(err, 'delete order'));
-    }
+    setOrders((prev) => {
+      const next = prev.filter((o) => o.id !== id);
+      ordersRef.current = next;
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
+      safeSaveOrdersToLocalStorage(next);
+      return next;
+    });
+
+    deleteDoc(doc(db, 'orders', id)).catch((err) => handleFirestoreWriteError(err, 'delete order'));
     setSelectedOrderIds((prev) => prev.filter((item) => item !== id));
   }, [showNotification, pushToSheet, handleFirestoreWriteError]);
 
@@ -1143,11 +1145,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updated: Order = { ...target, ...updates };
 
-    setOrders((prev) => prev.map((ord) => (ord.id === id ? updated : ord)));
+    setOrders((prev) => {
+      const next = prev.map((ord) => (ord.id === id ? updated : ord));
+      ordersRef.current = next;
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
+      safeSaveOrdersToLocalStorage(next);
+      return next;
+    });
 
-    if (!quotaExceededRef.current) {
-      setDoc(doc(db, 'orders', id), updated, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update order status'));
-    }
+    setDoc(doc(db, 'orders', id), updated, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update order status'));
     showNotification(`Order #${target.order_number} status changed to ${status.toUpperCase()}`);
     pushToSheet(updated, 'update');
   }, [session.name, session.role, showNotification, pushToSheet, handleFirestoreWriteError]);
@@ -1179,10 +1185,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: now
     };
 
-    setOrders((prev) => prev.map((o) => (o.id === id ? updatedOrder : o)));
-    if (!quotaExceededRef.current) {
-      setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'mark delivered'));
-    }
+    setOrders((prev) => {
+      const next = prev.map((o) => (o.id === id ? updatedOrder : o));
+      ordersRef.current = next;
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
+      safeSaveOrdersToLocalStorage(next);
+      return next;
+    });
+
+    setDoc(doc(db, 'orders', id), updatedOrder, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'mark delivered'));
 
     pushToSheet(updatedOrder, 'update');
 
@@ -1192,9 +1203,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prev.map((p) => {
           if (p.name === targetOrder.delivery_partner || p.id === session.deliveryPartnerId) {
             const updatedP = { ...p, total_deliveries: p.total_deliveries + 1, status: 'available' };
-            if (!quotaExceededRef.current) {
-              setDoc(doc(db, 'delivery_partners', p.id), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner delivery count'));
-            }
+            setDoc(doc(db, 'delivery_partners', p.id), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner delivery count'));
             return updatedP;
           }
           return p;
@@ -1212,8 +1221,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const riderName = targetOrder?.delivery_partner || (targetOrder?.delivered_by && !targetOrder.delivered_by.toLowerCase().includes('admin') && targetOrder.delivered_by.toLowerCase() !== 'delivery rider' ? targetOrder.delivered_by : '') || '';
     const deliveredBy = isPickup ? (targetOrder?.delivered_by || 'Store Pickup') : riderName;
 
-    setOrders((prev) =>
-      prev.map((ord) => {
+    setOrders((prev) => {
+      const next = prev.map((ord) => {
         if (ord.id === id) {
           return {
             ...ord,
@@ -1225,12 +1234,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return ord;
-      })
-    );
-    if (!quotaExceededRef.current) {
-      const targetDoc = doc(db, 'orders', id);
-      setDoc(targetDoc, { status: 'delivered', delivered_by: deliveredBy, rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
-    }
+      });
+      ordersRef.current = next;
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
+      safeSaveOrdersToLocalStorage(next);
+      return next;
+    });
+
+    const targetDoc = doc(db, 'orders', id);
+    setDoc(targetDoc, { status: 'delivered', delivered_by: deliveredBy, rider_delivered: true, delivery_confirmation_pending: false, updated_at: new Date().toISOString() }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
+    
     showNotification(`✅ Order delivery confirmed by Outlet!`);
   }, [showNotification, handleFirestoreWriteError]);
 
