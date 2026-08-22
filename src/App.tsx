@@ -5,18 +5,17 @@ import { Header } from './components/Header';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AddOrderModal } from './components/AddOrderModal';
+import { SheetSyncModal } from './components/SheetSyncModal';
+import { PasswordManagerModal } from './components/PasswordManagerModal';
+import { ThermalPrintModal } from './components/ThermalPrintModal';
 import { Order } from './types';
 
-// Lazy-loaded secondary pages & modals for maximum initial load performance
+// Lazy-loaded secondary pages for maximum initial load performance
 const OutletDashboard = lazy(() => import('./pages/OutletDashboard').then(m => ({ default: m.OutletDashboard })));
 const DeliveryDashboard = lazy(() => import('./pages/DeliveryDashboard').then(m => ({ default: m.DeliveryDashboard })));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const AlertsPage = lazy(() => import('./pages/AlertsPage').then(m => ({ default: m.AlertsPage })));
 const GoogleSheetsPage = lazy(() => import('./pages/GoogleSheetsPage').then(m => ({ default: m.GoogleSheetsPage })));
-
-const PasswordManagerModal = lazy(() => import('./components/PasswordManagerModal').then(m => ({ default: m.PasswordManagerModal })));
-const ThermalPrintModal = lazy(() => import('./components/ThermalPrintModal').then(m => ({ default: m.ThermalPrintModal })));
-const SheetSyncModal = lazy(() => import('./components/SheetSyncModal').then(m => ({ default: m.SheetSyncModal })));
 
 function PageFallback() {
   return (
@@ -136,32 +135,20 @@ function OMSAppContent() {
         onClose={closeAddModal}
       />
 
-      {isThermalModalOpen && (
-        <Suspense fallback={null}>
-          <ThermalPrintModal
-            isOpen={isThermalModalOpen}
-            onClose={closeThermalModal}
-          />
-        </Suspense>
-      )}
+      <ThermalPrintModal
+        isOpen={isThermalModalOpen}
+        onClose={closeThermalModal}
+      />
 
-      {isSheetModalOpen && (
-        <Suspense fallback={null}>
-          <SheetSyncModal
-            isOpen={isSheetModalOpen}
-            onClose={closeSheetModal}
-          />
-        </Suspense>
-      )}
+      <SheetSyncModal
+        isOpen={isSheetModalOpen}
+        onClose={closeSheetModal}
+      />
 
-      {isPasswordModalOpen && (
-        <Suspense fallback={null}>
-          <PasswordManagerModal
-            isOpen={isPasswordModalOpen}
-            onClose={closePasswordModal}
-          />
-        </Suspense>
-      )}
+      <PasswordManagerModal
+        isOpen={isPasswordModalOpen}
+        onClose={closePasswordModal}
+      />
     </div>
   );
 }

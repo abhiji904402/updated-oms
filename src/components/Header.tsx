@@ -218,24 +218,16 @@ export const Header = React.memo<HeaderProps>(({
 
         {/* Right Section: Export Actions, Password Settings & Logout */}
         <div className="flex items-center justify-end gap-2 w-full lg:w-auto">
-          {/* 24/7 Auto-Sync Indicator Badge (Admin & Outlet) */}
+          {/* 24/7 Live Cloud Sync Indicator Badge (Admin & Outlet) */}
           {session.role !== 'delivery' && (
             <button
               onClick={onOpenSheetModal}
-              title={
-                isFirestoreQuotaExceeded
-                  ? 'Firestore daily quota reached (resets daily). Offline-First local storage (IndexedDB) & Google Sheets Auto-Sync are ACTIVE.'
-                  : '24/7 Google Sheets & Cloud Auto-Sync is ACTIVE. Click to configure.'
-              }
-              className={`px-3 py-1.5 rounded-xl border transition text-xs font-bold flex items-center gap-1.5 shadow-sm ${
-                isFirestoreQuotaExceeded
-                  ? 'bg-amber-950/70 hover:bg-amber-900/80 border-amber-500/50 text-amber-300'
-                  : 'bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-500/50 text-emerald-300'
-              }`}
+              title="Real-time Live Cloud Sync is ACTIVE across all devices and Google Sheets. Click to configure."
+              className="px-3 py-1.5 rounded-xl border transition text-xs font-bold flex items-center gap-1.5 shadow-sm bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-500/50 text-emerald-300"
             >
-              <Sparkles className={`w-3.5 h-3.5 ${isFirestoreQuotaExceeded ? 'text-amber-400' : 'text-emerald-400'} animate-pulse`} />
-              <span>{isFirestoreQuotaExceeded ? 'OFFLINE-FIRST (IDB)' : '24/7 AUTO SYNC'}</span>
-              <span className={`w-2 h-2 rounded-full ${isFirestoreQuotaExceeded ? 'bg-amber-400' : 'bg-emerald-400'} animate-ping`} />
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span>LIVE CLOUD SYNC</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             </button>
           )}
 

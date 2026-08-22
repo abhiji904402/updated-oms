@@ -379,3 +379,5 @@ export const SheetSyncModal: React.FC<SheetSyncModalProps> = ({ isOpen, onClose 
     </div>
   );
 };
+
+export default SheetSyncModal;

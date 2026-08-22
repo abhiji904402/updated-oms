@@ -355,10 +355,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isQuota) {
       quotaExceededRef.current = true;
       setIsFirestoreQuotaExceeded(true);
-      // Disable Firestore background network retries to prevent backoff spam
-      try {
-        disableNetwork(db).catch(() => {});
-      } catch (e) {}
 
       if (!quotaNotifiedRef.current) {
         quotaNotifiedRef.current = true;
@@ -449,16 +445,57 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {}
   }, [outletLocations]);
 
+  // Deduplicate and merge orders by unique ID and order_number cleanly
+  const mergeAndDeduplicateOrders = (currentList: Order[], incomingList: Order[]): Order[] => {
+    const orderMap = new Map<string, Order>();
+
+    // Add current local orders
+    for (const ord of currentList) {
+      if (ord && ord.id) {
+        orderMap.set(ord.id, ord);
+      }
+    }
+
+    // Merge incoming orders from Firestore
+    for (const ord of incomingList) {
+      if (!ord || !ord.id) continue;
+      const existing = orderMap.get(ord.id);
+      if (!existing) {
+        orderMap.set(ord.id, ord);
+      } else {
+        const existingTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+        const incomingTime = new Date(ord.updated_at || ord.created_at || 0).getTime();
+        if (incomingTime >= existingTime) {
+          orderMap.set(ord.id, { ...existing, ...ord });
+        }
+      }
+    }
+
+    const uniqueOrders = Array.from(orderMap.values());
+
+    // Sort descending by order_number
+    uniqueOrders.sort((a, b) => {
+      const numA = Number(a.order_number) || 0;
+      const numB = Number(b.order_number) || 0;
+      if (numB !== numA) return numB - numA;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+
+    return uniqueOrders;
+  };
+
+  const hasInitialSyncedRef = useRef(false);
+
   // Fast offline hydration from IndexedDB on startup
   useEffect(() => {
     idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((idbOrders) => {
       if (idbOrders && Array.isArray(idbOrders) && idbOrders.length > 0) {
         idbOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
         setOrders((current) => {
-          if (!current || current.length < idbOrders.length) {
+          if (!current || current.length === 0) {
             return idbOrders;
           }
-          return current;
+          return mergeAndDeduplicateOrders(current, idbOrders);
         });
       }
     }).catch(() => {});
@@ -474,13 +511,32 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rawList.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        rawList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+        const currentLocal = ordersRef.current || [];
 
-        if (rawList.length > 0) {
-          setOrders(rawList);
-          ordersRef.current = rawList;
-          idbSet(LOCAL_STORAGE_KEY_ORDERS, rawList).catch(() => {});
-          safeSaveOrdersToLocalStorage(rawList);
+        // On first snapshot, if local storage has existing orders not yet in Firestore, push them up
+        if (!hasInitialSyncedRef.current) {
+          hasInitialSyncedRef.current = true;
+          const firestoreIdSet = new Set(rawList.map((o) => o.id));
+          const missingInFirestore = currentLocal.filter((o) => !firestoreIdSet.has(o.id));
+
+          if (missingInFirestore.length > 0) {
+            missingInFirestore.forEach((ord) => {
+              const clean = sanitizeOrderForFirestore(ord);
+              setDoc(doc(db, 'orders', ord.id), clean).catch((err) => {
+                handleFirestoreWriteError(err, 'push local order to firestore');
+              });
+            });
+          }
+        }
+
+        // Merge Firestore orders with current local orders without losing anything or duplicating
+        const merged = mergeAndDeduplicateOrders(currentLocal, rawList);
+
+        if (merged.length > 0 || !snapshot.metadata.fromCache) {
+          setOrders(merged);
+          ordersRef.current = merged;
+          idbSet(LOCAL_STORAGE_KEY_ORDERS, merged).catch(() => {});
+          safeSaveOrdersToLocalStorage(merged);
         }
       },
       (err) => {
@@ -507,13 +563,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const seeded = localStorage.getItem('delivery_partners_seeded_v2');
           if (!seeded) {
             safeLocalStorageSet('delivery_partners_seeded_v2', 'true');
-            if (!quotaExceededRef.current) {
-              const batch = writeBatch(db);
-              INITIAL_DELIVERY_PARTNERS.forEach((p) => {
-                batch.set(doc(db, 'delivery_partners', p.id), p);
-              });
-              batch.commit().catch((err) => handleFirestoreWriteError(err, 'seed delivery partners'));
-            }
+            const batch = writeBatch(db);
+            INITIAL_DELIVERY_PARTNERS.forEach((p) => {
+              batch.set(doc(db, 'delivery_partners', p.id), p);
+            });
+            batch.commit().catch((err) => handleFirestoreWriteError(err, 'seed delivery partners'));
           }
         }
       },
@@ -936,42 +990,42 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders);
 
       // Clear Firestore existing orders atomically with writeBatch
-      if (!quotaExceededRef.current) {
-        getDocs(collection(db, 'orders')).then(async (snap) => {
-          if (!snap.empty) {
-            const docs = snap.docs;
-            for (let i = 0; i < docs.length; i += 400) {
-              const chunk = docs.slice(i, i + 400);
-              const batch = writeBatch(db);
-              chunk.forEach((d) => batch.delete(d.ref));
-              await batch.commit();
-            }
-          }
-
-          // Persist all newly imported orders to Firestore in batches
-          for (let i = 0; i < formattedOrders.length; i += 400) {
-            const chunk = formattedOrders.slice(i, i + 400);
+      getDocs(collection(db, 'orders')).then(async (snap) => {
+        if (!snap.empty) {
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const chunk = docs.slice(i, i + 400);
             const batch = writeBatch(db);
-            chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+            chunk.forEach((d) => batch.delete(d.ref));
             await batch.commit();
           }
-        }).catch((err) => {
-          handleFirestoreWriteError(err, 'overwrite import');
-        });
-      }
+        }
 
-      showNotification(`Replaced all orders with ${formattedOrders.length} imported orders!`);
-    } else {
-      setOrders((prev) => [...formattedOrders, ...prev]);
-      ordersRef.current = [...formattedOrders, ...existingOrders];
-      // Persist new imported orders to Firestore
-      if (!quotaExceededRef.current) {
+        // Persist all newly imported orders to Firestore in batches
         for (let i = 0; i < formattedOrders.length; i += 400) {
           const chunk = formattedOrders.slice(i, i + 400);
           const batch = writeBatch(db);
           chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
-          batch.commit().catch((err) => handleFirestoreWriteError(err, 'import orders batch'));
+          await batch.commit();
         }
+      }).catch((err) => {
+        handleFirestoreWriteError(err, 'overwrite import');
+      });
+
+      showNotification(`Replaced all orders with ${formattedOrders.length} imported orders!`);
+    } else {
+      const merged = mergeAndDeduplicateOrders(existingOrders, formattedOrders);
+      setOrders(merged);
+      ordersRef.current = merged;
+      safeSaveOrdersToLocalStorage(merged);
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, merged);
+
+      // Persist new imported orders to Firestore
+      for (let i = 0; i < formattedOrders.length; i += 400) {
+        const chunk = formattedOrders.slice(i, i + 400);
+        const batch = writeBatch(db);
+        chunk.forEach((ord) => batch.set(doc(db, 'orders', ord.id), ord));
+        batch.commit().catch((err) => handleFirestoreWriteError(err, 'import orders batch'));
       }
       showNotification(`Successfully imported ${formattedOrders.length} new orders!`);
     }
@@ -997,20 +1051,18 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     idbSet(LOCAL_STORAGE_KEY_ORDERS, resequenced);
 
     // Save to Firestore in chunks without modifying delivery_date
-    if (!quotaExceededRef.current) {
-      try {
-        for (let i = 0; i < resequenced.length; i += 400) {
-          const chunk = resequenced.slice(i, i + 400);
-          const batch = writeBatch(db);
-          chunk.forEach((ord) => {
-            const clean = sanitizeOrderForFirestore(ord);
-            batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-          });
-          await batch.commit();
-        }
-      } catch (err) {
-        handleFirestoreWriteError(err, 'resequence batch');
+    try {
+      for (let i = 0; i < resequenced.length; i += 400) {
+        const chunk = resequenced.slice(i, i + 400);
+        const batch = writeBatch(db);
+        chunk.forEach((ord) => {
+          const clean = sanitizeOrderForFirestore(ord);
+          batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+        });
+        await batch.commit();
       }
+    } catch (err) {
+      handleFirestoreWriteError(err, 'resequence batch');
     }
 
     showNotification(`🔢 Order IDs sorted in descending order of punch date/time and updated sequentially!`);
@@ -1260,9 +1312,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               updated_at: updatedAt
             }
           };
-          if (!quotaExceededRef.current) {
-            setDoc(doc(db, 'delivery_partners', partnerId), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner location'));
-          }
+          setDoc(doc(db, 'delivery_partners', partnerId), updatedP, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner location'));
           return updatedP;
         }
         return p;
@@ -1277,9 +1327,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total_deliveries: 0
     };
     setPartners((prev) => [...prev, newPartner]);
-    if (!quotaExceededRef.current) {
-      setDoc(doc(db, 'delivery_partners', newPartner.id), newPartner).catch((err) => handleFirestoreWriteError(err, 'add partner'));
-    }
+    setDoc(doc(db, 'delivery_partners', newPartner.id), newPartner).catch((err) => handleFirestoreWriteError(err, 'add partner'));
     showNotification(`Added new delivery partner: ${newPartner.name}`);
   }, [showNotification, handleFirestoreWriteError]);
 
@@ -1291,9 +1339,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev.filter((p) => p.id !== id);
     });
-    if (!quotaExceededRef.current) {
-      deleteDoc(doc(db, 'delivery_partners', id)).catch((err) => handleFirestoreWriteError(err, 'delete partner'));
-    }
+    deleteDoc(doc(db, 'delivery_partners', id)).catch((err) => handleFirestoreWriteError(err, 'delete partner'));
   }, [showNotification, handleFirestoreWriteError]);
 
   const updatePartnerStatus = useCallback((id: string, status: DeliveryPartner['status']) => {
@@ -1301,9 +1347,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((p) => {
         if (p.id === id) {
           const updated = { ...p, status };
-          if (!quotaExceededRef.current) {
-            setDoc(doc(db, 'delivery_partners', id), { status }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner status'));
-          }
+          setDoc(doc(db, 'delivery_partners', id), { status }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'update partner status'));
           return updated;
         }
         return p;

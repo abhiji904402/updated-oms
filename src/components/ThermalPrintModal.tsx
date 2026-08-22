@@ -135,3 +135,5 @@ export const ThermalPrintModal: React.FC<ThermalPrintModalProps> = ({ isOpen, on
     </div>
   );
 };
+
+export default ThermalPrintModal;

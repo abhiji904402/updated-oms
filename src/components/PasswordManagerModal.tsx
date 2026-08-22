@@ -318,3 +318,5 @@ export const PasswordManagerModal: React.FC<PasswordManagerModalProps> = ({ isOp
     </div>
   );
 };
+
+export default PasswordManagerModal;
