@@ -46,6 +46,7 @@ import {
   ShieldCheck,
   Check,
   RefreshCw,
+  LayoutDashboard,
   X
 } from 'lucide-react';
 
@@ -118,6 +119,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
 
   // Tab definitions
   const tabs: { id: DashboardTab; label: string; icon: React.FC<{ className?: string }>; count: number | string; color: string }[] = [
+    { id: 'all', label: 'ALL ORDERS', icon: LayoutDashboard, count: counts.all, color: 'text-purple-300' },
     { id: 'today', label: 'TODAY ORDERS', icon: Calendar, count: counts.today, color: 'text-purple-400' },
     { id: 'tomorrow', label: 'TOMORROW ORDERS', icon: CalendarDays, count: counts.tomorrow, color: 'text-indigo-400' },
     { id: 'future', label: 'FUTURE ORDERS', icon: Clock3, count: counts.future, color: 'text-blue-400' },
