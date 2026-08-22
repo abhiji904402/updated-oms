@@ -103,6 +103,7 @@ interface OMSContextType {
   updateSheetConfig: (updates: Partial<SheetConfig>) => void;
   syncLogs: SyncLog[];
   triggerGoogleSheetSync: () => Promise<void>;
+  pullOrdersFromGoogleSheet: (customUrl?: string) => Promise<{ success: boolean; count?: number; message?: string }>;
 
   // Selection for batch actions (e.g., Thermal Printing)
   selectedOrderIds: string[];
@@ -524,40 +525,18 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const currentLocal = ordersRef.current || [];
 
-        // Auto-heal: If Firestore is currently empty but local vault has orders, push them to Firestore
-        if (firestoreOrders.length === 0 && currentLocal.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
+        // Safe Auto-heal: Only push if Firestore is completely empty and local count is reasonable (<= 50)
+        // to prevent exhaustively burning free-tier Firestore batch limits on startup.
+        if (firestoreOrders.length === 0 && currentLocal.length > 0 && currentLocal.length <= 50 && !hasAutoSyncedLocalOrdersRef.current) {
           hasAutoSyncedLocalOrdersRef.current = true;
           console.log(`[Cloud Sync Auto-Heal] Pushing ${currentLocal.length} local orders to Cloud Firestore...`);
-          for (let i = 0; i < currentLocal.length; i += 200) {
-            const chunk = currentLocal.slice(i, i + 200);
-            const batch = writeBatch(db);
-            chunk.forEach((ord) => {
-              const clean = sanitizeOrderForFirestore(ord);
-              batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-            });
-            batch.commit().catch((err) => handleFirestoreWriteError(err, 'auto-heal push local orders to firestore'));
-          }
+          const batch = writeBatch(db);
+          currentLocal.forEach((ord) => {
+            const clean = sanitizeOrderForFirestore(ord);
+            batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
+          });
+          batch.commit().catch((err) => handleFirestoreWriteError(err, 'auto-heal push local orders to firestore'));
           return;
-        }
-
-        // If Firestore has orders, also check if any local orders were created offline and missing in Firestore
-        if (firestoreOrders.length > 0 && currentLocal.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
-          const firestoreIdSet = new Set(firestoreOrders.map((o) => o.id));
-          const missingInFirestore = currentLocal.filter((o) => o && o.id && !firestoreIdSet.has(o.id));
-          if (missingInFirestore.length > 0) {
-            hasAutoSyncedLocalOrdersRef.current = true;
-            console.log(`[Cloud Sync] Uploading ${missingInFirestore.length} missing offline orders to Cloud Firestore...`);
-            for (let i = 0; i < missingInFirestore.length; i += 200) {
-              const chunk = missingInFirestore.slice(i, i + 200);
-              const batch = writeBatch(db);
-              chunk.forEach((ord) => {
-                const clean = sanitizeOrderForFirestore(ord);
-                batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-              });
-              batch.commit().catch((err) => handleFirestoreWriteError(err, 'upload missing orders to firestore'));
-            }
-            firestoreOrders.push(...missingInFirestore);
-          }
         }
 
         // Sort descending by order_number
@@ -967,6 +946,99 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Sheet sync warning:', err);
       showNotification('⚠️ Network or Webhook connection check required.');
+    }
+  }, [logSync, showNotification]);
+
+  // Pull live orders directly from Google Sheets Webhook (Unlimited Cloud Storage)
+  const pullOrdersFromGoogleSheet = useCallback(async (customUrl?: string): Promise<{ success: boolean; count?: number; message?: string }> => {
+    const targetUrl = (customUrl || sheetConfigRef.current.sheet_url || '').trim();
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+      showNotification('⚠️ Please enter a Google Apps Script Webhook URL first in Settings');
+      return { success: false, message: 'Google Apps Script Webhook URL not set' };
+    }
+
+    if (targetUrl.includes('docs.google.com/spreadsheets')) {
+      showNotification('⚠️ Google Sheet document URL detected! Please paste the Apps Script Web App URL ending with /exec');
+      return { success: false, message: 'Invalid URL format' };
+    }
+
+    showNotification('📥 Fetching live order database directly from Google Sheets...');
+
+    try {
+      const sep = targetUrl.includes('?') ? '&' : '?';
+      const fetchUrl = `${targetUrl}${sep}action=get_orders&t=${Date.now()}`;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) {
+        throw new Error(`HTTP error ${res.status}`);
+      }
+      const data = await res.json();
+      const rawList = Array.isArray(data.orders) ? data.orders : (Array.isArray(data) ? data : []);
+
+      if (rawList.length === 0) {
+        showNotification('ℹ️ Google Sheet response active, but no order rows found.');
+        return { success: true, count: 0, message: 'Sheet is empty' };
+      }
+
+      const formatted: Order[] = rawList.map((raw: any, index: number) => {
+        const ordNum = Number(raw.order_number) || (index + 1);
+        const orderDate = raw.order_date || new Date().toISOString().split('T')[0];
+        const orderTime = raw.order_time || '12:00 PM';
+        const delivDate = raw.delivery_date || orderDate;
+
+        return sanitizeOrderForFirestore({
+          id: raw.id || `ord-${ordNum}`,
+          order_number: ordNum,
+          order_id: ordNum,
+          order_date: orderDate,
+          order_time: orderTime,
+          delivery_date: delivDate,
+          customer_name: raw.customer_name || 'Customer',
+          mobile_number: raw.mobile_number || raw.customer_phone || '',
+          customer_phone: raw.customer_phone || raw.mobile_number || '',
+          outlet: raw.outlet || 'Sector 31',
+          item_type: raw.item_type || raw.items || 'Bakery Items',
+          items: raw.items || raw.item_type || 'Bakery Items',
+          quantity: Number(raw.quantity) || 1,
+          total_amount: Number(raw.total_amount) || 0,
+          advance_amount: Number(raw.advance_amount) || 0,
+          remaining_balance: Number(raw.remaining_balance) || 0,
+          due_amount: Number(raw.due_amount) || Number(raw.remaining_balance) || 0,
+          payment_type: raw.payment_type || 'full',
+          advance_bill_number: raw.advance_bill_number || '',
+          final_bill_number: raw.final_bill_number || '',
+          status: raw.status || 'pending',
+          delivery_type: raw.delivery_type || 'delivery',
+          scheduled_time: raw.scheduled_time || raw.delivery_time_expected || '',
+          delivery_time_expected: raw.delivery_time_expected || raw.scheduled_time || '',
+          actual_delivery_time: raw.actual_delivery_time || '',
+          delivery_partner: raw.delivery_partner || '',
+          delivery_address: raw.delivery_address || raw.address || '',
+          address: raw.address || raw.delivery_address || '',
+          notes: raw.notes || raw.remarks || '',
+          remarks: raw.remarks || raw.notes || '',
+          item_image_url: raw.item_image_url || '',
+          otp: raw.otp || String(Math.floor(1000 + Math.random() * 9000)),
+          delivered_by: raw.delivered_by || '',
+          created_at: raw.created_at || new Date().toISOString(),
+          updated_at: raw.updated_at || new Date().toISOString(),
+        } as unknown as Order);
+      });
+
+      formatted.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+
+      setOrders(formatted);
+      ordersRef.current = formatted;
+      persistToLocalVault(formatted, `Google Sheet Live Pull (${formatted.length} orders)`);
+      safeSaveOrdersToLocalStorage(formatted);
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, formatted).catch(() => {});
+      logSync(formatted.length, 'google_sheet_pull', true);
+
+      showNotification(`⚡ Successfully loaded ${formatted.length} live orders directly from Google Sheets!`);
+      return { success: true, count: formatted.length };
+    } catch (err: any) {
+      console.warn('Pull from Google Sheet error:', err);
+      showNotification(`⚠️ Google Sheet pull failed: ${err.message || 'Network / CORS issue'}`);
+      return { success: false, message: err.message };
     }
   }, [logSync, showNotification]);
 
@@ -1616,6 +1688,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateSheetConfig,
       syncLogs: syncLogs || [],
       triggerGoogleSheetSync,
+      pullOrdersFromGoogleSheet,
       selectedOrderIds: selectedOrderIds || [],
       toggleOrderSelection,
       selectAllOrders,
@@ -1664,6 +1737,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateSheetConfig,
       syncLogs,
       triggerGoogleSheetSync,
+      pullOrdersFromGoogleSheet,
       selectedOrderIds,
       toggleOrderSelection,
       selectAllOrders,

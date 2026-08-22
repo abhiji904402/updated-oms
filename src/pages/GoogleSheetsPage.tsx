@@ -194,7 +194,59 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput("Broomies Bakery Google Sheets Webhook Active!");
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getOrCreateSheet(ss, "All Orders");
+    var data = sheet.getDataRange().getValues();
+    if (!data || data.length <= 1) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", orders: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var orders = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0] && !row[4]) continue;
+      var obj = {
+        order_number: Number(row[0]) || i,
+        order_date: String(row[1] || ""),
+        order_time: String(row[2] || ""),
+        mobile_number: String(row[3] || ""),
+        customer_name: String(row[4] || ""),
+        item_type: String(row[5] || ""),
+        items: String(row[5] || ""),
+        quantity: Number(row[6]) || 1,
+        delivery_type: String(row[7] || "delivery"),
+        informed_by: String(row[8] || ""),
+        total_amount: Number(row[9]) || 0,
+        advance_amount: Number(row[10]) || 0,
+        remaining_balance: Number(row[11]) || 0,
+        due_amount: Number(row[11]) || 0,
+        payment_type: String(row[12] || "full"),
+        advance_bill_number: String(row[13] || ""),
+        final_bill_number: String(row[14] || ""),
+        status: String(row[15] || "pending"),
+        delivery_date: String(row[16] || ""),
+        delivery_time_expected: String(row[17] || ""),
+        scheduled_time: String(row[17] || ""),
+        actual_delivery_time: String(row[18] || ""),
+        delivery_partner: String(row[19] || ""),
+        delivery_address: String(row[20] || ""),
+        address: String(row[20] || ""),
+        remarks: String(row[21] || ""),
+        notes: String(row[21] || ""),
+        item_image_url: String(row[22] || ""),
+        created_at: String(row[23] || new Date().toISOString()),
+        updated_at: String(row[23] || new Date().toISOString())
+      };
+      obj.id = "ord_" + obj.order_number;
+      orders.push(obj);
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", count: orders.length, orders: orders }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }`;
 
 interface DataUploadSectionProps {
@@ -731,8 +783,9 @@ interface GoogleSheetsPageProps {
 }
 
 export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVaultModal }) => {
-  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, clearAllOrders, importOrders, resequenceAllOrders } = useOMS();
+  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, pullOrdersFromGoogleSheet, deleteOrder, clearAllOrders, importOrders, resequenceAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [isResequencing, setIsResequencing] = useState(false);
   const [isResequenceModalOpen, setIsResequenceModalOpen] = useState(false);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
@@ -756,6 +809,14 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
     setTimeout(() => {
       setIsSyncing(false);
     }, 1200);
+  };
+
+  const handlePullFromSheet = async () => {
+    setIsPulling(true);
+    await pullOrdersFromGoogleSheet();
+    setTimeout(() => {
+      setIsPulling(false);
+    }, 1000);
   };
 
   const handleOpenClearModal = () => {
@@ -918,12 +979,23 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
           )}
 
           <button
+            onClick={handlePullFromSheet}
+            disabled={isPulling}
+            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/40 text-white font-bold text-xs shadow-md shadow-emerald-950/50 flex items-center gap-2 transition cursor-pointer"
+            title="Fetch all live orders directly from Google Sheet (Unlimited Cloud Storage)"
+          >
+            <Download className={`w-4 h-4 text-emerald-200 ${isPulling ? 'animate-bounce' : ''}`} />
+            <span>{isPulling ? 'Pulling Data...' : '📥 Pull Live from Sheet'}</span>
+          </button>
+
+          <button
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="px-4 py-2.5 rounded-xl bg-[#0e1120] hover:bg-indigo-950 border border-slate-700/80 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
+            className="px-4 py-2.5 rounded-xl bg-[#0e1120] hover:bg-indigo-950 border border-slate-700/80 text-white font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
+            title="Push all current orders to Google Sheet Webhook"
           >
             <RefreshCw className={`w-4 h-4 text-slate-300 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Syncing...' : 'Manual Sync'}</span>
+            <span>{isSyncing ? 'Syncing...' : '📤 Push to Sheet'}</span>
           </button>
         </div>
       </div>
