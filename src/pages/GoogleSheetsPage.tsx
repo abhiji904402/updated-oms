@@ -598,7 +598,7 @@ interface GoogleSheetsPageProps {
 }
 
 export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVaultModal }) => {
-  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, clearAllOrders, resequenceAllOrders } = useOMS();
+  const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, deleteOrder, importOrders, resequenceAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isResequencing, setIsResequencing] = useState(false);
   const [isResequenceModalOpen, setIsResequenceModalOpen] = useState(false);
@@ -607,7 +607,6 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
   const [copied, setCopied] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
@@ -624,16 +623,6 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
     await resequenceAllOrders(startNum);
     setIsResequencing(false);
     setIsResequenceModalOpen(false);
-  };
-
-  const handleClearAllOrdersRequest = () => {
-    if (orders.length === 0) return;
-    setIsClearConfirmOpen(true);
-  };
-
-  const handleConfirmClearAll = () => {
-    clearAllOrders();
-    setIsClearConfirmOpen(false);
   };
 
   const handleCopyCode = () => {
@@ -735,26 +724,15 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
 
         <div className="flex items-center gap-2.5">
           {orders.length > 0 && (
-            <>
-              <button
-                onClick={() => setIsResequenceModalOpen(true)}
-                disabled={isResequencing}
-                className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 border border-purple-400/30 text-white font-bold text-xs shadow-md shadow-purple-950/50 flex items-center gap-2 transition cursor-pointer"
-                title="Fix and re-number order sequence cleanly"
-              >
-                <ShieldCheck className={`w-4 h-4 text-purple-200 ${isResequencing ? 'animate-spin' : ''}`} />
-                <span>{isResequencing ? 'Re-sequencing...' : '🔢 Fix Order Series'}</span>
-              </button>
-
-              <button
-                onClick={handleClearAllOrdersRequest}
-                className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 font-bold text-xs shadow-md flex items-center gap-2 transition cursor-pointer"
-                title="Clear all order data to replace with new data"
-              >
-                <Trash2 className="w-4 h-4 text-rose-400" />
-                <span>Clear All Data ({orders.length})</span>
-              </button>
-            </>
+            <button
+              onClick={() => setIsResequenceModalOpen(true)}
+              disabled={isResequencing}
+              className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 border border-purple-400/30 text-white font-bold text-xs shadow-md shadow-purple-950/50 flex items-center gap-2 transition cursor-pointer"
+              title="Fix and re-number order sequence cleanly"
+            >
+              <ShieldCheck className={`w-4 h-4 text-purple-200 ${isResequencing ? 'animate-spin' : ''}`} />
+              <span>{isResequencing ? 'Re-sequencing...' : '🔢 Fix Order Series'}</span>
+            </button>
           )}
 
           {onOpenVaultModal && (
@@ -891,15 +869,6 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
             <span className="text-xs text-slate-400 font-medium hidden sm:inline">
               Newest first • Click to edit
             </span>
-            {orders.length > 0 && (
-              <button
-                onClick={handleClearAllOrdersRequest}
-                className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                <span>Clear All ({orders.length})</span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -1033,45 +1002,6 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
             setEditingOrder(null);
           }}
         />
-      )}
-
-      {/* Clear All Orders Modal */}
-      {isClearConfirmOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#101426] border border-rose-900/60 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl">
-                <Trash2 className="w-6 h-6 text-rose-500" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Delete All Orders?</h3>
-                <p className="text-xs text-rose-300/80">Permanent action • Cannot be undone</p>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Are you sure you want to permanently delete all <strong className="text-rose-400 font-extrabold">{orders.length} orders</strong> from the live database and system?
-            </p>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsClearConfirmOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmClearAll}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-900/40 flex items-center gap-2 transition"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Yes, Clear All Orders ({orders.length})</span>
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Resequence / Fix Order Series Modal */}

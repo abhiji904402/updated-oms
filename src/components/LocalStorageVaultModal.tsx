@@ -31,7 +31,7 @@ interface LocalStorageVaultModalProps {
 }
 
 export const LocalStorageVaultModal: React.FC<LocalStorageVaultModalProps> = ({ isOpen, onClose }) => {
-  const { orders, importOrders, clearAllOrders } = useOMS();
+  const { orders, importOrders } = useOMS();
   const [snapshots, setSnapshots] = useState<StorageSnapshot[]>([]);
   const [snapshotLabel, setSnapshotLabel] = useState('');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);

@@ -265,7 +265,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Failed to parse saved orders', e);
       }
     }
-    return INITIAL_ORDERS;
+    return [];
   });
 
   // Delivery Partners State
@@ -486,9 +486,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return uniqueOrders;
   };
 
-  const hasInitialSyncedRef = useRef(false);
-
-  // Fast offline hydration from IndexedDB on startup
+  // Fast offline hydration from IndexedDB on startup (provides instant 0ms initial render)
   useEffect(() => {
     // Check both local vault key and legacy IDB key
     idbGet<Order[]>(LOCAL_VAULT_KEYS.ACTIVE_ORDERS).then((vaultOrders) => {
@@ -496,7 +494,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         vaultOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
         setOrders((current) => {
           if (!current || current.length === 0) return vaultOrders;
-          return mergeAndDeduplicateOrders(current, vaultOrders);
+          return current;
         });
       } else {
         idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((legacyOrders) => {
@@ -504,7 +502,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
             setOrders((current) => {
               if (!current || current.length === 0) return legacyOrders;
-              return mergeAndDeduplicateOrders(current, legacyOrders);
+              return current;
             });
           }
         }).catch(() => {});
@@ -512,7 +510,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // 1. Real-time Firestore Sync for Orders (Instant Live Sync across all devices)
+  // 1. Real-time Firestore Sync for Orders (Authoritative Live Sync across all devices, Vercel, & AI Studio)
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
@@ -522,32 +520,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           firestoreOrders.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        const currentLocal = ordersRef.current || [];
-
-        // On first snapshot, if Firestore is empty but local storage has orders, push them up to Firestore
-        if (!hasInitialSyncedRef.current) {
-          hasInitialSyncedRef.current = true;
-          const firestoreIdSet = new Set(firestoreOrders.map((o) => o.id));
-          const missingInFirestore = currentLocal.filter((o) => !firestoreIdSet.has(o.id));
-
-          if (missingInFirestore.length > 0) {
-            // Use batch write to push up missing orders efficiently in chunks of 100
-            for (let i = 0; i < missingInFirestore.length; i += 100) {
-              const chunk = missingInFirestore.slice(i, i + 100);
-              const batch = writeBatch(db);
-              chunk.forEach((ord) => {
-                const clean = sanitizeOrderForFirestore(ord);
-                batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-              });
-              batch.commit().catch((err) => {
-                handleFirestoreWriteError(err, 'push local orders batch to firestore');
-              });
-            }
-            // Combine with missing orders temporarily until snapshot re-fires
-            firestoreOrders.push(...missingInFirestore);
-          }
-        }
-
         // Sort descending by order_number
         firestoreOrders.sort((a, b) => {
           const numA = Number(a.order_number) || 0;
@@ -556,9 +528,13 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         });
 
+        // Firestore is the authoritative central source of truth:
+        // Automatically updates local React state, IndexedDB, and localStorage across all open devices!
         setOrders(firestoreOrders);
         ordersRef.current = firestoreOrders;
         persistToLocalVault(firestoreOrders, 'Firestore Live Snapshot');
+        safeSaveOrdersToLocalStorage(firestoreOrders);
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
       },
       (err) => {
         handleFirestoreWriteError(err, 'orders snapshot sync');
@@ -580,7 +556,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (list.length > 0) {
           setPartners(list);
           idbSet(LOCAL_STORAGE_KEY_PARTNERS, list).catch(() => {});
-        } else if (!snapshot.metadata.fromCache) {
+          safeLocalStorageSet(LOCAL_STORAGE_KEY_PARTNERS, JSON.stringify(list));
+        } else if (!snapshot.metadata.fromCache && snapshot.empty) {
           const seeded = localStorage.getItem('delivery_partners_seeded_v2');
           if (!seeded) {
             safeLocalStorageSet('delivery_partners_seeded_v2', 'true');
@@ -611,6 +588,46 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (list.length > 0) {
           setOutletLocations(list);
           idbSet(LOCAL_STORAGE_KEY_OUTLETS, list).catch(() => {});
+          safeLocalStorageSet(LOCAL_STORAGE_KEY_OUTLETS, JSON.stringify(list));
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, []);
+
+  // 4. Real-time Firestore Sync for System Settings (Sheet Config & Passwords live sync across Vercel & AI Studio)
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'system_settings', 'sheet_config'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as Partial<SheetConfig>;
+          if (data && (data.sheet_url !== undefined || data.auto_sync !== undefined)) {
+            setSheetConfig((prev) => ({ ...prev, ...data }));
+          }
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'system_settings', 'passwords'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as Partial<AuthPasswords>;
+          if (data && data.admin) {
+            setAuthPasswords((prev) => ({
+              admin: data.admin || prev.admin,
+              outlets: { ...prev.outlets, ...(data.outlets || {}) },
+              defaultOutletPassword: data.defaultOutletPassword || prev.defaultOutletPassword,
+              partners: { ...prev.partners, ...(data.partners || {}) },
+              defaultPartnerPassword: data.defaultPartnerPassword || prev.defaultPartnerPassword,
+            }));
+          }
         }
       },
       () => {}
@@ -698,21 +715,33 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const updateAdminPassword = useCallback((newPass: string) => {
-    setAuthPasswords((prev) => ({ ...prev, admin: newPass }));
+    setAuthPasswords((prev) => {
+      const next = { ...prev, admin: newPass };
+      setDoc(doc(db, 'system_settings', 'passwords'), next, { merge: true }).catch(() => {});
+      return next;
+    });
   }, []);
 
   const updateOutletPassword = useCallback((outletName: string, newPass: string) => {
-    setAuthPasswords((prev) => ({
-      ...prev,
-      outlets: { ...prev.outlets, [outletName]: newPass }
-    }));
+    setAuthPasswords((prev) => {
+      const next = {
+        ...prev,
+        outlets: { ...prev.outlets, [outletName]: newPass }
+      };
+      setDoc(doc(db, 'system_settings', 'passwords'), next, { merge: true }).catch(() => {});
+      return next;
+    });
   }, []);
 
   const updatePartnerPassword = useCallback((partnerId: string, newPass: string) => {
-    setAuthPasswords((prev) => ({
-      ...prev,
-      partners: { ...prev.partners, [partnerId]: newPass }
-    }));
+    setAuthPasswords((prev) => {
+      const next = {
+        ...prev,
+        partners: { ...prev.partners, [partnerId]: newPass }
+      };
+      setDoc(doc(db, 'system_settings', 'passwords'), next, { merge: true }).catch(() => {});
+      return next;
+    });
   }, []);
 
   const verifyPassword = useCallback(
@@ -1152,6 +1181,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const next = prev.filter((o) => o.id !== id);
       ordersRef.current = next;
       persistToLocalVault(next, `Delete Order`);
+      safeSaveOrdersToLocalStorage(next);
+      idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
       return next;
     });
 
@@ -1162,8 +1193,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearAllOrders = useCallback(async () => {
     // 1. Immediately update UI state & local persistent storages
     setOrders([]);
+    ordersRef.current = [];
     setSelectedOrderIds([]);
     persistToLocalVault([], 'Clear All Orders');
+    safeSaveOrdersToLocalStorage([]);
+    idbSet(LOCAL_STORAGE_KEY_ORDERS, []).catch(() => {});
 
     // 2. Perform atomic batch delete on Firestore collection
     try {
@@ -1472,7 +1506,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [showNotification]);
 
   const updateSheetConfig = useCallback((updates: Partial<SheetConfig>) => {
-    setSheetConfig((prev) => ({ ...prev, ...updates }));
+    setSheetConfig((prev) => {
+      const next = { ...prev, ...updates };
+      setDoc(doc(db, 'system_settings', 'sheet_config'), next, { merge: true }).catch(() => {});
+      return next;
+    });
     showNotification('Updated Google Sheets Integration configuration.');
   }, [showNotification]);
 
