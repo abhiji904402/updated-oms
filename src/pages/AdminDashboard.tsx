@@ -117,7 +117,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
 
   // Tab definitions
   const tabs: { id: DashboardTab; label: string; icon: React.FC<{ className?: string }>; count: number | string; color: string }[] = [
-    { id: 'all', label: 'ALL ORDERS', icon: LayoutDashboard, count: counts.all, color: 'text-purple-300' },
     { id: 'today', label: 'TODAY ORDERS', icon: Calendar, count: counts.today, color: 'text-purple-400' },
     { id: 'tomorrow', label: 'TOMORROW ORDERS', icon: CalendarDays, count: counts.tomorrow, color: 'text-indigo-400' },
     { id: 'future', label: 'FUTURE ORDERS', icon: Clock3, count: counts.future, color: 'text-blue-400' },
@@ -131,7 +130,8 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     },
     { id: 'cancelled', label: 'CANCELLED', icon: Ban, count: counts.cancelled, color: 'text-rose-400' },
     { id: 'missed', label: 'MISSED', icon: AlertTriangle, count: counts.missed, color: 'text-orange-400' },
-    { id: 'on_hold', label: 'ON HOLD', icon: PauseCircle, count: counts.on_hold, color: 'text-slate-400' }
+    { id: 'on_hold', label: 'ON HOLD', icon: PauseCircle, count: counts.on_hold, color: 'text-slate-400' },
+    { id: 'all', label: 'ALL ORDERS', icon: LayoutDashboard, count: counts.all, color: 'text-purple-300' }
   ];
 
   // Filtered Orders Logic based on Dashboard Tabs + Outlet / Search filters

@@ -119,13 +119,13 @@ export const Header = React.memo<HeaderProps>(({
         <div className="flex items-center gap-2.5 w-full lg:w-auto flex-1">
           <button
             onClick={onToggleMobileMenu}
-            className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition shrink-0"
+            className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition shrink-0"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Mobile Logo Badge */}
-          <div className="flex items-center gap-2 lg:hidden shrink-0">
+          {/* Logo Badge */}
+          <div className="flex items-center gap-2 shrink-0">
             <img
               src="/app-icon.svg"
               alt="Broomies Logo"

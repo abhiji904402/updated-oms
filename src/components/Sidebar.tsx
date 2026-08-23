@@ -54,18 +54,18 @@ export const Sidebar = React.memo<SidebarProps>(({
 
   return (
     <>
-      {/* Mobile Backdrop */}
+      {/* Backdrop */}
       {isOpenMobile && (
         <div
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40"
           onClick={() => setIsOpenMobile(false)}
         />
       )}
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed lg:static top-0 left-0 h-full w-64 bg-zinc-950 border-r border-zinc-800 z-50 flex flex-col justify-between transition-transform duration-300 ease-in-out shrink-0 ${
-          isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed top-0 left-0 h-full w-64 bg-zinc-950 border-r border-zinc-800 z-50 flex flex-col justify-between transition-transform duration-300 ease-in-out shrink-0 ${
+          isOpenMobile ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full justify-between">
@@ -89,7 +89,7 @@ export const Sidebar = React.memo<SidebarProps>(({
               </div>
               <button
                 onClick={() => setIsOpenMobile(false)}
-                className="lg:hidden text-slate-400 hover:text-white p-1"
+                className="text-slate-400 hover:text-white p-1"
               >
                 <X className="w-5 h-5" />
               </button>
