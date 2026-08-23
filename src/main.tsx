@@ -2,7 +2,6 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { APIProvider } from '@vis.gl/react-google-maps';
 
 // Declare global variable for early beforeinstallprompt capture
 declare global {
@@ -29,7 +28,6 @@ if ('serviceWorker' in navigator) {
         console.error('❌ ServiceWorker registration failed:', err);
       });
   };
-
   if (document.readyState === 'complete') {
     registerSW();
   } else {
@@ -39,9 +37,7 @@ if ('serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
-      <App />
-    </APIProvider>
+    <App />
   </StrictMode>,
 );
 

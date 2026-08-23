@@ -24,7 +24,10 @@ const connectDB = async () => {
     return cachedDb;
   }
   try {
-    cachedDb = await mongoose.connect(MONGODB_URI);
+    cachedDb = await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
     console.log('Connected to MongoDB via Vercel Serverless');
     return cachedDb;
   } catch (err) {
@@ -216,6 +219,22 @@ apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// REMOVED app.use('/', apiRouter) which was causing static files to return 404
 app.use('/api', apiRouter);
+
+// Support Vercel serverless where the route is passed without /api sometimes
+// but ONLY if the route looks like a database call (orders, delivery_partners, etc.)
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith('/orders') || 
+    req.path.startsWith('/delivery_partners') || 
+    req.path.startsWith('/outlet_locations') || 
+    req.path.startsWith('/system_settings')
+  ) {
+    apiRouter(req, res, next);
+  } else {
+    next();
+  }
+});
 
 export default app;

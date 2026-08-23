@@ -9,7 +9,6 @@ import {
   Zap,
   Navigation,
 } from 'lucide-react';
-import { Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import { DeliveryPartner } from '../types';
 import { useOMS } from '../lib/store';
 import { SetOutletLocationModal } from './SetOutletLocationModal';
@@ -36,12 +35,6 @@ const MapController = ({
   centerLat: number; 
   centerLng: number;
 }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (map) {
-      map.panTo({ lat: centerLat, lng: centerLng });
-    }
-  }, [map, centerLat, centerLng]);
   return null;
 };
 
@@ -174,51 +167,11 @@ export const RiderLocationMapModal: React.FC<RiderLocationMapModalProps> = ({
             </div>
 
             {/* Google Map Node */}
-            <div className="relative z-10 my-3 flex-1 border border-indigo-950 rounded-2xl overflow-hidden shadow-2xl min-h-[320px] bg-slate-950">
-              <Map
-                mapId="DEMO_MAP_ID"
-                defaultZoom={12.5}
-                defaultCenter={{ lat: defaultLat, lng: defaultLng }}
-                disableDefaultUI={true}
-                zoomControl={true}
-                internalUsageAttributionIds={["gmp_mcp_codeassist_v1_aistudio"]}
-                style={{ width: '100%', height: '100%' }}
-              >
-                <MapController centerLat={defaultLat} centerLng={defaultLng} />
-
-                {outlets.map(outlet => (
-                  <AdvancedMarker
-                    key={outlet.name}
-                    position={{ lat: outlet.lat, lng: outlet.lng }}
-                    title={outlet.name}
-                  >
-                    <div style={{ backgroundColor: outlet.color }} className="px-2.5 py-1 rounded-xl text-slate-950 font-black text-[11px] shadow-2xl flex items-center gap-1 border-2 border-white">
-                      <span>🏬</span>
-                      <span>{outlet.name}</span>
-                    </div>
-                  </AdvancedMarker>
-                ))}
-
-                {partners.map(p => {
-                  if (!p.location) return null;
-                  return (
-                    <AdvancedMarker
-                      key={p.id}
-                      position={{ lat: p.location.lat, lng: p.location.lng }}
-                      title={p.name}
-                    >
-                      <div className="flex flex-col items-center">
-                        <div className="bg-[#0b0e1e] border-2 border-indigo-500 text-indigo-400 w-8 h-8 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.5)]">
-                          <Truck className="w-4 h-4" />
-                        </div>
-                        <div className="bg-[#0b0e1e]/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-1 border border-indigo-500/50 whitespace-nowrap">
-                          {p.name}
-                        </div>
-                      </div>
-                    </AdvancedMarker>
-                  );
-                })}
-              </Map>
+            <div className="relative z-10 my-3 flex-1 border border-indigo-950 rounded-2xl overflow-hidden shadow-2xl min-h-[320px] bg-slate-950 flex items-center justify-center text-slate-500">
+              <div className="text-center">
+                <Compass className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Map View Disabled</p>
+              </div>
             </div>
 
             {activePartner && (
