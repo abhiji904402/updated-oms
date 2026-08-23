@@ -39,8 +39,8 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 ];
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
-import { db } from './firebase';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebase';
+import { db } from './firebaseMock';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebaseMock';
 
 export interface AuthPasswords {
   admin: string;
@@ -348,7 +348,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleFirestoreWriteError = useCallback((err: any, operationName = 'write') => {
     const errStr = String(err?.message || err || '');
     const isQuota = errStr.includes('resource-exhausted') || errStr.includes('Quota exceeded') || errStr.includes('Quota limit');
-    const isUnavailable = err?.code === 'unavailable' || errStr.includes('unavailable') || errStr.includes('could not be completed') || errStr.includes('Could not reach Cloud Firestore');
+    const isUnavailable = err?.code === 'unavailable' || errStr.includes('unavailable') || errStr.includes('could not be completed') || errStr.includes('Could not reach Cloud Firestore') || errStr.includes('Failed to fetch');
 
     if (isUnavailable) {
       // Standard Firestore offline / reconnecting state - operations persist silently in IndexedDB / IndexedDB
@@ -358,7 +358,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isQuota) {
       quotaExceededRef.current = true;
       setIsFirestoreQuotaExceeded(true);
-      showNotification("Firebase Free Daily Quota Exceeded! Live sync paused.");
       // Silently fall back to IndexedDB without showing annoying popup banners to the user
       console.log(`[IndexedDB Active] Operation "${operationName}" persisted 100% safely in local storage.`);
     } else {
