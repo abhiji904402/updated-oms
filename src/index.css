@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "maplibre-gl/dist/maplibre-gl.css";
 
 /* Universal Crisp Text & Subpixel Anti-aliasing Rules across all Browsers */
 :root, html, body, button, input, select, textarea {
