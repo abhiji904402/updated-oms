@@ -358,6 +358,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isQuota) {
       quotaExceededRef.current = true;
       setIsFirestoreQuotaExceeded(true);
+      showNotification("Firebase Free Daily Quota Exceeded! Live sync paused.");
       // Silently fall back to IndexedDB without showing annoying popup banners to the user
       console.log(`[IndexedDB Active] Operation "${operationName}" persisted 100% safely in local storage.`);
     } else {
