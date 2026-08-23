@@ -29,7 +29,7 @@ export async function setDoc(docRef: { collection: string, id: string }, data: a
     
     setTimeout(() => {
       pendingWrites.delete(cacheKey);
-    }, 2000);
+    }, 30000);
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -50,7 +50,7 @@ export async function deleteDoc(docRef: { collection: string, id: string }) {
     
     setTimeout(() => {
       pendingWrites.delete(cacheKey);
-    }, 2000);
+    }, 30000);
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
