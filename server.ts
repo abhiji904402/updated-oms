@@ -157,7 +157,10 @@ app.post('/api/:collection/:id', async (req, res) => {
     if (req.params.collection === 'system_settings') {
       await Model.findOneAndUpdate({ _id: req.params.id }, { data: req.body }, { upsert: true });
     } else {
-      await Model.findOneAndUpdate({ id: req.params.id }, { $set: req.body }, { upsert: true });
+      const updateData = { ...req.body };
+      delete updateData._id;
+      delete updateData.__v;
+      await Model.findOneAndUpdate({ id: req.params.id }, { $set: updateData }, { upsert: true });
     }
     res.json({ success: true });
   } catch (error) {
@@ -179,11 +182,25 @@ app.put('/api/:collection/:id', async (req, res) => {
       // Fetch existing and merge
       const existing = await Model.findOne({ id: req.params.id }).lean();
       const newData = { ...(existing || {}), ...req.body };
-      await Model.findOneAndUpdate({ id: req.params.id }, newData, { upsert: true });
+      delete newData._id; // NEVER try to update _id
+      delete newData.__v; 
+      await Model.findOneAndUpdate({ id: req.params.id }, { $set: newData }, { upsert: true });
     }
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/:collection', async (req, res) => {
+  try {
+    const Model = models[req.params.collection];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
+    
+    await Model.deleteMany({});
+    res.json({ success: true, message: 'All documents deleted' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

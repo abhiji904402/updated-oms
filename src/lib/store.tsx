@@ -1348,16 +1348,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Perform atomic batch delete on Firestore collection
     try {
-      const snap = await getDocs(collection(db, 'orders'));
-      if (!snap.empty) {
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += 200) {
-          const chunk = docs.slice(i, i + 200);
-          const batch = writeBatch(db);
-          chunk.forEach((d) => batch.delete(d.ref));
-          await batch.commit();
-        }
-      }
+      await fetch('/api/orders', { method: 'DELETE' });
       showNotification('🗑️ All orders permanently deleted from Cloud & Local Vault! Ready for fresh upload.');
     } catch (err) {
       handleFirestoreWriteError(err, 'clear orders');

@@ -18,21 +18,31 @@ export async function setDoc(docRef: { collection: string, id: string }, data: a
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
-  if (!res.ok) throw new Error(`API error: ${res.statusText}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+  }
 }
 
 export async function deleteDoc(docRef: { collection: string, id: string }) {
   const res = await fetch(`${API_BASE}/${docRef.collection}/${docRef.id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`API error: ${res.statusText}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+  }
 }
 
 export async function getDocs(collRef: { collection: string }) {
   const res = await fetch(`${API_BASE}/${collRef.collection}`);
-  if (!res.ok) throw new Error(`API error: ${res.statusText}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+  }
   const data = await res.json();
   return {
     docs: data.map((d: any) => ({
       id: d.id || d._id,
+      ref: { collection: collRef.collection, id: d.id || d._id },
       data: () => d
     })),
     size: data.length,
@@ -50,14 +60,16 @@ export function writeBatch(db: any) {
       operations.push({ action: 'delete', collection: docRef.collection, id: docRef.id });
     },
     commit: async () => {
-      for (const op of operations) {
+      const promises = operations.map(op => {
          if (op.action === 'set') {
-           await setDoc({collection: op.collection, id: op.id}, op.data, op.options).catch(e => console.error(e));
+           return setDoc({collection: op.collection, id: op.id}, op.data, op.options).catch(e => console.error(e));
          }
          else if (op.action === 'delete') {
-           await deleteDoc({collection: op.collection, id: op.id}).catch(e => console.error(e));
+           return deleteDoc({collection: op.collection, id: op.id}).catch(e => console.error(e));
          }
-      }
+         return Promise.resolve();
+      });
+      await Promise.all(promises);
     }
   };
 }
@@ -83,7 +95,7 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
          if (res.ok) {
            const data = await res.json();
            callback({
-             docs: data.map((d: any) => ({ id: d.id || d._id, data: () => d }))
+             docs: data.map((d: any) => ({ id: d.id || d._id, ref: { collection: ref.collection, id: d.id || d._id }, data: () => d }))
            });
          }
       }
