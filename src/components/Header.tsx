@@ -24,7 +24,6 @@ interface HeaderProps {
   onOpenAddModal: () => void;
   onOpenPasswordModal?: () => void;
   onOpenSheetModal?: () => void;
-  onOpenVaultModal?: () => void;
 }
 
 export const Header = React.memo<HeaderProps>(({
@@ -32,7 +31,6 @@ export const Header = React.memo<HeaderProps>(({
   onOpenAddModal,
   onOpenPasswordModal,
   onOpenSheetModal,
-  onOpenVaultModal
 }) => {
   const {
     orders,
@@ -233,30 +231,6 @@ export const Header = React.memo<HeaderProps>(({
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             </button>
           )}
-
-          {/* Local Storage Zero-Loss Vault Button */}
-          {session.role !== 'delivery' && onOpenVaultModal && (
-            <button
-              onClick={onOpenVaultModal}
-              title="Local Disk Vault & 100% Zero Data-Loss Backup (IndexedDB + Storage Folders). Click to download or restore backup."
-              className="px-3 py-1.5 rounded-xl border transition text-xs font-bold flex items-center gap-1.5 shadow-sm bg-purple-950/70 hover:bg-purple-900/80 border-purple-500/50 text-purple-300"
-            >
-              <HardDrive className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden sm:inline">LOCAL VAULT</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-purple-800 text-[10px] text-purple-200">
-                {orders.length}
-              </span>
-            </button>
-          )}
-
-          {/* Rider Mode Indicator Badge */}
-          {session.role === 'delivery' && (
-            <div className="px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-800/60 text-purple-300 text-xs font-extrabold flex items-center gap-1.5">
-              <span>🛵 Rider Mode</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
-          )}
-
 
           {/* Export CSV (Admin & Outlet only) */}
           {session.role !== 'delivery' && (

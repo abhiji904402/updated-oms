@@ -39,7 +39,6 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 ];
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
-import { persistToLocalVault, LOCAL_VAULT_KEYS } from './localStorageVault';
 import { db } from './firebaseMock';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebaseMock';
 
@@ -256,7 +255,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Orders State
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem(LOCAL_VAULT_KEYS.ACTIVE_ORDERS) || localStorage.getItem(LOCAL_STORAGE_KEY_ORDERS);
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY_ORDERS);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -352,15 +351,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isUnavailable = err?.code === 'unavailable' || errStr.includes('unavailable') || errStr.includes('could not be completed') || errStr.includes('Could not reach Cloud Firestore');
 
     if (isUnavailable) {
-      // Standard Firestore offline / reconnecting state - operations persist silently in Local Vault / IndexedDB
+      // Standard Firestore offline / reconnecting state - operations persist silently in IndexedDB / IndexedDB
       return;
     }
     
     if (isQuota) {
       quotaExceededRef.current = true;
       setIsFirestoreQuotaExceeded(true);
-      // Silently fall back to Local Vault without showing annoying popup banners to the user
-      console.log(`[Local Vault Active] Operation "${operationName}" persisted 100% safely in local storage.`);
+      // Silently fall back to IndexedDB without showing annoying popup banners to the user
+      console.log(`[IndexedDB Active] Operation "${operationName}" persisted 100% safely in local storage.`);
     } else {
       console.warn(`Firestore ${operationName} status:`, err);
     }
@@ -493,15 +492,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Fast offline hydration from IndexedDB on startup (provides instant 0ms initial render)
   useEffect(() => {
-    // Check both local vault key and legacy IDB key
-    idbGet<Order[]>(LOCAL_VAULT_KEYS.ACTIVE_ORDERS).then((vaultOrders) => {
-      if (vaultOrders && Array.isArray(vaultOrders) && vaultOrders.length > 0) {
-        vaultOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
-        setOrders((current) => {
-          if (!current || current.length === 0) return vaultOrders;
-          return current;
-        });
-      } else {
+    
         idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((legacyOrders) => {
           if (legacyOrders && Array.isArray(legacyOrders) && legacyOrders.length > 0) {
             legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
@@ -516,8 +507,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               return current;
             });
           }
-        }).catch(() => {});
-      }
+        
     }).catch(() => {});
   }, []);
 
@@ -550,7 +540,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const initialList = [...INITIAL_ORDERS];
             setOrders(initialList);
             ordersRef.current = initialList;
-            persistToLocalVault(initialList, 'Initial Orders Seed');
             safeSaveOrdersToLocalStorage(initialList);
             idbSet(LOCAL_STORAGE_KEY_ORDERS, initialList).catch(() => {});
             const batch = writeBatch(db);
@@ -575,7 +564,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Automatically updates local React state, IndexedDB, and localStorage across all open devices!
         setOrders(firestoreOrders);
         ordersRef.current = firestoreOrders;
-        persistToLocalVault(firestoreOrders, 'Firestore Live Snapshot');
         safeSaveOrdersToLocalStorage(firestoreOrders);
         idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
       },
@@ -1052,7 +1040,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setOrders(formatted);
       ordersRef.current = formatted;
-      persistToLocalVault(formatted, `Google Sheet Live Pull (${formatted.length} orders)`);
       safeSaveOrdersToLocalStorage(formatted);
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formatted).catch(() => {});
       logSync(formatted.length, 'google_sheet_pull', true);
@@ -1093,7 +1080,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextOrders = [newOrder, ...currentOrders.filter((o) => o.id !== newOrder.id)];
     ordersRef.current = nextOrders;
     setOrders(nextOrders);
-    persistToLocalVault(nextOrders, `Create Order #${newOrderNumber}`);
 
     // Direct write to Firestore
     setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
@@ -1171,7 +1157,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (overwrite) {
       setOrders(formattedOrders);
       ordersRef.current = formattedOrders;
-      persistToLocalVault(formattedOrders, `Import ${formattedOrders.length} Orders (Overwrite)`);
       safeSaveOrdersToLocalStorage(formattedOrders);
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formattedOrders).catch(() => {});
 
@@ -1206,7 +1191,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const merged = mergeAndDeduplicateOrders(existingOrders, formattedOrders);
       setOrders(merged);
       ordersRef.current = merged;
-      persistToLocalVault(merged, `Import ${formattedOrders.length} Orders`);
       safeSaveOrdersToLocalStorage(merged);
       idbSet(LOCAL_STORAGE_KEY_ORDERS, merged).catch(() => {});
 
@@ -1240,7 +1224,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders(resequenced);
     ordersRef.current = resequenced;
-    persistToLocalVault(resequenced, 'Resequence Orders');
 
     // Save to Firestore in chunks without modifying delivery_date
     try {
@@ -1308,7 +1291,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.map((ord) => (ord.id === id ? updated : ord));
       ordersRef.current = next;
-      persistToLocalVault(next, `Update Order #${updated.order_number}`);
       return next;
     });
 
@@ -1326,7 +1308,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.filter((o) => o.id !== id);
       ordersRef.current = next;
-      persistToLocalVault(next, `Delete Order`);
       safeSaveOrdersToLocalStorage(next);
       idbSet(LOCAL_STORAGE_KEY_ORDERS, next).catch(() => {});
       return next;
@@ -1342,14 +1323,13 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders([]);
     ordersRef.current = [];
     setSelectedOrderIds([]);
-    persistToLocalVault([], 'Clear All Orders');
     safeSaveOrdersToLocalStorage([]);
     idbSet(LOCAL_STORAGE_KEY_ORDERS, []).catch(() => {});
 
     // 2. Perform atomic batch delete on Firestore collection
     try {
       await fetch('/api/orders', { method: 'DELETE' });
-      showNotification('🗑️ All orders permanently deleted from Cloud & Local Vault! Ready for fresh upload.');
+      showNotification('🗑️ All orders permanently deleted from Cloud & IndexedDB! Ready for fresh upload.');
     } catch (err) {
       handleFirestoreWriteError(err, 'clear orders');
       showNotification('All orders cleared locally!');
@@ -1410,7 +1390,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.map((ord) => (ord.id === id ? updated : ord));
       ordersRef.current = next;
-      persistToLocalVault(next, `Status -> ${status}`);
       return next;
     });
 
@@ -1476,7 +1455,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) => {
       const next = prev.map((o) => (o.id === id ? updatedOrder : o));
       ordersRef.current = next;
-      persistToLocalVault(next, `Delivered Order #${updatedOrder.order_number}`);
       return next;
     });
 
@@ -1538,7 +1516,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return ord;
       });
       ordersRef.current = next;
-      persistToLocalVault(next, `Confirm Rider Delivery`);
       return next;
     });
 

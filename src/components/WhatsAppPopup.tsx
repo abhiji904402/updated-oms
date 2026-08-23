@@ -49,9 +49,10 @@ export function formatWhatsAppPhone(mobileNumber?: string): string {
 }
 
 export const WhatsAppPopup: React.FC<WhatsAppPopupProps> = ({ order, onClose }) => {
-  if (!order) return null;
+  
 
-  const [messageText, setMessageText] = useState(() => buildWhatsAppConfirmationMessage(order));
+  const [messageText, setMessageText] = useState(() => order ? buildWhatsAppConfirmationMessage(order) : "");
+
 
   useEffect(() => {
     if (order) {
@@ -59,6 +60,7 @@ export const WhatsAppPopup: React.FC<WhatsAppPopupProps> = ({ order, onClose }) 
     }
   }, [order]);
 
+  if (!order) return null;
   const cleanPhone = formatWhatsAppPhone(order.mobile_number);
 
   const handleSend = () => {

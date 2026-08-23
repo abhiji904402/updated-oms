@@ -56,7 +56,6 @@ interface AdminDashboardProps {
   onOpenDeliveryModal: (order: Order) => void;
   onOpenPasswordModal?: () => void;
   onOpenSheetModal?: () => void;
-  onOpenVaultModal?: () => void;
 }
 
 export const AdminDashboard = React.memo<AdminDashboardProps>(({
@@ -65,7 +64,6 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
   onOpenDeliveryModal,
   onOpenPasswordModal,
   onOpenSheetModal,
-  onOpenVaultModal
 }) => {
   const {
     orders = [],
