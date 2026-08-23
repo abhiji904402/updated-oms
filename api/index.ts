@@ -126,6 +126,9 @@ apiRouter.get('/:collection', async (req, res) => {
     const Model = models[req.params.collection];
     if (!Model) return res.status(404).json({ error: 'Collection not found' });
     const data = await Model.find({}).lean();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -140,6 +143,9 @@ apiRouter.get('/:collection/:id', async (req, res) => {
       ? { _id: req.params.id }
       : { id: req.params.id };
     const doc = await Model.findOne(query).lean();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     if (!doc) return res.status(404).json({});
     if (req.params.collection === 'system_settings') {
       res.json(doc.data || doc);

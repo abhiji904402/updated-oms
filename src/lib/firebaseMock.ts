@@ -85,14 +85,19 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
   const poll = async () => {
     if (isCancelled) return;
     try {
+      const timestamp = new Date().getTime();
       if (ref.id) {
-         const res = await fetch(`${API_BASE}/${ref.collection}/${ref.id}`);
+         const res = await fetch(`${API_BASE}/${ref.collection}/${ref.id}?t=${timestamp}`, {
+           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+         });
          if (res.ok) {
            const data = await res.json();
            callback({ id: ref.id, exists: () => (data && Object.keys(data).length > 0), data: () => data });
          }
       } else {
-         const res = await fetch(`${API_BASE}/${ref.collection}`);
+         const res = await fetch(`${API_BASE}/${ref.collection}?t=${timestamp}`, {
+           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+         });
          if (res.ok) {
            const data = await res.json();
            const docs = data.map((d: any) => ({
@@ -116,7 +121,7 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
       }
       if (onError) onError(e);
     }
-    if (!isCancelled) setTimeout(poll, 8000); // 8 seconds to prevent excessive load
+    if (!isCancelled) setTimeout(poll, 1500); // 1.5 seconds for near real-time sync without caching issues
   };
   poll();
   return () => { isCancelled = true; };
