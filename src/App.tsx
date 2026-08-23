@@ -101,7 +101,6 @@ function OMSAppContent() {
             onToggleMobileMenu={toggleMobileMenu}
             onOpenAddModal={openAddModal}
             onOpenPasswordModal={openPasswordModal}
-            onOpenSheetModal={openSheetModal}
           />
 
           {/* Instant Active Page Rendering */}

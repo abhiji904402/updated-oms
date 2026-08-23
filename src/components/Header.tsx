@@ -13,7 +13,6 @@ import {
   Filter,
   Sparkles,
   Calendar,
-  LogOut,
   Key,
   X,
   HardDrive
@@ -23,19 +22,16 @@ interface HeaderProps {
   onToggleMobileMenu: () => void;
   onOpenAddModal: () => void;
   onOpenPasswordModal?: () => void;
-  onOpenSheetModal?: () => void;
 }
 
 export const Header = React.memo<HeaderProps>(({
   onToggleMobileMenu,
   onOpenAddModal,
   onOpenPasswordModal,
-  onOpenSheetModal,
 }) => {
   const {
     orders,
     session,
-    logout,
     searchQuery,
     setSearchQuery,
     selectedOutletFilter,
@@ -217,21 +213,8 @@ export const Header = React.memo<HeaderProps>(({
           </div>
         )}
 
-        {/* Right Section: Export Actions, Password Settings & Logout */}
+        {/* Right Section: Export Actions & Password Settings */}
         <div className="flex items-center justify-end gap-2 w-full lg:w-auto">
-          {/* 24/7 Live Cloud Sync Indicator Badge (Admin & Outlet) */}
-          {session.role !== 'delivery' && (
-            <button
-              onClick={onOpenSheetModal}
-              title="Real-time Live Cloud Sync is ACTIVE across all devices and Google Sheets. Click to configure."
-              className="px-3 py-1.5 rounded-xl border transition text-xs font-bold flex items-center gap-1.5 shadow-sm bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-500/50 text-emerald-300"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>LIVE CLOUD SYNC</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            </button>
-          )}
-
           {/* Export CSV (Admin & Outlet only) */}
           {session.role !== 'delivery' && (
             <button
@@ -269,16 +252,6 @@ export const Header = React.memo<HeaderProps>(({
               <span className="hidden xl:inline">PDF Report ({filteredHeaderOrders.length})</span>
             </button>
           )}
-
-          {/* Logout Button */}
-          <button
-            onClick={logout}
-            title="Logout"
-            className="p-2 rounded-xl bg-rose-950/80 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 hover:text-white transition text-xs font-bold flex items-center gap-1.5"
-          >
-            <LogOut className="w-4 h-4 text-rose-400" />
-            <span className="hidden sm:inline">Logout</span>
-          </button>
         </div>
       </div>
     </header>
