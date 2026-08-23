@@ -112,6 +112,10 @@ const models: Record<string, mongoose.Model<any>> = {
 // --- API ROUTES ---
 const apiRouter = express.Router();
 
+apiRouter.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 apiRouter.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -219,10 +223,6 @@ apiRouter.delete('/:collection/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
-});
-
-apiRouter.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
 });
 
 // REMOVED app.use('/', apiRouter) which was causing static files to return 404

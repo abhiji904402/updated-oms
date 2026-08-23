@@ -2,6 +2,9 @@ const API_BASE = '/api';
 
 export const db = {};
 
+// Simple latency compensation cache
+const pendingWrites = new Map<string, { timestamp: number, data: any | null }>();
+
 export function doc(db: any, collection: string, id: string) {
   return { collection, id };
 }
@@ -13,22 +16,49 @@ export function collection(db: any, name: string) {
 export async function setDoc(docRef: { collection: string, id: string }, data: any, options?: any) {
   const method = options?.merge ? 'PUT' : 'POST';
   const url = `${API_BASE}/${docRef.collection}/${docRef.id}`;
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+  
+  const cacheKey = `${docRef.collection}/${docRef.id}`;
+  pendingWrites.set(cacheKey, { data, timestamp: Date.now() });
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    setTimeout(() => {
+      pendingWrites.delete(cacheKey);
+    }, 2000);
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+    }
+  } catch (e) {
+    pendingWrites.delete(cacheKey);
+    throw e;
   }
 }
 
 export async function deleteDoc(docRef: { collection: string, id: string }) {
-  const res = await fetch(`${API_BASE}/${docRef.collection}/${docRef.id}`, { method: 'DELETE' });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+  const cacheKey = `${docRef.collection}/${docRef.id}`;
+  pendingWrites.set(cacheKey, { data: null, timestamp: Date.now() });
+
+  try {
+    const res = await fetch(`${API_BASE}/${docRef.collection}/${docRef.id}`, { method: 'DELETE' });
+    
+    setTimeout(() => {
+      pendingWrites.delete(cacheKey);
+    }, 2000);
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
+    }
+  } catch (e) {
+    pendingWrites.delete(cacheKey);
+    throw e;
   }
 }
 
@@ -82,6 +112,7 @@ export function disableNetwork() {
 
 export function onSnapshot(ref: any, callback: any, onError?: any) {
   let isCancelled = false;
+  
   const poll = async () => {
     if (isCancelled) return;
     try {
@@ -91,7 +122,16 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
          });
          if (res.ok) {
-           const data = await res.json();
+           let data = await res.json();
+           const cacheKey = `${ref.collection}/${ref.id}`;
+           const pending = pendingWrites.get(cacheKey);
+           if (pending) {
+             if (pending.data === null) {
+               data = null;
+             } else {
+               data = { ...data, ...pending.data };
+             }
+           }
            callback({ id: ref.id, exists: () => (data && Object.keys(data).length > 0), data: () => data });
          }
       } else {
@@ -100,11 +140,34 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
          });
          if (res.ok) {
            const data = await res.json();
-           const docs = data.map((d: any) => ({
+           
+           // Latency compensation
+           const mergedData = data.filter((d: any) => {
+               const cacheKey = `${ref.collection}/${d.id || d._id}`;
+               const pending = pendingWrites.get(cacheKey);
+               return !(pending && pending.data === null);
+           }).map((d: any) => {
+               const cacheKey = `${ref.collection}/${d.id || d._id}`;
+               const pending = pendingWrites.get(cacheKey);
+               return pending ? { ...d, ...pending.data } : d;
+           });
+
+           const serverIds = new Set(mergedData.map((d: any) => d.id || d._id));
+           for (const [key, pending] of pendingWrites.entries()) {
+               if (key.startsWith(`${ref.collection}/`) && pending.data !== null) {
+                   const id = key.split('/')[1];
+                   if (!serverIds.has(id)) {
+                       mergedData.push(pending.data);
+                   }
+               }
+           }
+
+           const docs = mergedData.map((d: any) => ({
              id: d.id || d._id,
              ref: { collection: ref.collection, id: d.id || d._id },
              data: () => d
            }));
+           
            callback({
              docs,
              size: docs.length,
@@ -115,13 +178,12 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
          }
       }
     } catch(e: any) {
-      // Suppress network errors during polling (e.g., when dev server restarts)
       if (e.message !== 'Failed to fetch') {
          console.warn("Polling error:", e);
       }
       if (onError) onError(e);
     }
-    if (!isCancelled) setTimeout(poll, 1500); // 1.5 seconds for near real-time sync without caching issues
+    if (!isCancelled) setTimeout(poll, 1500);
   };
   poll();
   return () => { isCancelled = true; };

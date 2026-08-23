@@ -1022,9 +1022,9 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                   <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Auto-suggest: Click past customer to fill info
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {matchedCustomers.map((c) => (
+                  {matchedCustomers.map((c, idx) => (
                     <button
-                      key={c.id}
+                      key={`${c.mobile_number}-${idx}`}
                       type="button"
                       onClick={() => {
                         setCustomerName(c.customer_name);
