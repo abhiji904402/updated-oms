@@ -40,8 +40,8 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
 import { persistToLocalVault, LOCAL_VAULT_KEYS } from './localStorageVault';
-import { db } from './firebase';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from 'firebase/firestore';
+import { db } from './firebaseMock';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebaseMock';
 
 export interface AuthPasswords {
   admin: string;

@@ -785,7 +785,6 @@ interface GoogleSheetsPageProps {
 export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVaultModal }) => {
   const { sheetConfig, orders = [], updateSheetConfig, triggerSheetSync, pullOrdersFromGoogleSheet, deleteOrder, clearAllOrders, importOrders, resequenceAllOrders } = useOMS();
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
   const [isResequencing, setIsResequencing] = useState(false);
   const [isResequenceModalOpen, setIsResequenceModalOpen] = useState(false);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
@@ -809,14 +808,6 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
     setTimeout(() => {
       setIsSyncing(false);
     }, 1200);
-  };
-
-  const handlePullFromSheet = async () => {
-    setIsPulling(true);
-    await pullOrdersFromGoogleSheet();
-    setTimeout(() => {
-      setIsPulling(false);
-    }, 1000);
   };
 
   const handleOpenClearModal = () => {
@@ -977,16 +968,6 @@ export const GoogleSheetsPage = React.memo<GoogleSheetsPageProps>(({ onOpenVault
               <span>Local Vault ({orders.length})</span>
             </button>
           )}
-
-          <button
-            onClick={handlePullFromSheet}
-            disabled={isPulling}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/40 text-white font-bold text-xs shadow-md shadow-emerald-950/50 flex items-center gap-2 transition cursor-pointer"
-            title="Fetch all live orders directly from Google Sheet (Unlimited Cloud Storage)"
-          >
-            <Download className={`w-4 h-4 text-emerald-200 ${isPulling ? 'animate-bounce' : ''}`} />
-            <span>{isPulling ? 'Pulling Data...' : '📥 Pull Live from Sheet'}</span>
-          </button>
 
           <button
             onClick={handleManualSync}
