@@ -696,27 +696,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               )}
             </div>
 
-            <div className="relative">
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
-                Customer Name
-              </label>
-              <input
-                type="text"
-                value={customerName}
-                disabled={isOutletUser}
-                onChange={(e) => {
-                  setCustomerName(e.target.value);
-                  setShowCustomerSuggestions(true);
-                  setCustomerHighlightIndex(0);
-                }}
-                onFocus={() => !isOutletUser && setShowCustomerSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
-                onKeyDown={handleCustomerKeyDown}
-                placeholder="e.g. Rahul Sharma"
-                className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-            </div>
-
             <div>
               <label className="block text-xs font-bold text-purple-300 uppercase tracking-wider mb-1">
                 Informed By <span className="text-[10px] font-normal text-slate-400">(Staff / Informer)</span>

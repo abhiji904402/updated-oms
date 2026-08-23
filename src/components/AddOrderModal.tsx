@@ -676,29 +676,6 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
               )}
             </div>
 
-            {/* Customer Name (Optional) */}
-            <div ref={customerNameContainerRef} className="relative">
-              <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">
-                <span>Customer Name</span>
-                <span className="text-[10px] text-slate-400 font-normal">(Optional / ऐच्छिक)</span>
-              </label>
-              <input
-                ref={customerNameInputRef}
-                type="text"
-                placeholder="Enter customer name (optional)"
-                value={customerName}
-                onChange={(e) => {
-                  setCustomerName(e.target.value);
-                  setShowCustomerSuggestions(true);
-                  setCustomerHighlightIndex(-1);
-                }}
-                onFocus={() => setShowCustomerSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
-                onKeyDown={handleCustomerKeyDown}
-                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
-              />
-            </div>
-
             {/* Item Type * */}
             <div ref={itemContainerRef} className="relative">
               <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">
@@ -771,19 +748,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                 </div>
               )}
 
-              {/* Quick Item Presets */}
-              <div className="mt-2 flex flex-wrap gap-1.5 max-h-16 overflow-y-auto">
-                {ITEM_PRESETS.slice(0, 5).map((p) => (
-                  <button
-                    key={p.name}
-                    type="button"
-                    onClick={() => handleSelectPreset(p)}
-                    className="px-2 py-0.5 rounded-md bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-900/40 text-[11px] text-slate-300 transition"
-                  >
-                    + {p.name} (₹{p.price})
-                  </button>
-                ))}
-              </div>
+
             </div>
 
             {/* Quantity / Weight / Pcs */}
