@@ -94,8 +94,12 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
          const res = await fetch(`${API_BASE}/${ref.collection}`);
          if (res.ok) {
            const data = await res.json();
+           const docs = data.map((d: any) => ({ id: d.id || d._id, ref: { collection: ref.collection, id: d.id || d._id }, data: () => d }));
            callback({
-             docs: data.map((d: any) => ({ id: d.id || d._id, ref: { collection: ref.collection, id: d.id || d._id }, data: () => d }))
+             docs,
+             size: docs.length,
+             empty: docs.length === 0,
+             forEach: (cb: any) => docs.forEach(cb)
            });
          }
       }
