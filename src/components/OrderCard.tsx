@@ -274,17 +274,17 @@ Broomies Team`;
                 </div>
               </div>
 
-              {/* Title & Customer Subtitle */}
+              {/* Title & Phone Number Subtitle */}
               <div>
                 <div className="t-title flex items-center justify-between">
-                  <span className="truncate">{order.customer_name}</span>
+                  <span className="truncate flex items-center gap-1.5"><Phone className="w-5 h-5 text-purple-400" /> {order.mobile_number}</span>
                 </div>
                 <div className="t-subtitle flex items-center justify-between text-xs mt-0.5">
                   <span className="flex items-center gap-1 text-slate-300 font-semibold">
-                    <Phone className="w-3 h-3 text-purple-400" /> {order.mobile_number}
+                    Order #{order.order_number}
                   </span>
                   <a
-                    href={formattedWhatsAppUrl(order.mobile_number, `Hi ${order.customer_name}, regarding your Broomies order #${order.order_number}...`)}
+                    href={formattedWhatsAppUrl(order.mobile_number, `Hi ${order.customer_name || "Customer"}, regarding your Broomies order #${order.order_number}...`)}
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
