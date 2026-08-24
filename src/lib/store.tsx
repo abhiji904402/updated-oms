@@ -612,9 +612,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           idbSet(LOCAL_STORAGE_KEY_PARTNERS, list).catch(() => {});
           safeLocalStorageSet(LOCAL_STORAGE_KEY_PARTNERS, JSON.stringify(list));
         } else if (!snapshot.metadata.fromCache && snapshot.empty) {
-          const seeded = localStorage.getItem('delivery_partners_seeded_v2');
+          const seeded = localStorage.getItem('delivery_partners_seeded_v3');
           if (!seeded) {
-            safeLocalStorageSet('delivery_partners_seeded_v2', 'true');
+            safeLocalStorageSet('delivery_partners_seeded_v3', 'true');
             const batch = writeBatch(db);
             INITIAL_DELIVERY_PARTNERS.forEach((p) => {
               batch.set(doc(db, 'delivery_partners', p.id), p);
@@ -1096,6 +1096,21 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ordersRef.current = formatted;
       safeSaveOrdersToLocalStorage(formatted);
       idbSet(LOCAL_STORAGE_KEY_ORDERS, formatted).catch(() => {});
+      
+      // Save to Firestore in chunks so other devices see the pulled orders
+      try {
+        for (let i = 0; i < formatted.length; i += 400) {
+          const chunk = formatted.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((ord) => {
+            batch.set(doc(db, 'orders', ord.id), ord, { merge: true });
+          });
+          await batch.commit();
+        }
+      } catch (e) {
+        console.warn('Failed to sync pulled orders to Firestore:', e);
+      }
+
       logSync(formatted.length, 'google_sheet_pull', true);
 
       showNotification(`⚡ Successfully loaded ${formatted.length} live orders directly from Google Sheets!`);
