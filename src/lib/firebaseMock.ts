@@ -28,45 +28,48 @@ type SnapshotListener = {
 
 const listeners = new Set<SnapshotListener>();
 
-// Cross-tab Synchronization Broadcast Channel (0ms cross-tab latency on same device)
-let broadcastChannel: BroadcastChannel | null = null;
-try {
-  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-    broadcastChannel = new BroadcastChannel('broomies_live_channel');
-    broadcastChannel.onmessage = (event) => {
-      if (event.data && event.data.type === 'mutation') {
-        handleIncomingMutation(event.data.mutation, false);
-      }
+// Debounced collection notification to avoid UI jitter/flicker during rapid stream updates
+const pendingNotificationTimers: Record<string, any> = {};
+
+function notifyListenersForCollection(collName: string, immediate = false) {
+  const fireNotification = () => {
+    delete pendingNotificationTimers[collName];
+    const collMap = clientStore[collName] || new Map();
+    const items = Array.from(collMap.values());
+    const docs = items.map((d: any) => ({
+      id: d.id || d._id,
+      ref: { collection: collName, id: d.id || d._id },
+      data: () => d
+    }));
+
+    const snapshot = {
+      docs,
+      size: docs.length,
+      empty: docs.length === 0,
+      metadata: { fromCache: false },
+      forEach: (cb: any) => docs.forEach(cb)
     };
-  }
-} catch (e) {
-  console.warn('BroadcastChannel not supported or restricted:', e);
-}
 
-function notifyListenersForCollection(collName: string) {
-  const collMap = clientStore[collName] || new Map();
-  const items = Array.from(collMap.values());
-  const docs = items.map((d: any) => ({
-    id: d.id || d._id,
-    ref: { collection: collName, id: d.id || d._id },
-    data: () => d
-  }));
-
-  const snapshot = {
-    docs,
-    size: docs.length,
-    empty: docs.length === 0,
-    metadata: { fromCache: false },
-    forEach: (cb: any) => docs.forEach(cb)
+    for (const l of listeners) {
+      if (l.ref.collection === collName && !l.ref.id) {
+        try {
+          l.callback(snapshot);
+        } catch (err) {
+          console.error('Error in onSnapshot collection listener:', err);
+        }
+      }
+    }
   };
 
-  for (const l of listeners) {
-    if (l.ref.collection === collName && !l.ref.id) {
-      try {
-        l.callback(snapshot);
-      } catch (err) {
-        console.error('Error in onSnapshot collection listener:', err);
-      }
+  if (immediate) {
+    if (pendingNotificationTimers[collName]) {
+      clearTimeout(pendingNotificationTimers[collName]);
+      delete pendingNotificationTimers[collName];
+    }
+    fireNotification();
+  } else {
+    if (!pendingNotificationTimers[collName]) {
+      pendingNotificationTimers[collName] = setTimeout(fireNotification, 50);
     }
   }
 }
@@ -92,6 +95,21 @@ function notifyListenersForDoc(collName: string, docId: string) {
   }
 }
 
+// Cross-tab Synchronization Broadcast Channel (0ms cross-tab latency on same device)
+let broadcastChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    broadcastChannel = new BroadcastChannel('broomies_live_channel');
+    broadcastChannel.onmessage = (event) => {
+      if (event.data && event.data.type === 'mutation') {
+        handleIncomingMutation(event.data.mutation, false);
+      }
+    };
+  }
+} catch (e) {
+  console.warn('BroadcastChannel not supported:', e);
+}
+
 function handleIncomingMutation(
   mutation: { collection: string; action: 'set' | 'update' | 'delete' | 'clear'; id?: string; data?: any },
   broadcastToOtherTabs = true
@@ -104,7 +122,7 @@ function handleIncomingMutation(
 
   if (action === 'clear') {
     store.clear();
-    notifyListenersForCollection(collection);
+    notifyListenersForCollection(collection, true);
   } else if (action === 'delete' && id) {
     store.delete(id);
     notifyListenersForDoc(collection, id);
@@ -125,43 +143,53 @@ function handleIncomingMutation(
 }
 
 // =========================================================================
-// MULTI-DEVICE REAL-TIME SERVER-SENT EVENTS (SSE) + ACTIVE AUTO-RECOVERY
+// REAL-TIME SERVER-SENT EVENTS (SSE) ENGINE
 // =========================================================================
 
 let eventSource: EventSource | null = null;
 let isConnectingSSE = false;
+let sseReconnectTimer: any = null;
 let lastSSEActivityTime = Date.now();
 
 export function refreshCollectionFromServer(collName: string) {
   if (typeof window === 'undefined') return;
   fetch(`${API_BASE}/${collName}`)
-    .then((res) => res.json())
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
     .then((data) => {
       const items = Array.isArray(data) ? data : [];
       if (!clientStore[collName]) {
         clientStore[collName] = new Map();
       }
       const store = clientStore[collName];
-      store.clear();
+      // Atomic swap to prevent empty flashes
+      const newMap = new Map<string, any>();
       items.forEach((item: any) => {
         const key = String(item.id || item._id);
-        if (key) store.set(key, item);
+        if (key) newMap.set(key, item);
       });
-      notifyListenersForCollection(collName);
+      clientStore[collName] = newMap;
+      notifyListenersForCollection(collName, true);
     })
-    .catch(() => {});
+    .catch((err) => {
+      console.warn(`[Sync] Background refresh for ${collName} skipped:`, err.message);
+    });
 }
 
 function initSSE() {
   if (typeof window === 'undefined' || !('EventSource' in window)) return;
-  if (eventSource && eventSource.readyState === EventSource.OPEN) return;
+  if (eventSource && (eventSource.readyState === EventSource.OPEN || eventSource.readyState === EventSource.CONNECTING)) {
+    return;
+  }
   if (isConnectingSSE) return;
 
   isConnectingSSE = true;
 
   try {
     if (eventSource) {
-      eventSource.close();
+      try { eventSource.close(); } catch {}
       eventSource = null;
     }
 
@@ -169,6 +197,10 @@ function initSSE() {
 
     eventSource.addEventListener('connected', () => {
       isConnectingSSE = false;
+      lastSSEActivityTime = Date.now();
+    });
+
+    eventSource.addEventListener('heartbeat', () => {
       lastSSEActivityTime = Date.now();
     });
 
@@ -182,22 +214,32 @@ function initSSE() {
       }
     });
 
-    eventSource.onmessage = () => {
+    eventSource.onopen = () => {
+      isConnectingSSE = false;
       lastSSEActivityTime = Date.now();
     };
 
     eventSource.onerror = () => {
       isConnectingSSE = false;
       if (eventSource) {
-        eventSource.close();
+        try { eventSource.close(); } catch {}
         eventSource = null;
       }
-      // Immediate exponential retry
-      setTimeout(initSSE, 2000);
+      if (!sseReconnectTimer) {
+        sseReconnectTimer = setTimeout(() => {
+          sseReconnectTimer = null;
+          initSSE();
+        }, 3000);
+      }
     };
   } catch (err) {
     isConnectingSSE = false;
-    setTimeout(initSSE, 3000);
+    if (!sseReconnectTimer) {
+      sseReconnectTimer = setTimeout(() => {
+        sseReconnectTimer = null;
+        initSSE();
+      }, 5000);
+    }
   }
 }
 
@@ -205,33 +247,29 @@ function initSSE() {
 if (typeof window !== 'undefined') {
   initSSE();
 
-  // Instant refresh when user switches back to tab or unlocks phone
+  // Instant recovery when user switches back to tab or unlocks phone
   window.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       initSSE();
-      // Fast resync to catch any missed updates while device was sleeping
-      Object.keys(clientStore).forEach(refreshCollectionFromServer);
     }
   });
 
   window.addEventListener('focus', () => {
     initSSE();
-    Object.keys(clientStore).forEach(refreshCollectionFromServer);
   });
 
   window.addEventListener('online', () => {
     initSSE();
-    Object.keys(clientStore).forEach(refreshCollectionFromServer);
+    refreshCollectionFromServer('orders');
   });
 
-  // Background health check & fallback sync every 6 seconds
+  // Watchdog timer: only re-establishes SSE if connection was genuinely dead for over 45s
   setInterval(() => {
-    const isStale = Date.now() - lastSSEActivityTime > 25000;
-    if (isStale || !eventSource || eventSource.readyState !== EventSource.OPEN) {
+    const isDead = Date.now() - lastSSEActivityTime > 45000;
+    if (isDead || !eventSource || eventSource.readyState === EventSource.CLOSED) {
       initSSE();
-      refreshCollectionFromServer('orders');
     }
-  }, 6000);
+  }, 15000);
 }
 
 export async function setDoc(docRef: { collection: string; id: string }, data: any, options?: any) {
@@ -283,16 +321,13 @@ export async function getDocs(collRef: { collection: string }) {
   const data = await res.json();
   const list = Array.isArray(data) ? data : [];
 
-  // Update client collection cache
-  if (!clientStore[collRef.collection]) {
-    clientStore[collRef.collection] = new Map();
-  }
-  const store = clientStore[collRef.collection];
-  store.clear();
+  // Update client collection cache atomically
+  const newMap = new Map<string, any>();
   list.forEach((item: any) => {
     const key = String(item.id || item._id);
-    if (key) store.set(key, item);
+    if (key) newMap.set(key, item);
   });
+  clientStore[collRef.collection] = newMap;
 
   const docs = list.map((d: any) => ({
     id: d.id || d._id,
@@ -355,7 +390,6 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
   // Make sure SSE is alive
   initSSE();
 
-  // Initial Fetch & Hydrate
   const collName = ref.collection;
   const collStore = clientStore[collName] || (clientStore[collName] = new Map());
 
@@ -407,25 +441,28 @@ export function onSnapshot(ref: any, callback: any, onError?: any) {
       .then((res) => res.json())
       .then((data) => {
         const items = Array.isArray(data) ? data : [];
-        collStore.clear();
-        items.forEach((item: any) => {
-          const key = String(item.id || item._id);
-          if (key) collStore.set(key, item);
-        });
+        if (items.length > 0) {
+          const newMap = new Map<string, any>();
+          items.forEach((item: any) => {
+            const key = String(item.id || item._id);
+            if (key) newMap.set(key, item);
+          });
+          clientStore[collName] = newMap;
 
-        const docs = items.map((d: any) => ({
-          id: d.id || d._id,
-          ref: { collection: collName, id: d.id || d._id },
-          data: () => d
-        }));
+          const docs = items.map((d: any) => ({
+            id: d.id || d._id,
+            ref: { collection: collName, id: d.id || d._id },
+            data: () => d
+          }));
 
-        callback({
-          docs,
-          size: docs.length,
-          empty: docs.length === 0,
-          metadata: { fromCache: false },
-          forEach: (cb: any) => docs.forEach(cb)
-        });
+          callback({
+            docs,
+            size: docs.length,
+            empty: docs.length === 0,
+            metadata: { fromCache: false },
+            forEach: (cb: any) => docs.forEach(cb)
+          });
+        }
       })
       .catch((err) => {
         if (onError) onError(err);

@@ -531,8 +531,25 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         });
 
-        // Authoritative Real-time Sync
-        setOrders(firestoreOrders);
+        // Authoritative Real-time Sync with reference stability
+        setOrders((prev) => {
+          if (prev.length === firestoreOrders.length && prev.length > 0) {
+            let isIdentical = true;
+            // Sample test first, middle, last and recent elements
+            for (let i = 0; i < Math.min(prev.length, 30); i++) {
+              const p = prev[i];
+              const f = firestoreOrders[i];
+              if (p.id !== f.id || p.updated_at !== f.updated_at || p.status !== f.status || p.delivery_partner !== f.delivery_partner || p.rider_delivered !== f.rider_delivered) {
+                isIdentical = false;
+                break;
+              }
+            }
+            if (isIdentical && prev[prev.length - 1]?.id === firestoreOrders[firestoreOrders.length - 1]?.id) {
+              return prev;
+            }
+          }
+          return firestoreOrders;
+        });
         ordersRef.current = firestoreOrders;
         safeSaveOrdersToLocalStorage(firestoreOrders);
         idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});

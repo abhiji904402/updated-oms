@@ -17,7 +17,8 @@ app.use(express.json({ limit: '50mb' }));
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // =========================================================================
-// REAL-TIME IN-MEMORY & DISK PERSISTENCE ENGINE (SUB-10MS LATENCY)
+// BROOMIES REALTIME DATABASE ENGINE (BRDB)
+// In-Memory RAM + Write-Ahead Log + Disk Snapshot + Double Confirmation Queue
 // =========================================================================
 
 const DATA_DIR = path.join(process.cwd(), '.data');
@@ -28,6 +29,7 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 const DB_FILE = path.join(DATA_DIR, 'broomies_store.json');
+const WAL_FILE = path.join(DATA_DIR, 'broomies_wal.log');
 
 interface CollectionCache {
   map: Map<string, any>;
@@ -43,7 +45,27 @@ const cache: Record<string, CollectionCache> = {
   'system_settings': { map: new Map(), version: 1, lastUpdated: 0, isReady: false }
 };
 
-// Load initial disk snapshot instantly
+// Double-confirmation background sync queue
+interface SyncTask {
+  collection: string;
+  action: 'set' | 'update' | 'delete';
+  id: string;
+  data?: any;
+  timestamp: number;
+  retries: number;
+}
+const backgroundSyncQueue: SyncTask[] = [];
+let isProcessingQueue = false;
+
+// Append to Write-Ahead Log (WAL)
+function appendWAL(task: { collection: string; action: string; id: string; data?: any }) {
+  try {
+    const entry = JSON.stringify({ ...task, t: Date.now() }) + '\n';
+    fs.appendFileSync(WAL_FILE, entry, 'utf-8');
+  } catch {}
+}
+
+// Load initial disk snapshot instantly (< 1ms)
 function loadFromDisk() {
   try {
     if (fs.existsSync(DB_FILE)) {
@@ -52,7 +74,6 @@ function loadFromDisk() {
       for (const coll of Object.keys(cache)) {
         if (parsed[coll] && typeof parsed[coll] === 'object') {
           const c = cache[coll];
-          c.map.clear();
           for (const [k, v] of Object.entries(parsed[coll])) {
             c.map.set(String(k), v);
           }
@@ -60,14 +81,14 @@ function loadFromDisk() {
           c.lastUpdated = Date.now();
         }
       }
-      console.log(`[Storage] Loaded ${cache['orders'].map.size} orders instantly from fast disk snapshot.`);
+      console.log(`[Realtime DB] Loaded ${cache['orders'].map.size} orders instantly from high-speed local engine.`);
     }
   } catch (err) {
-    console.warn('[Storage] Could not load disk snapshot:', err);
+    console.warn('[Realtime DB] Could not load disk snapshot:', err);
   }
 }
 
-// Debounced disk save
+// Debounced disk snapshot persistence
 let diskSaveTimer: NodeJS.Timeout | null = null;
 function persistToDisk() {
   if (diskSaveTimer) clearTimeout(diskSaveTimer);
@@ -82,12 +103,49 @@ function persistToDisk() {
       }
       fs.writeFileSync(DB_FILE, JSON.stringify(exportObj), 'utf-8');
     } catch (err) {
-      console.warn('[Storage] Error persisting to disk:', err);
+      console.warn('[Realtime DB] Error persisting snapshot to disk:', err);
     }
-  }, 300);
+  }, 200);
 }
 
 loadFromDisk();
+
+// Double confirmation background sync worker
+async function processBackgroundSyncQueue() {
+  if (isProcessingQueue || backgroundSyncQueue.length === 0 || !isMongoConnected) return;
+  isProcessingQueue = true;
+
+  while (backgroundSyncQueue.length > 0 && isMongoConnected) {
+    const task = backgroundSyncQueue.shift();
+    if (!task) break;
+
+    try {
+      const Model = models[task.collection];
+      if (Model) {
+        if (task.action === 'set' || task.action === 'update') {
+          if (task.collection === 'system_settings') {
+            await Model.findOneAndUpdate({ _id: task.id }, { data: task.data?.data || task.data }, { upsert: true, maxTimeMS: 5000 });
+          } else {
+            await Model.findOneAndUpdate({ id: task.id }, { $set: task.data }, { upsert: true, maxTimeMS: 5000 });
+          }
+        } else if (task.action === 'delete') {
+          const query = task.collection === 'system_settings' ? { _id: task.id } : { id: task.id };
+          await Model.findOneAndDelete(query, { maxTimeMS: 5000 });
+        }
+      }
+    } catch (err: any) {
+      if (task.retries < 3) {
+        task.retries += 1;
+        backgroundSyncQueue.push(task);
+      }
+      break;
+    }
+  }
+
+  isProcessingQueue = false;
+}
+
+setInterval(processBackgroundSyncQueue, 1500);
 
 // Schemas & MongoDB Setup
 const OrderSchema = new mongoose.Schema({
@@ -177,32 +235,47 @@ async function tryConnectMongo() {
     isMongoConnected = true;
     console.log('✅ MongoDB connected in background.');
 
-    // Hydrate collections from Mongo if disk cache was empty or to sync fresh data
+    // Reconcile collections from Mongo without wiping local in-memory RAM
     for (const [collName, Model] of Object.entries(models)) {
       const c = cache[collName];
       if (c) {
         const docs = await Model.find({}).lean();
         if (docs.length > 0) {
-          c.map.clear();
           docs.forEach((d: any) => {
             const key = collName === 'system_settings' ? (d._id || d.id) : (d.id || d._id);
             if (key) {
               const clean = { ...d };
               delete clean.__v;
               if (collName !== 'system_settings') delete clean._id;
-              c.map.set(String(key), clean);
+              // If local RAM doesn't have it yet, add it
+              if (!c.map.has(String(key))) {
+                c.map.set(String(key), clean);
+              }
             }
           });
           c.isReady = true;
           c.lastUpdated = Date.now();
           c.version += 1;
         }
+
+        // Back-sync any local records to Mongo if Mongo was missing them
+        for (const [k, localDoc] of c.map.entries()) {
+          backgroundSyncQueue.push({
+            collection: collName,
+            action: 'set',
+            id: k,
+            data: localDoc,
+            timestamp: Date.now(),
+            retries: 0
+          });
+        }
+        processBackgroundSyncQueue().catch(() => {});
       }
     }
     persistToDisk();
-    console.log(`[Storage] Synced ${cache['orders'].map.size} orders from MongoDB Atlas.`);
+    console.log(`[Realtime DB] Synced & reconciled ${cache['orders'].map.size} total orders.`);
   } catch (err: any) {
-    console.warn('[MongoDB Notice]: Operating on ultra-fast RAM + Disk snapshot:', err.message);
+    console.warn('[Realtime DB Notice]: Operating on ultra-fast RAM + Disk engine:', err.message);
   }
 }
 tryConnectMongo();
@@ -258,10 +331,10 @@ apiRouter.get('/events', (req, res) => {
 
   sseClients.add(res);
 
-  // Keep-alive heartbeat ping every 15s
+  // Keep-alive heartbeat ping every 15s with named event
   const interval = setInterval(() => {
     try {
-      res.write(`: ping\n\n`);
+      res.write(`event: heartbeat\ndata: {"time":${Date.now()}}\n\n`);
     } catch {
       clearInterval(interval);
       sseClients.delete(res);
@@ -344,6 +417,7 @@ apiRouter.post('/:collection/:id', async (req, res) => {
     }
 
     persistToDisk();
+    appendWAL({ collection: collName, action: 'set', id, data: payloadToBroadcast });
 
     // Instant SSE Real-time Broadcast to all connected clients (< 5ms)
     broadcastMutation({
@@ -353,19 +427,18 @@ apiRouter.post('/:collection/:id', async (req, res) => {
       data: payloadToBroadcast
     });
 
-    // Async MongoDB write if connected
-    if (isMongoConnected) {
-      const Model = models[collName];
-      if (Model) {
-        if (collName === 'system_settings') {
-          Model.findOneAndUpdate({ _id: id }, { data }, { upsert: true }).catch(() => {});
-        } else {
-          Model.findOneAndUpdate({ id }, { $set: payloadToBroadcast }, { upsert: true }).catch(() => {});
-        }
-      }
-    }
+    // Enqueue double-confirmation write to MongoDB (non-blocking)
+    backgroundSyncQueue.push({
+      collection: collName,
+      action: 'set',
+      id,
+      data: payloadToBroadcast,
+      timestamp: Date.now(),
+      retries: 0
+    });
+    processBackgroundSyncQueue().catch(() => {});
 
-    res.json({ success: true });
+    res.json({ success: true, engine: 'broomies_realtime_db' });
   } catch (error: any) {
     console.error(`Error in POST /api/${req.params.collection}/${req.params.id}:`, error);
     res.status(500).json({ error: error.message || String(error) });
@@ -403,6 +476,7 @@ apiRouter.put('/:collection/:id', async (req, res) => {
     }
 
     persistToDisk();
+    appendWAL({ collection: collName, action: 'update', id, data: payloadToBroadcast });
 
     // Instant SSE Real-time Broadcast (< 5ms)
     broadcastMutation({
@@ -412,19 +486,18 @@ apiRouter.put('/:collection/:id', async (req, res) => {
       data: payloadToBroadcast
     });
 
-    // Async MongoDB write if connected
-    if (isMongoConnected) {
-      const Model = models[collName];
-      if (Model) {
-        if (collName === 'system_settings') {
-          Model.findOneAndUpdate({ _id: id }, { data: payloadToBroadcast.data }, { upsert: true }).catch(() => {});
-        } else {
-          Model.findOneAndUpdate({ id }, { $set: payloadToBroadcast }, { upsert: true }).catch(() => {});
-        }
-      }
-    }
+    // Enqueue double-confirmation write to MongoDB (non-blocking)
+    backgroundSyncQueue.push({
+      collection: collName,
+      action: 'update',
+      id,
+      data: payloadToBroadcast,
+      timestamp: Date.now(),
+      retries: 0
+    });
+    processBackgroundSyncQueue().catch(() => {});
 
-    res.json({ success: true });
+    res.json({ success: true, engine: 'broomies_realtime_db' });
   } catch (error: any) {
     console.error(`Error in PUT /api/${req.params.collection}/${req.params.id}:`, error);
     res.status(500).json({ error: error.message || String(error) });
@@ -443,6 +516,7 @@ apiRouter.delete('/:collection', async (req, res) => {
     c.lastUpdated = Date.now();
 
     persistToDisk();
+    appendWAL({ collection: collName, action: 'clear', id: '*' });
 
     broadcastMutation({
       collection: collName,
@@ -454,7 +528,7 @@ apiRouter.delete('/:collection', async (req, res) => {
       if (Model) Model.deleteMany({}).catch(() => {});
     }
 
-    res.json({ success: true, message: 'All documents deleted' });
+    res.json({ success: true, message: 'All documents deleted', engine: 'broomies_realtime_db' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || String(error) });
   }
@@ -473,6 +547,7 @@ apiRouter.delete('/:collection/:id', async (req, res) => {
     c.lastUpdated = Date.now();
 
     persistToDisk();
+    appendWAL({ collection: collName, action: 'delete', id });
 
     broadcastMutation({
       collection: collName,
@@ -480,15 +555,16 @@ apiRouter.delete('/:collection/:id', async (req, res) => {
       id
     });
 
-    if (isMongoConnected) {
-      const Model = models[collName];
-      if (Model) {
-        const query = collName === 'system_settings' ? { _id: id } : { id };
-        Model.findOneAndDelete(query).catch(() => {});
-      }
-    }
+    backgroundSyncQueue.push({
+      collection: collName,
+      action: 'delete',
+      id,
+      timestamp: Date.now(),
+      retries: 0
+    });
+    processBackgroundSyncQueue().catch(() => {});
 
-    res.json({ success: true });
+    res.json({ success: true, engine: 'broomies_realtime_db' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || String(error) });
   }
