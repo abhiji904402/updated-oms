@@ -137,12 +137,12 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       // 1. Search query filter
       if (searchQuery) {
         const q = searchQuery.toLowerCase().trim();
-        const matchNum = o.order_number.toString().includes(q);
-        const matchName = o.customer_name.toLowerCase().includes(q);
-        const matchPhone = o.mobile_number.includes(q);
-        const matchItem = o.item_type.toLowerCase().includes(q);
-        const matchAdvBill = (o.advance_bill_number || (o as any).adv_bill || '').toLowerCase().includes(q);
-        const matchFinalBill = (o.final_bill_number || (o as any).final_bill || (o as any).bill_number || '').toLowerCase().includes(q);
+        const matchNum = String(o?.order_number || o?.order_id || '').toLowerCase().includes(q);
+        const matchName = String(o?.customer_name || '').toLowerCase().includes(q);
+        const matchPhone = String(o?.mobile_number || '').includes(q);
+        const matchItem = String(o?.item_type || '').toLowerCase().includes(q);
+        const matchAdvBill = String(o?.advance_bill_number || (o as any)?.adv_bill || '').toLowerCase().includes(q);
+        const matchFinalBill = String(o?.final_bill_number || (o as any)?.final_bill || (o as any)?.bill_number || '').toLowerCase().includes(q);
         if (!matchNum && !matchName && !matchPhone && !matchItem && !matchAdvBill && !matchFinalBill) return false;
       }
 

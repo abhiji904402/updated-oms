@@ -78,10 +78,10 @@ export const DeliveryDashboard = React.memo(() => {
     if (!queueSearch.trim()) return [];
     const q = queueSearch.toLowerCase().trim().replace('#', '');
     return safeOrders.filter((o) => {
-      const matchNum = o.order_number.toString().includes(q);
-      const matchCust = (o.customer_name || '').toLowerCase().includes(q);
-      const matchPhone = (o.mobile_number || '').includes(q);
-      const matchItem = (o.item_type || '').toLowerCase().includes(q);
+      const matchNum = String(o?.order_number || o?.order_id || '').toLowerCase().includes(q);
+      const matchCust = String(o?.customer_name || '').toLowerCase().includes(q);
+      const matchPhone = String(o?.mobile_number || '').includes(q);
+      const matchItem = String(o?.item_type || '').toLowerCase().includes(q);
       return matchNum || matchCust || matchPhone || matchItem;
     }).slice(0, 6);
   }, [safeOrders, queueSearch]);
@@ -128,13 +128,13 @@ export const DeliveryDashboard = React.memo(() => {
       // 4. Search filter by Order ID, Customer Name, Mobile, Item, Outlet, Address
       if (queueSearch.trim()) {
         const q = queueSearch.toLowerCase().trim();
-        const matchNum = o.order_number.toString().includes(q);
-        const matchCust = (o.customer_name || '').toLowerCase().includes(q);
-        const matchPhone = (o.mobile_number || '').includes(q);
-        const matchItem = (o.item_type || '').toLowerCase().includes(q);
-        const matchOutlet = (o.outlet || '').toLowerCase().includes(q);
-        const matchAddr = (o.address || '').toLowerCase().includes(q);
-        const matchRider = (o.delivery_partner || '').toLowerCase().includes(q);
+        const matchNum = String(o?.order_number || o?.order_id || '').toLowerCase().includes(q);
+        const matchCust = String(o?.customer_name || '').toLowerCase().includes(q);
+        const matchPhone = String(o?.mobile_number || '').includes(q);
+        const matchItem = String(o?.item_type || '').toLowerCase().includes(q);
+        const matchOutlet = String(o?.outlet || '').toLowerCase().includes(q);
+        const matchAddr = String(o?.address || '').toLowerCase().includes(q);
+        const matchRider = String(o?.delivery_partner || '').toLowerCase().includes(q);
         if (!matchNum && !matchCust && !matchPhone && !matchItem && !matchOutlet && !matchAddr && !matchRider) {
           return false;
         }
@@ -162,10 +162,10 @@ export const DeliveryDashboard = React.memo(() => {
       // Search filter
       if (deliveredSearch) {
         const q = deliveredSearch.toLowerCase();
-        const matchNum = o.order_number.toString().includes(q);
-        const matchItem = o.item_type.toLowerCase().includes(q);
-        const matchCust = o.customer_name.toLowerCase().includes(q);
-        const matchRider = (o.delivery_partner || '').toLowerCase().includes(q);
+        const matchNum = String(o?.order_number || o?.order_id || '').toLowerCase().includes(q);
+        const matchItem = String(o?.item_type || '').toLowerCase().includes(q);
+        const matchCust = String(o?.customer_name || '').toLowerCase().includes(q);
+        const matchRider = String(o?.delivery_partner || '').toLowerCase().includes(q);
         if (!matchNum && !matchItem && !matchCust && !matchRider) return false;
       }
 

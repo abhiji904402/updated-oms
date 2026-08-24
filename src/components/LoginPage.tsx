@@ -240,20 +240,20 @@ export const LoginPage: React.FC = () => {
           <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
             <div className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-center">
               <div className="text-[10px] text-rose-400 font-sans font-bold">Admin</div>
-              <div className="font-black text-white mt-0.5">{authPasswords.admin}</div>
+              <div className="font-black text-white mt-0.5">{authPasswords?.admin || 'admin123'}</div>
             </div>
 
             <div className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-center">
               <div className="text-[10px] text-amber-400 font-sans font-bold">Outlet</div>
               <div className="font-black text-white mt-0.5">
-                {authPasswords.outlets[selectedOutlet] || authPasswords.defaultOutletPassword}
+                {authPasswords?.outlets?.[selectedOutlet] || authPasswords?.defaultOutletPassword || 'outlet123'}
               </div>
             </div>
 
             <div className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-center">
               <div className="text-[10px] text-emerald-400 font-sans font-bold">Rider</div>
               <div className="font-black text-white mt-0.5">
-                {authPasswords.partners[selectedPartnerId] || authPasswords.defaultPartnerPassword}
+                {authPasswords?.partners?.[selectedPartnerId] || authPasswords?.defaultPartnerPassword || 'rider123'}
               </div>
             </div>
           </div>

@@ -43,6 +43,7 @@ export interface Order {
   remaining_balance: number;
   due_amount: number;
   address: string;
+  delivery_address?: string;
   remarks: string;
   status: OrderStatus;
   delivery_partner?: string;
@@ -84,11 +85,13 @@ export interface DeliveryPartner {
   id: string;
   name: string;
   phone: string;
-  login_id: string;
+  login_id?: string;
   password?: string;
-  status: 'available' | 'on_delivery' | 'offline';
+  status: 'available' | 'on_delivery' | 'offline' | 'busy';
   total_deliveries: number;
   vehicle?: string;
+  vehicle_type?: string;
+  rating?: number;
   avatar?: string;
   location?: DeliveryPartnerLocation;
   is_tracking_active?: boolean;
@@ -117,7 +120,7 @@ export interface SheetConfig {
 export interface SyncLog {
   id: string;
   timestamp: string;
-  event: 'create' | 'update' | 'delete' | 'manual_sync';
+  event: 'create' | 'update' | 'delete' | 'manual_sync' | 'google_sheet_pull';
   order_number: number;
   status: 'success' | 'failed';
   details: string;

@@ -10,12 +10,11 @@ import { PasswordManagerModal } from './components/PasswordManagerModal';
 import { ThermalPrintModal } from './components/ThermalPrintModal';
 import { Order } from './types';
 
-// Lazy-loaded secondary pages for maximum initial load performance
-const OutletDashboard = lazy(() => import('./pages/OutletDashboard').then(m => ({ default: m.OutletDashboard })));
-const DeliveryDashboard = lazy(() => import('./pages/DeliveryDashboard').then(m => ({ default: m.DeliveryDashboard })));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const AlertsPage = lazy(() => import('./pages/AlertsPage').then(m => ({ default: m.AlertsPage })));
-const GoogleSheetsPage = lazy(() => import('./pages/GoogleSheetsPage').then(m => ({ default: m.GoogleSheetsPage })));
+import { OutletDashboard } from './pages/OutletDashboard';
+import { DeliveryDashboard } from './pages/DeliveryDashboard';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { AlertsPage } from './pages/AlertsPage';
+import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 
 function PageFallback() {
   return (

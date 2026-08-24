@@ -358,7 +358,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       const isPickup = String(order.delivery_type || '').toLowerCase().trim() === 'pickup';
       const delBy = status === 'delivered'
         ? (isPickup ? (order.delivered_by || `${order.outlet || 'Store'} Pickup`) : (order.delivery_partner || order.delivered_by || session.name || `${order.outlet} Staff`))
-        : (status !== 'delivered' ? '' : order.delivered_by);
+        : '';
 
       updateOrder(order.id, {
         status,
@@ -395,7 +395,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     const cleanPartner = deliveryPartner ? deliveryPartner.replace(/^Rider:\s*/i, '').trim() : undefined;
     const deliveredByVal = status === 'delivered'
       ? (isPickupOrder ? (order.delivered_by || `${outlet || 'Store'} Pickup`) : (cleanPartner || order.delivery_partner || order.delivered_by || `${outlet} Staff`))
-      : (status !== 'delivered' ? '' : order.delivered_by);
+      : '';
 
     updateOrder(order.id, {
       order_number: finalOrderNumber,

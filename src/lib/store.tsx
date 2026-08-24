@@ -245,7 +245,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY_PASSWORDS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            admin: parsed.admin || DEFAULT_PASSWORDS.admin,
+            outlets: { ...DEFAULT_PASSWORDS.outlets, ...(parsed.outlets || {}) },
+            defaultOutletPassword: parsed.defaultOutletPassword || DEFAULT_PASSWORDS.defaultOutletPassword,
+            partners: { ...DEFAULT_PASSWORDS.partners, ...(parsed.partners || {}) },
+            defaultPartnerPassword: parsed.defaultPartnerPassword || DEFAULT_PASSWORDS.defaultPartnerPassword,
+          };
+        }
       } catch (e) {
         console.error('Failed to parse saved passwords', e);
       }
@@ -800,7 +809,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (role === 'outlet') {
         const outletName = (identifier as OutletName) || 'Sector 31';
-        const expected = authPasswords.outlets[outletName] || authPasswords.defaultOutletPassword;
+        const expected = authPasswords?.outlets?.[outletName] || authPasswords?.defaultOutletPassword || DEFAULT_PASSWORDS.defaultOutletPassword;
         if (passwordAttempt === expected) {
           const userSession: UserSession = {
             id: `usr-outlet-${outletName}`,
@@ -817,9 +826,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const partner = partners.find((p) => p.id === identifier) || partners[0];
         const partnerId = partner ? partner.id : (identifier || 'pt-1');
         const expected =
-          authPasswords.partners[partnerId] ||
+          authPasswords?.partners?.[partnerId] ||
           partner?.password ||
-          authPasswords.defaultPartnerPassword;
+          authPasswords?.defaultPartnerPassword ||
+          DEFAULT_PASSWORDS.defaultPartnerPassword;
 
         if (passwordAttempt === expected) {
           const userSession: UserSession = {
@@ -876,7 +886,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Helper function to log sheet sync
-  const logSync = useCallback((orderNumber: number, event: 'create' | 'update' | 'delete' | 'manual_sync', success = true) => {
+  const logSync = useCallback((orderNumber: number, event: 'create' | 'update' | 'delete' | 'manual_sync' | 'google_sheet_pull', success = true) => {
     const newLog: SyncLog = {
       id: `log-${Date.now()}`,
       timestamp: new Date().toISOString(),
@@ -887,6 +897,48 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSyncLogs((prev) => [newLog, ...prev.slice(0, 49)]);
   }, []);
+
+  const loadDemoOrders = useCallback(() => {
+    fetch('/api/orders')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setOrders(data);
+          ordersRef.current = data;
+          safeSaveOrdersToLocalStorage(data);
+          idbSet(LOCAL_STORAGE_KEY_ORDERS, data).catch(() => {});
+          showNotification(`Loaded ${data.length} orders successfully!`);
+        } else if (INITIAL_ORDERS.length > 0) {
+          setOrders(INITIAL_ORDERS);
+          ordersRef.current = INITIAL_ORDERS;
+          showNotification(`Loaded ${INITIAL_ORDERS.length} demo orders!`);
+        }
+      })
+      .catch(() => {
+        if (INITIAL_ORDERS.length > 0) {
+          setOrders(INITIAL_ORDERS);
+          ordersRef.current = INITIAL_ORDERS;
+        }
+      });
+  }, [showNotification]);
+
+  const pushAllOrdersToCloud = useCallback(async () => {
+    try {
+      const current = ordersRef.current || [];
+      const res = await fetch('/api/orders/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orders: current, overwrite: true })
+      });
+      if (res.ok) {
+        showNotification(`Cloud sync complete! ${current.length} orders synced.`);
+        return { success: true, count: current.length };
+      }
+      return { success: false, count: 0, message: 'Server returned error' };
+    } catch (err: any) {
+      return { success: false, count: 0, message: err.message };
+    }
+  }, [showNotification]);
 
   // Fast, non-blocking pushToSheet function for Google Sheet webhook
   const pushToSheet = useCallback((order: Order, action: 'create' | 'update' | 'delete') => {
@@ -1672,6 +1724,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrder,
       deleteOrder,
       clearAllOrders,
+      loadDemoOrders,
+      pushAllOrdersToCloud,
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,
@@ -1722,6 +1776,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrder,
       deleteOrder,
       clearAllOrders,
+      loadDemoOrders,
+      pushAllOrdersToCloud,
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,

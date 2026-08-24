@@ -22,12 +22,12 @@ export const PasswordManagerModal: React.FC<PasswordManagerModalProps> = ({ isOp
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
 
   // Local state for edits
-  const [adminPass, setAdminPass] = useState(authPasswords.admin);
+  const [adminPass, setAdminPass] = useState(authPasswords?.admin || 'admin123');
   const [outletPasses, setOutletPasses] = useState<Record<string, string>>({
-    ...authPasswords.outlets
+    ...(authPasswords?.outlets || {})
   });
   const [partnerPasses, setPartnerPasses] = useState<Record<string, string>>({
-    ...authPasswords.partners
+    ...(authPasswords?.partners || {})
   });
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);

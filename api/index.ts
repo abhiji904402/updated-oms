@@ -590,19 +590,4 @@ apiRouter.delete('/:collection/:id', async (req, res) => {
 
 app.use('/api', apiRouter);
 
-// Support Vercel serverless routing
-app.use((req, res, next) => {
-  if (
-    req.path.startsWith('/orders') || 
-    req.path.startsWith('/delivery_partners') || 
-    req.path.startsWith('/outlet_locations') || 
-    req.path.startsWith('/system_settings') ||
-    req.path.startsWith('/events')
-  ) {
-    apiRouter(req, res, next);
-  } else {
-    next();
-  }
-});
-
 export default app;

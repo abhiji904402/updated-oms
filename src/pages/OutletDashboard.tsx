@@ -142,14 +142,14 @@ export const OutletDashboard = React.memo(() => {
       // 2. Search Query Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchNum = o.order_number.toString().includes(q);
-        const matchCust = (o.customer_name || '').toLowerCase().includes(q);
-        const matchPhone = (o.mobile_number || '').includes(q);
-        const matchItem = (o.item_type || '').toLowerCase().includes(q);
-        const matchAddr = (o.address || '').toLowerCase().includes(q);
-        const matchRider = (o.delivery_partner || '').toLowerCase().includes(q);
-        const matchAdvBill = (o.advance_bill_number || (o as any).adv_bill || '').toLowerCase().includes(q);
-        const matchFinalBill = (o.final_bill_number || (o as any).final_bill || (o as any).bill_number || '').toLowerCase().includes(q);
+        const matchNum = String(o?.order_number || o?.order_id || '').toLowerCase().includes(q);
+        const matchCust = String(o?.customer_name || '').toLowerCase().includes(q);
+        const matchPhone = String(o?.mobile_number || '').includes(q);
+        const matchItem = String(o?.item_type || '').toLowerCase().includes(q);
+        const matchAddr = String(o?.address || '').toLowerCase().includes(q);
+        const matchRider = String(o?.delivery_partner || '').toLowerCase().includes(q);
+        const matchAdvBill = String(o?.advance_bill_number || (o as any)?.adv_bill || '').toLowerCase().includes(q);
+        const matchFinalBill = String(o?.final_bill_number || (o as any)?.final_bill || (o as any)?.bill_number || '').toLowerCase().includes(q);
         if (!matchNum && !matchCust && !matchPhone && !matchItem && !matchAddr && !matchRider && !matchAdvBill && !matchFinalBill) {
           return false;
         }

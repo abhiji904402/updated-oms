@@ -1,11 +1,7 @@
 import { Order, DeliveryPartner, SheetConfig, Alert } from '../types';
-import seedData from './broomies_store_seed.json';
 
-const rawOrders = (seedData && seedData.orders) ? Object.values(seedData.orders) as Order[] : [];
-const rawPartners = (seedData && seedData.delivery_partners) ? Object.values(seedData.delivery_partners) as DeliveryPartner[] : [];
-
-export const INITIAL_ORDERS: Order[] = rawOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
-export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = rawPartners.length > 0 ? rawPartners : [
+export const INITIAL_ORDERS: Order[] = [];
+export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = [
   { id: '1', name: 'Raju (Biker)', phone: '9876543210', vehicle_type: 'bike', status: 'available', total_deliveries: 142, rating: 4.8 },
   { id: '2', name: 'Amit (Scooter)', phone: '9876543211', vehicle_type: 'scooter', status: 'busy', total_deliveries: 98, rating: 4.9 },
   { id: '3', name: 'Vikas (EV)', phone: '9876543212', vehicle_type: 'ev', status: 'available', total_deliveries: 64, rating: 4.7 }
@@ -21,3 +17,4 @@ export const ITEM_PRESETS = [
   { name: 'Custom Fondant Cake (2kg)', price: 2000 },
   { name: 'Pastries Box (4 pcs)', price: 300 }
 ];
+
