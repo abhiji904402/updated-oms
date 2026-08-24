@@ -60,7 +60,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
   const [deliveryPartner, setDeliveryPartner] = useState<string>('');
   const [itemImageUrl, setItemImageUrl] = useState<string | null>(null);
   const [otp, setOtp] = useState<string>('');
-  const [orderNumberStr, setOrderNumberStr] = useState<string>('');
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
 
   // Suggestions State
@@ -165,7 +164,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       setDeliveryPartner(order.delivery_partner || '');
       setItemImageUrl(order.item_image_url || null);
       setOtp(order.otp || '');
-      setOrderNumberStr(order.order_number ? order.order_number.toString() : '');
     }
   }, [order, isOpen]);
 
@@ -387,10 +385,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     const calculatedAdvance = isFullPay ? totalAmountNum : (paymentType === 'due' ? 0 : advanceAmountNum);
     const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
 
-    const finalOrderNumber = orderNumberStr && !isNaN(Number(orderNumberStr)) && Number(orderNumberStr) > 0
-      ? Number(orderNumberStr)
-      : order.order_number;
-
     const isPickupOrder = deliveryType === 'pickup';
     const cleanPartner = deliveryPartner ? deliveryPartner.replace(/^Rider:\s*/i, '').trim() : undefined;
     const deliveredByVal = status === 'delivered'
@@ -398,7 +392,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       : '';
 
     updateOrder(order.id, {
-      order_number: finalOrderNumber,
       outlet,
       order_date: orderDate,
       order_time: formatTo12Hour(orderTime) || orderTime,

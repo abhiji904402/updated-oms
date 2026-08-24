@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Order, DeliveryPartner, DeliveryPartnerLocation, OutletLocation, SheetConfig, SyncLog, UserSession, Role, OutletName, OrderStatus, Alert } from '../types';
 import { formatTo12Hour, getCurrentTime12Hour } from './timeUtils';
-import { getNextOrderNumber, resequenceOrderNumbers } from './orderLogic';
+import { getNextOrderNumber } from './orderLogic';
 
 export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
   {
@@ -39,8 +39,7 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 ];
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
-import { db } from './firebaseMock';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebaseMock';
+import { db, collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebase';
 
 export interface AuthPasswords {
   admin: string;
@@ -82,7 +81,6 @@ interface OMSContextType {
   updateOrderStatus: (id: string, status: OrderStatus, deliveryPartner?: string) => void;
   markDelivered: (id: string, photoUrl?: string, otpInput?: string, deliveringRiderName?: string) => { success: boolean; message: string };
   confirmRiderDelivery: (id: string) => void;
-  resequenceAllOrders: (startNumber?: number) => Promise<void>;
 
   // Delivery Partners
   partners: DeliveryPartner[];
@@ -552,7 +550,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           firestoreOrders.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        if (firestoreOrders.length === 0) return;
+        if (firestoreOrders.length === 0 && !snapshot.metadata.fromCache && snapshot.empty) {
+          setOrders([]);
+          ordersRef.current = [];
+          safeLocalStorageSet(LOCAL_STORAGE_KEY_ORDERS, '[]');
+          return;
+        } else if (firestoreOrders.length === 0) {
+          return;
+        }
 
         // Sort descending by order_number
         firestoreOrders.sort((a, b) => {
@@ -898,43 +903,31 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSyncLogs((prev) => [newLog, ...prev.slice(0, 49)]);
   }, []);
 
-  const loadDemoOrders = useCallback(() => {
-    fetch('/api/orders')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setOrders(data);
-          ordersRef.current = data;
-          safeSaveOrdersToLocalStorage(data);
-          idbSet(LOCAL_STORAGE_KEY_ORDERS, data).catch(() => {});
-          showNotification(`Loaded ${data.length} orders successfully!`);
-        } else if (INITIAL_ORDERS.length > 0) {
-          setOrders(INITIAL_ORDERS);
-          ordersRef.current = INITIAL_ORDERS;
-          showNotification(`Loaded ${INITIAL_ORDERS.length} demo orders!`);
-        }
-      })
-      .catch(() => {
-        if (INITIAL_ORDERS.length > 0) {
-          setOrders(INITIAL_ORDERS);
-          ordersRef.current = INITIAL_ORDERS;
-        }
-      });
+  const loadDemoOrders = useCallback(async () => {
+    if (INITIAL_ORDERS.length > 0) {
+      try {
+        const batch = writeBatch(db);
+        INITIAL_ORDERS.forEach((ord) => {
+          batch.set(doc(db, 'orders', ord.id), sanitizeOrderForFirestore(ord));
+        });
+        await batch.commit();
+        showNotification(`Seeded ${INITIAL_ORDERS.length} demo orders to Firestore!`);
+      } catch (err) {
+        handleFirestoreWriteError(err, 'seed demo orders');
+      }
+    }
   }, [showNotification]);
 
   const pushAllOrdersToCloud = useCallback(async () => {
     try {
       const current = ordersRef.current || [];
-      const res = await fetch('/api/orders/bulk-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orders: current, overwrite: true })
+      const batch = writeBatch(db);
+      current.forEach((ord) => {
+        batch.set(doc(db, 'orders', ord.id), sanitizeOrderForFirestore(ord), { merge: true });
       });
-      if (res.ok) {
-        showNotification(`Cloud sync complete! ${current.length} orders synced.`);
-        return { success: true, count: current.length };
-      }
-      return { success: false, count: 0, message: 'Server returned error' };
+      await batch.commit();
+      showNotification(`Cloud sync complete! ${current.length} orders synced.`);
+      return { success: true, count: current.length };
     } catch (err: any) {
       return { success: false, count: 0, message: err.message };
     }
@@ -1273,40 +1266,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [showNotification, sheetConfig.sheet_url, triggerGoogleSheetSync]);
 
-  const resequenceAllOrders = useCallback(async (startNumber = 1) => {
-    const current = ordersRef.current || [];
-    if (current.length === 0) {
-      showNotification('No orders to re-sequence.');
-      return;
-    }
-
-    // Sort descending by order_date, then descending by order_time, and assign sequential order_id/order_number
-    const resequenced = resequenceOrderNumbers(current, startNumber);
-
-    setOrders(resequenced);
-    ordersRef.current = resequenced;
-
-    // Save to Firestore in chunks without modifying delivery_date
-    try {
-      for (let i = 0; i < resequenced.length; i += 400) {
-        const chunk = resequenced.slice(i, i + 400);
-        const batch = writeBatch(db);
-        chunk.forEach((ord) => {
-          const clean = sanitizeOrderForFirestore(ord);
-          batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-        });
-        await batch.commit();
-      }
-    } catch (err) {
-      handleFirestoreWriteError(err, 'resequence batch');
-    }
-
-    showNotification(`🔢 Order IDs sorted in descending order of punch date/time and updated sequentially!`);
-  }, [showNotification]);
-
   const updateOrder = useCallback((id: string, updates: Partial<Order>) => {
     const target = ordersRef.current.find((o) => o.id === id);
     if (!target) return;
+
+    // Defend strictly against order_number mutations
+    if ('order_number' in updates) {
+      delete updates.order_number;
+    }
 
     const now = new Date().toISOString();
     const hasPaymentUpdate =
@@ -1389,7 +1356,12 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Perform atomic batch delete on Firestore collection
     try {
-      await fetch('/api/orders', { method: 'DELETE' });
+      const snap = await getDocs(collection(db, 'orders'));
+      if (!snap.empty) {
+        const batch = writeBatch(db);
+        snap.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
       showNotification('🗑️ All orders permanently deleted from Cloud & IndexedDB! Ready for fresh upload.');
     } catch (err) {
       handleFirestoreWriteError(err, 'clear orders');
@@ -1729,7 +1701,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,
-      resequenceAllOrders,
       partners: partners || [],
       addPartner,
       deletePartner,
@@ -1781,7 +1752,6 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrderStatus,
       markDelivered,
       confirmRiderDelivery,
-      resequenceAllOrders,
       partners,
       addPartner,
       deletePartner,

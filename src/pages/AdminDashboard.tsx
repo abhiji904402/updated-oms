@@ -77,8 +77,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
     selectedOrderIds = [],
     session,
     clearOrderSelection,
-    confirmRiderDelivery,
-    resequenceAllOrders
+    confirmRiderDelivery
   } = useOMS();
 
   const isOutletUser = session?.role === 'outlet';
