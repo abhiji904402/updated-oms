@@ -560,12 +560,21 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         });
 
-        // Firestore is the authoritative central source of truth:
-        // Automatically updates local React state, IndexedDB, and localStorage across all open devices!
-        setOrders(firestoreOrders);
-        ordersRef.current = firestoreOrders;
-        safeSaveOrdersToLocalStorage(firestoreOrders);
-        idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
+        // Smart change check to prevent redundant re-renders & heavy storage writes
+        const prev = ordersRef.current;
+        const hasChanged =
+          !prev ||
+          prev.length !== firestoreOrders.length ||
+          prev[0]?.id !== firestoreOrders[0]?.id ||
+          prev[0]?.updated_at !== firestoreOrders[0]?.updated_at ||
+          prev[prev.length - 1]?.id !== firestoreOrders[firestoreOrders.length - 1]?.id;
+
+        if (hasChanged) {
+          setOrders(firestoreOrders);
+          ordersRef.current = firestoreOrders;
+          safeSaveOrdersToLocalStorage(firestoreOrders);
+          idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
+        }
       },
       (err) => {
         handleFirestoreWriteError(err, 'orders snapshot sync');

@@ -2,8 +2,12 @@ const API_BASE = '/api';
 
 export const db = {};
 
-// Simple latency compensation cache
+// Latency compensation write cache
 const pendingWrites = new Map<string, { timestamp: number, data: any | null }>();
+
+// Collection/Document ETag Cache to avoid redundant parsing and re-renders
+const etagCache = new Map<string, string>();
+const lastDataCache = new Map<string, any>();
 
 export function doc(db: any, collection: string, id: string) {
   return { collection, id };
@@ -19,6 +23,7 @@ export async function setDoc(docRef: { collection: string, id: string }, data: a
   
   const cacheKey = `${docRef.collection}/${docRef.id}`;
   pendingWrites.set(cacheKey, { data, timestamp: Date.now() });
+  etagCache.delete(docRef.collection); // invalidate cached etag
 
   try {
     const res = await fetch(url, {
@@ -29,7 +34,7 @@ export async function setDoc(docRef: { collection: string, id: string }, data: a
     
     setTimeout(() => {
       pendingWrites.delete(cacheKey);
-    }, 30000);
+    }, 10000);
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -44,13 +49,14 @@ export async function setDoc(docRef: { collection: string, id: string }, data: a
 export async function deleteDoc(docRef: { collection: string, id: string }) {
   const cacheKey = `${docRef.collection}/${docRef.id}`;
   pendingWrites.set(cacheKey, { data: null, timestamp: Date.now() });
+  etagCache.delete(docRef.collection);
 
   try {
     const res = await fetch(`${API_BASE}/${docRef.collection}/${docRef.id}`, { method: 'DELETE' });
     
     setTimeout(() => {
       pendingWrites.delete(cacheKey);
-    }, 30000);
+    }, 10000);
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -92,16 +98,24 @@ export function writeBatch(db: any) {
       operations.push({ action: 'delete', collection: docRef.collection, id: docRef.id });
     },
     commit: async () => {
-      const promises = operations.map(op => {
-         if (op.action === 'set') {
-           return setDoc({collection: op.collection, id: op.id}, op.data, op.options).catch(e => console.error(e));
-         }
-         else if (op.action === 'delete') {
-           return deleteDoc({collection: op.collection, id: op.id}).catch(e => console.error(e));
-         }
-         return Promise.resolve();
-      });
-      await Promise.all(promises);
+      // Chunk operations in batches of 25 for fast parallel dispatch
+      const chunks: any[][] = [];
+      for (let i = 0; i < operations.length; i += 25) {
+        chunks.push(operations.slice(i, i + 25));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.allSettled(
+          chunk.map((op) => {
+            if (op.action === 'set') {
+              return setDoc({ collection: op.collection, id: op.id }, op.data, op.options);
+            } else if (op.action === 'delete') {
+              return deleteDoc({ collection: op.collection, id: op.id });
+            }
+            return Promise.resolve();
+          })
+        );
+      }
     }
   };
 }
@@ -112,79 +126,97 @@ export function disableNetwork() {
 
 export function onSnapshot(ref: any, callback: any, onError?: any) {
   let isCancelled = false;
-  
+  const pollKey = ref.id ? `${ref.collection}/${ref.id}` : ref.collection;
+
   const poll = async () => {
     if (isCancelled) return;
     try {
-      const timestamp = new Date().getTime();
-      if (ref.id) {
-         const res = await fetch(`${API_BASE}/${ref.collection}/${ref.id}?t=${timestamp}`, {
-           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-         });
-         if (res.ok) {
-           let data = await res.json();
-           const cacheKey = `${ref.collection}/${ref.id}`;
-           const pending = pendingWrites.get(cacheKey);
-           if (pending) {
-             if (pending.data === null) {
-               data = null;
-             } else {
-               data = { ...data, ...pending.data };
-             }
-           }
-           callback({ id: ref.id, exists: () => (data && Object.keys(data).length > 0), data: () => data });
-         }
-      } else {
-         const res = await fetch(`${API_BASE}/${ref.collection}?t=${timestamp}`, {
-           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-         });
-         if (res.ok) {
-           const data = await res.json();
-           
-           // Latency compensation
-           const mergedData = data.filter((d: any) => {
-               const cacheKey = `${ref.collection}/${d.id || d._id}`;
-               const pending = pendingWrites.get(cacheKey);
-               return !(pending && pending.data === null);
-           }).map((d: any) => {
-               const cacheKey = `${ref.collection}/${d.id || d._id}`;
-               const pending = pendingWrites.get(cacheKey);
-               return pending ? { ...d, ...pending.data } : d;
-           });
-
-           const serverIds = new Set(mergedData.map((d: any) => d.id || d._id));
-           for (const [key, pending] of pendingWrites.entries()) {
-               if (key.startsWith(`${ref.collection}/`) && pending.data !== null) {
-                   const id = key.split('/')[1];
-                   if (!serverIds.has(id)) {
-                       mergedData.push(pending.data);
-                   }
-               }
-           }
-
-           const docs = mergedData.map((d: any) => ({
-             id: d.id || d._id,
-             ref: { collection: ref.collection, id: d.id || d._id },
-             data: () => d
-           }));
-           
-           callback({
-             docs,
-             size: docs.length,
-             empty: docs.length === 0,
-             metadata: { fromCache: false },
-             forEach: (cb: any) => docs.forEach(cb)
-           });
-         }
+      const cachedEtag = etagCache.get(pollKey);
+      const headers: Record<string, string> = {
+        'Accept': 'application/json'
+      };
+      if (cachedEtag) {
+        headers['If-None-Match'] = cachedEtag;
       }
-    } catch(e: any) {
-      if (e.message !== 'Failed to fetch') {
-         console.warn("Polling error:", e);
+
+      if (ref.id) {
+        const res = await fetch(`${API_BASE}/${ref.collection}/${ref.id}`, { headers });
+        if (res.status === 304) {
+          // No change
+        } else if (res.ok) {
+          const etag = res.headers.get('ETag');
+          if (etag) etagCache.set(pollKey, etag);
+          let data = await res.json();
+          const cacheKey = `${ref.collection}/${ref.id}`;
+          const pending = pendingWrites.get(cacheKey);
+          if (pending) {
+            if (pending.data === null) {
+              data = null;
+            } else {
+              data = { ...data, ...pending.data };
+            }
+          }
+          lastDataCache.set(pollKey, data);
+          callback({ id: ref.id, exists: () => (data && Object.keys(data).length > 0), data: () => data });
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/${ref.collection}`, { headers });
+        if (res.status === 304) {
+          // No change, do not re-render or re-parse!
+        } else if (res.ok) {
+          const etag = res.headers.get('ETag');
+          if (etag) etagCache.set(pollKey, etag);
+          const data = await res.json();
+          
+          // Latency compensation merge
+          const mergedData = data.filter((d: any) => {
+            const cacheKey = `${ref.collection}/${d.id || d._id}`;
+            const pending = pendingWrites.get(cacheKey);
+            return !(pending && pending.data === null);
+          }).map((d: any) => {
+            const cacheKey = `${ref.collection}/${d.id || d._id}`;
+            const pending = pendingWrites.get(cacheKey);
+            return pending ? { ...d, ...pending.data } : d;
+          });
+
+          const serverIds = new Set(mergedData.map((d: any) => d.id || d._id));
+          for (const [key, pending] of pendingWrites.entries()) {
+            if (key.startsWith(`${ref.collection}/`) && pending.data !== null) {
+              const id = key.split('/')[1];
+              if (!serverIds.has(id)) {
+                mergedData.push(pending.data);
+              }
+            }
+          }
+
+          const docs = mergedData.map((d: any) => ({
+            id: d.id || d._id,
+            ref: { collection: ref.collection, id: d.id || d._id },
+            data: () => d
+          }));
+
+          callback({
+            docs,
+            size: docs.length,
+            empty: docs.length === 0,
+            metadata: { fromCache: false },
+            forEach: (cb: any) => docs.forEach(cb)
+          });
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError' && e.message !== 'Failed to fetch') {
+        console.warn('Sync poll notice:', e);
       }
       if (onError) onError(e);
     }
-    if (!isCancelled) setTimeout(poll, 1500);
+
+    if (!isCancelled) {
+      // 3.5 second interval for calm, responsive sync without flooding CPU
+      setTimeout(poll, 3500);
+    }
   };
+
   poll();
   return () => { isCancelled = true; };
 }
