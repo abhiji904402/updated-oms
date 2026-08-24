@@ -157,41 +157,19 @@ export function safeLocalStorageSet(key: string, value: string): void {
 export function safeSaveOrdersToLocalStorage(ordersToSave: Order[]): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(ordersToSave));
-  } catch (e) {
-    console.warn('LocalStorage quota exceeded! Stripping large image payloads for localStorage fallback:', e);
+    // Only save latest 50 orders without large images to localStorage to prevent blocking the main thread.
+    // IndexedDB and Firestore Persistent Cache handle the full dataset asynchronously.
+    const recentOrders = ordersToSave.slice(0, 50).map((o) => ({
+      ...o,
+      item_image_url: '',
+      delivery_photo_url: ''
+    }));
+    localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(recentOrders));
+  } catch (e3) {
+    console.warn('LocalStorage completely full. IndexedDB will serve as the primary storage layer.', e3);
     try {
-      // 1. Strip images & delivery photos which consume 90%+ of quota
-      const lightweightOrders = ordersToSave.map((o) => {
-        const hasLargeImage = o.item_image_url && o.item_image_url.length > 200;
-        const hasLargePhoto = o.delivery_photo_url && o.delivery_photo_url.length > 200;
-        if (hasLargeImage || hasLargePhoto) {
-          return {
-            ...o,
-            item_image_url: hasLargeImage ? '' : o.item_image_url,
-            delivery_photo_url: hasLargePhoto ? '' : o.delivery_photo_url
-          };
-        }
-        return o;
-      });
-      localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(lightweightOrders));
-    } catch (e2) {
-      console.warn('LocalStorage still exceeded quota, saving most recent 50 orders only:', e2);
-      try {
-        // 2. Fallback to latest 50 orders without images
-        const recentOrders = ordersToSave.slice(0, 50).map((o) => ({
-          ...o,
-          item_image_url: '',
-          delivery_photo_url: ''
-        }));
-        localStorage.setItem(LOCAL_STORAGE_KEY_ORDERS, JSON.stringify(recentOrders));
-      } catch (e3) {
-        console.warn('LocalStorage completely full. IndexedDB will serve as the primary storage layer.', e3);
-        try {
-          localStorage.removeItem(LOCAL_STORAGE_KEY_ORDERS);
-        } catch (e4) {}
-      }
-    }
+      localStorage.removeItem(LOCAL_STORAGE_KEY_ORDERS);
+    } catch (e4) {}
   }
 }
 
