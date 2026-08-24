@@ -138,24 +138,25 @@ export const getDocs = async (queryObj: any) => {
 };
 
 export const writeBatch = (dbInstance: any) => {
-  const promises: Promise<any>[] = [];
+  const updatesObj: Record<string, any> = {};
+  const deletes: string[] = [];
+
   return {
     set: (docPath: any, data: any, options?: { merge?: boolean }) => {
       const finalPath = typeof docPath === 'string' ? docPath : docPath.ref || String(docPath);
-      const dbRef = ref(db, finalPath);
-      if (options?.merge) {
-        promises.push(update(dbRef, data));
-      } else {
-        promises.push(set(dbRef, data));
-      }
+      // In RTDB, to update specific paths without overwriting, we must structure it carefully,
+      // but for doc-level set/merge, we just place the whole object at the path.
+      updatesObj[finalPath] = data;
     },
     delete: (docPath: any) => {
       const finalPath = typeof docPath === 'string' ? docPath : docPath.ref || String(docPath);
-      const dbRef = ref(db, finalPath);
-      promises.push(remove(dbRef));
+      deletes.push(finalPath);
+      updatesObj[finalPath] = null; // null deletes the path in RTDB
     },
     commit: async () => {
-      await Promise.all(promises);
+      if (Object.keys(updatesObj).length > 0) {
+        await update(ref(db), updatesObj);
+      }
     }
   };
 };

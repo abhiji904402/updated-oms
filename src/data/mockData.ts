@@ -2,9 +2,9 @@ import { Order, DeliveryPartner, SheetConfig, Alert } from '../types';
 
 export const INITIAL_ORDERS: Order[] = [];
 export const INITIAL_DELIVERY_PARTNERS: DeliveryPartner[] = [
-  { id: '1', name: 'Raju (Biker)', phone: '9876543210', vehicle_type: 'bike', status: 'available', total_deliveries: 142, rating: 4.8 },
-  { id: '2', name: 'Amit (Scooter)', phone: '9876543211', vehicle_type: 'scooter', status: 'busy', total_deliveries: 98, rating: 4.9 },
-  { id: '3', name: 'Vikas (EV)', phone: '9876543212', vehicle_type: 'ev', status: 'available', total_deliveries: 64, rating: 4.7 }
+  { id: 'goldy', name: 'Goldy', phone: '9004800273', vehicle_type: 'Van', status: 'available', total_deliveries: 0, login_id: 'goldy' },
+  { id: 'abhishek', name: 'Abhishek', phone: '9354706040', vehicle_type: 'Bike', status: 'available', total_deliveries: 0, login_id: 'Abhishek' },
+  { id: 'vishwakarma', name: 'Vishwakarma', phone: '9205573468', vehicle_type: 'Bike', status: 'available', total_deliveries: 0, login_id: 'vishwakarma' }
 ];
 export const INITIAL_SHEET_CONFIG: SheetConfig = { sheet_url: '', is_active: false, last_sync: null, auto_sync: false, webhook_status: 'idle', sync_count: 0 };
 export const INITIAL_ALERTS: Alert[] = [];

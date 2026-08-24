@@ -522,20 +522,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     // Fetch only active orders to save Firestore read limits (limit 50k/day)
     // We use query 'in' for active statuses.
-    const activeOrdersQuery = query(
-      collection(db, 'orders'),
-      where('status', 'in', ['pending', 'processing', 'out_for_delivery'])
-    );
-
     const unsub = onSnapshot(
-      activeOrdersQuery,
+      collection(db, 'orders'),
       (snapshot) => {
         const firestoreOrders: Order[] = [];
         snapshot.forEach((docSnap) => {
           firestoreOrders.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        if (firestoreOrders.length === 0 && !snapshot.metadata.fromCache && snapshot.empty) {
+        if (firestoreOrders.length === 0 && !snapshot.metadata?.fromCache && snapshot.empty) {
           setOrders([]);
           ordersRef.current = [];
           safeLocalStorageSet(LOCAL_STORAGE_KEY_ORDERS, '[]');
@@ -553,24 +548,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         // Authoritative Real-time Sync with reference stability
-        setOrders((prev) => {
-          if (prev.length === firestoreOrders.length && prev.length > 0) {
-            let isIdentical = true;
-            // Sample test first, middle, last and recent elements
-            for (let i = 0; i < Math.min(prev.length, 30); i++) {
-              const p = prev[i];
-              const f = firestoreOrders[i];
-              if (p.id !== f.id || p.updated_at !== f.updated_at || p.status !== f.status || p.delivery_partner !== f.delivery_partner || p.rider_delivered !== f.rider_delivered) {
-                isIdentical = false;
-                break;
-              }
-            }
-            if (isIdentical && prev[prev.length - 1]?.id === firestoreOrders[firestoreOrders.length - 1]?.id) {
-              return prev;
-            }
-          }
-          return firestoreOrders;
-        });
+        setOrders(firestoreOrders);
         ordersRef.current = firestoreOrders;
         safeSaveOrdersToLocalStorage(firestoreOrders);
         idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
@@ -597,9 +575,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           idbSet(LOCAL_STORAGE_KEY_PARTNERS, list).catch(() => {});
           safeLocalStorageSet(LOCAL_STORAGE_KEY_PARTNERS, JSON.stringify(list));
         } else if (!snapshot.metadata.fromCache && snapshot.empty) {
-          const seeded = localStorage.getItem('delivery_partners_seeded_v3');
+          const seeded = localStorage.getItem('delivery_partners_seeded_v4');
           if (!seeded) {
-            safeLocalStorageSet('delivery_partners_seeded_v3', 'true');
+            safeLocalStorageSet('delivery_partners_seeded_v4', 'true');
             const batch = writeBatch(db);
             INITIAL_DELIVERY_PARTNERS.forEach((p) => {
               batch.set(doc(db, 'delivery_partners', p.id), p);
