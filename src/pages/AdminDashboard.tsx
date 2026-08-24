@@ -1,3 +1,4 @@
+import { getTodayDateStr, getTomorrowDateStr } from '../lib/timeUtils';
 import React, { useState, useMemo } from 'react';
 import { useOMS } from '../lib/store';
 import { OrderCard } from '../components/OrderCard';
@@ -103,12 +104,8 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
 
   // Dates
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const tomorrowStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  }, []);
+  const todayStr = useMemo(() => getTodayDateStr(), []);
+  const tomorrowStr = useMemo(() => getTomorrowDateStr(), []);
 
   // Compute Badge Counts for all 8 Tabs
   const counts = useMemo(() => {
@@ -174,7 +171,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
       if (activeTab === 'today') {
         const delDate = getNormalizedDateStr(o.delivery_date) || getNormalizedDateStr(o.order_date);
         return (
-          (delDate === todayStr || delDate <= todayStr) &&
+          (delDate === todayStr || Boolean(o.delivery_confirmation_pending)) &&
           o.status !== 'cancelled' &&
           o.status !== 'on_hold' &&
           !isDeliveredMarked(o) &&

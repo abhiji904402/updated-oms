@@ -511,7 +511,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // 1. Real-time Firestore Sync for Orders (Authoritative Live Sync across all devices, Vercel, & AI Studio)
+  // 1. Real-time Database Sync for Orders (Authoritative Live Sync across all devices & tabs)
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'orders'),
@@ -521,36 +521,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           firestoreOrders.push({ ...docSnap.data(), id: docSnap.id } as Order);
         });
 
-        const currentLocal = ordersRef.current || [];
-
-        // Safe Auto-heal: If Firestore is empty, push local or seed orders
-        if (firestoreOrders.length === 0) {
-          if (currentLocal.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
-            hasAutoSyncedLocalOrdersRef.current = true;
-            console.log(`[Cloud Sync Auto-Heal] Pushing ${currentLocal.length} local orders to Cloud Firestore...`);
-            const batch = writeBatch(db);
-            currentLocal.forEach((ord) => {
-              const clean = sanitizeOrderForFirestore(ord);
-              batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-            });
-            batch.commit().catch((err) => handleFirestoreWriteError(err, 'auto-heal push local orders to firestore'));
-            return;
-          } else if (currentLocal.length === 0 && INITIAL_ORDERS.length > 0 && !hasAutoSyncedLocalOrdersRef.current) {
-            hasAutoSyncedLocalOrdersRef.current = true;
-            const initialList = [...INITIAL_ORDERS];
-            setOrders(initialList);
-            ordersRef.current = initialList;
-            safeSaveOrdersToLocalStorage(initialList);
-            idbSet(LOCAL_STORAGE_KEY_ORDERS, initialList).catch(() => {});
-            const batch = writeBatch(db);
-            initialList.forEach((ord) => {
-              const clean = sanitizeOrderForFirestore(ord);
-              batch.set(doc(db, 'orders', ord.id), clean, { merge: true });
-            });
-            batch.commit().catch((err) => handleFirestoreWriteError(err, 'seed initial orders to firestore'));
-            return;
-          }
-        }
+        if (firestoreOrders.length === 0) return;
 
         // Sort descending by order_number
         firestoreOrders.sort((a, b) => {
@@ -560,21 +531,11 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         });
 
-        // Smart change check to prevent redundant re-renders & heavy storage writes
-        const prev = ordersRef.current;
-        const hasChanged =
-          !prev ||
-          prev.length !== firestoreOrders.length ||
-          prev[0]?.id !== firestoreOrders[0]?.id ||
-          prev[0]?.updated_at !== firestoreOrders[0]?.updated_at ||
-          prev[prev.length - 1]?.id !== firestoreOrders[firestoreOrders.length - 1]?.id;
-
-        if (hasChanged) {
-          setOrders(firestoreOrders);
-          ordersRef.current = firestoreOrders;
-          safeSaveOrdersToLocalStorage(firestoreOrders);
-          idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
-        }
+        // Authoritative Real-time Sync
+        setOrders(firestoreOrders);
+        ordersRef.current = firestoreOrders;
+        safeSaveOrdersToLocalStorage(firestoreOrders);
+        idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
       },
       (err) => {
         handleFirestoreWriteError(err, 'orders snapshot sync');

@@ -1,3 +1,22 @@
+
+/**
+ * Returns local YYYY-MM-DD string according to device/client timezone (e.g. IST)
+ */
+export function getTodayDateStr(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Returns tomorrow's local YYYY-MM-DD string
+ */
+export function getTomorrowDateStr(date: Date = new Date()): string {
+  const next = new Date(date);
+  next.setDate(next.getDate() + 1);
+  return getTodayDateStr(next);
+}
 import { Order } from '../types';
 
 export interface DeliveryTimeInfo {

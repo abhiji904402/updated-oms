@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Order, OrderStatus, PaymentType } from '../types';
 import { useOMS } from '../lib/store';
 import { printThermalReceipts } from '../lib/thermalPrint';
-import { getDeliveryTimeInfo, getCountdownInfo, formatTo12Hour } from '../lib/timeUtils';
+import { getDeliveryTimeInfo, getCountdownInfo, formatTo12Hour, getTodayDateStr } from '../lib/timeUtils';
 import { getNormalizedDateStr } from '../lib/orderLogic';
 import {
   Clock,
@@ -55,7 +55,7 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
   const timeInfo = getDeliveryTimeInfo(order);
   const countdown = getCountdownInfo(order, Date.now());
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayDateStr();
   const normDelDate = getNormalizedDateStr(order.delivery_date);
   const isMissedOrder = normDelDate !== '' && normDelDate < todayStr && order.status !== 'delivered' && order.status !== 'cancelled';
 

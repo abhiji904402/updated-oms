@@ -1,3 +1,4 @@
+import { getTodayDateStr } from '../lib/timeUtils';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useOMS } from '../lib/store';
 import { Order, OutletName, DeliveryType, PaymentType } from '../types';
@@ -32,7 +33,7 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     return getNextOrderNumber(orders || [], 1);
   }, [orders]);
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => getTodayDateStr(), []);
   const currentTimeStr = useMemo(() => {
     const d = new Date();
     let hours = d.getHours();

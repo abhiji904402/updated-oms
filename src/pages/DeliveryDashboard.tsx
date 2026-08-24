@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useOMS } from '../lib/store';
 import { Order, DeliveryPartner } from '../types';
 import { compressImage } from '../lib/imageCompressor';
-import { sortOrdersByDeliveryPriority, getCountdownInfo, formatTo12Hour } from '../lib/timeUtils';
+import { sortOrdersByDeliveryPriority, getCountdownInfo, formatTo12Hour, getTodayDateStr } from '../lib/timeUtils';
 import { matchesOutlet, formatOutletDisplayName, isOrderForToday } from '../lib/outletUtils';
 import { getDeliveredByDisplayName } from '../lib/orderLogic';
 import {
@@ -59,7 +59,7 @@ export const DeliveryDashboard = React.memo(() => {
   const [selectedOutlet, setSelectedOutlet] = useState<string>('ALL');
   const [selectedDateScope, setSelectedDateScope] = useState<'today' | 'all'>('today');
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => getTodayDateStr(), []);
 
   const mainOutlets = useMemo(() => {
     const base = ['ALL', 'Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];

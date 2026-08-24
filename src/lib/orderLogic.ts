@@ -257,7 +257,7 @@ export const computeTabCounts = (safeOrders: Order[], todayStr: string, tomorrow
     }
 
     if (!isCanc && !isHold && !isDel && o.status !== 'missed') {
-      if (delDate === todayStr || delDate <= todayStr) {
+      if (delDate === todayStr || o.delivery_confirmation_pending) {
         today++;
       } else if (delDate === tomorrowStr) {
         tomorrow++;

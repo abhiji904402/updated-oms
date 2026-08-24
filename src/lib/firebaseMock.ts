@@ -2,13 +2,6 @@ const API_BASE = '/api';
 
 export const db = {};
 
-// Latency compensation write cache
-const pendingWrites = new Map<string, { timestamp: number, data: any | null }>();
-
-// Collection/Document ETag Cache to avoid redundant parsing and re-renders
-const etagCache = new Map<string, string>();
-const lastDataCache = new Map<string, any>();
-
 export function doc(db: any, collection: string, id: string) {
   return { collection, id };
 }
@@ -20,51 +13,25 @@ export function collection(db: any, name: string) {
 export async function setDoc(docRef: { collection: string, id: string }, data: any, options?: any) {
   const method = options?.merge ? 'PUT' : 'POST';
   const url = `${API_BASE}/${docRef.collection}/${docRef.id}`;
-  
-  const cacheKey = `${docRef.collection}/${docRef.id}`;
-  pendingWrites.set(cacheKey, { data, timestamp: Date.now() });
-  etagCache.delete(docRef.collection); // invalidate cached etag
 
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    
-    setTimeout(() => {
-      pendingWrites.delete(cacheKey);
-    }, 10000);
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
-    }
-  } catch (e) {
-    pendingWrites.delete(cacheKey);
-    throw e;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
   }
 }
 
 export async function deleteDoc(docRef: { collection: string, id: string }) {
-  const cacheKey = `${docRef.collection}/${docRef.id}`;
-  pendingWrites.set(cacheKey, { data: null, timestamp: Date.now() });
-  etagCache.delete(docRef.collection);
+  const res = await fetch(`${API_BASE}/${docRef.collection}/${docRef.id}`, { method: 'DELETE' });
 
-  try {
-    const res = await fetch(`${API_BASE}/${docRef.collection}/${docRef.id}`, { method: 'DELETE' });
-    
-    setTimeout(() => {
-      pendingWrites.delete(cacheKey);
-    }, 10000);
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
-    }
-  } catch (e) {
-    pendingWrites.delete(cacheKey);
-    throw e;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
   }
 }
 
@@ -75,7 +42,7 @@ export async function getDocs(collRef: { collection: string }) {
     throw new Error(`API error ${res.status}: ${res.statusText} - ${text}`);
   }
   const data = await res.json();
-  const docs = data.map((d: any) => ({
+  const docs = (Array.isArray(data) ? data : []).map((d: any) => ({
     id: d.id || d._id,
     ref: { collection: collRef.collection, id: d.id || d._id },
     data: () => d
@@ -98,10 +65,9 @@ export function writeBatch(db: any) {
       operations.push({ action: 'delete', collection: docRef.collection, id: docRef.id });
     },
     commit: async () => {
-      // Chunk operations in batches of 25 for fast parallel dispatch
       const chunks: any[][] = [];
-      for (let i = 0; i < operations.length; i += 25) {
-        chunks.push(operations.slice(i, i + 25));
+      for (let i = 0; i < operations.length; i += 20) {
+        chunks.push(operations.slice(i, i + 20));
       }
 
       for (const chunk of chunks) {
@@ -126,94 +92,54 @@ export function disableNetwork() {
 
 export function onSnapshot(ref: any, callback: any, onError?: any) {
   let isCancelled = false;
-  const pollKey = ref.id ? `${ref.collection}/${ref.id}` : ref.collection;
 
   const poll = async () => {
     if (isCancelled) return;
     try {
-      const cachedEtag = etagCache.get(pollKey);
-      const headers: Record<string, string> = {
-        'Accept': 'application/json'
-      };
-      if (cachedEtag) {
-        headers['If-None-Match'] = cachedEtag;
-      }
-
       if (ref.id) {
-        const res = await fetch(`${API_BASE}/${ref.collection}/${ref.id}`, { headers });
-        if (res.status === 304) {
-          // No change
-        } else if (res.ok) {
-          const etag = res.headers.get('ETag');
-          if (etag) etagCache.set(pollKey, etag);
-          let data = await res.json();
-          const cacheKey = `${ref.collection}/${ref.id}`;
-          const pending = pendingWrites.get(cacheKey);
-          if (pending) {
-            if (pending.data === null) {
-              data = null;
-            } else {
-              data = { ...data, ...pending.data };
-            }
+        const res = await fetch(`${API_BASE}/${ref.collection}/${ref.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCancelled) {
+            callback({
+              id: ref.id,
+              exists: () => (data && Object.keys(data).length > 0),
+              data: () => data
+            });
           }
-          lastDataCache.set(pollKey, data);
-          callback({ id: ref.id, exists: () => (data && Object.keys(data).length > 0), data: () => data });
         }
       } else {
-        const res = await fetch(`${API_BASE}/${ref.collection}`, { headers });
-        if (res.status === 304) {
-          // No change, do not re-render or re-parse!
-        } else if (res.ok) {
-          const etag = res.headers.get('ETag');
-          if (etag) etagCache.set(pollKey, etag);
+        const res = await fetch(`${API_BASE}/${ref.collection}`);
+        if (res.ok) {
           const data = await res.json();
-          
-          // Latency compensation merge
-          const mergedData = data.filter((d: any) => {
-            const cacheKey = `${ref.collection}/${d.id || d._id}`;
-            const pending = pendingWrites.get(cacheKey);
-            return !(pending && pending.data === null);
-          }).map((d: any) => {
-            const cacheKey = `${ref.collection}/${d.id || d._id}`;
-            const pending = pendingWrites.get(cacheKey);
-            return pending ? { ...d, ...pending.data } : d;
-          });
-
-          const serverIds = new Set(mergedData.map((d: any) => d.id || d._id));
-          for (const [key, pending] of pendingWrites.entries()) {
-            if (key.startsWith(`${ref.collection}/`) && pending.data !== null) {
-              const id = key.split('/')[1];
-              if (!serverIds.has(id)) {
-                mergedData.push(pending.data);
-              }
-            }
-          }
-
-          const docs = mergedData.map((d: any) => ({
+          const items = Array.isArray(data) ? data : [];
+          const docs = items.map((d: any) => ({
             id: d.id || d._id,
             ref: { collection: ref.collection, id: d.id || d._id },
             data: () => d
           }));
 
-          callback({
-            docs,
-            size: docs.length,
-            empty: docs.length === 0,
-            metadata: { fromCache: false },
-            forEach: (cb: any) => docs.forEach(cb)
-          });
+          if (!isCancelled) {
+            callback({
+              docs,
+              size: docs.length,
+              empty: docs.length === 0,
+              metadata: { fromCache: false },
+              forEach: (cb: any) => docs.forEach(cb)
+            });
+          }
         }
       }
     } catch (e: any) {
       if (e.name !== 'AbortError' && e.message !== 'Failed to fetch') {
         console.warn('Sync poll notice:', e);
       }
-      if (onError) onError(e);
+      if (onError && !isCancelled) onError(e);
     }
 
     if (!isCancelled) {
-      // 3.5 second interval for calm, responsive sync without flooding CPU
-      setTimeout(poll, 3500);
+      // 2-second real-time polling interval
+      setTimeout(poll, 2000);
     }
   };
 

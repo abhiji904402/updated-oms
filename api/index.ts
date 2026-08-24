@@ -90,307 +90,263 @@ const models: Record<string, mongoose.Model<any>> = {
 };
 
 // =========================================================================
-// LIGHTNING-FAST IN-MEMORY RAM STORAGE LAYER WITH WRITE-THROUGH MONGO SYNC
+// REAL-TIME IN-MEMORY CACHE WITH IMMEDIATE MONGODB SYNC
 // =========================================================================
 
-interface CollectionStore {
+interface CollectionCache {
   map: Map<string, any>;
   version: number;
-  etag: string;
-  isHydrated: boolean;
-  lastHydratedAt: number;
+  lastUpdated: number;
+  isReady: boolean;
 }
 
-const ramStore: Record<string, CollectionStore> = {
-  'orders': { map: new Map(), version: 1, etag: '"v1-init"', isHydrated: false, lastHydratedAt: 0 },
-  'delivery_partners': { map: new Map(), version: 1, etag: '"v1-init"', isHydrated: false, lastHydratedAt: 0 },
-  'outlet_locations': { map: new Map(), version: 1, etag: '"v1-init"', isHydrated: false, lastHydratedAt: 0 },
-  'system_settings': { map: new Map(), version: 1, etag: '"v1-init"', isHydrated: false, lastHydratedAt: 0 }
+const cache: Record<string, CollectionCache> = {
+  'orders': { map: new Map(), version: 1, lastUpdated: 0, isReady: false },
+  'delivery_partners': { map: new Map(), version: 1, lastUpdated: 0, isReady: false },
+  'outlet_locations': { map: new Map(), version: 1, lastUpdated: 0, isReady: false },
+  'system_settings': { map: new Map(), version: 1, lastUpdated: 0, isReady: false }
 };
 
-const updateStoreEtag = (collName: string) => {
-  const store = ramStore[collName];
-  if (!store) return;
-  store.version += 1;
-  store.etag = `"v${store.version}-${Date.now()}"`;
+let dbPromise: Promise<typeof mongoose> | null = null;
+const connectDB = async (): Promise<typeof mongoose> => {
+  if (mongoose.connection.readyState === 1) return mongoose;
+  if (!MONGODB_URI) {
+    throw new Error('No MONGODB_URI found in environment variables.');
+  }
+  if (!dbPromise) {
+    dbPromise = mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+    });
+  }
+  return dbPromise;
 };
 
-let isConnecting = false;
-const connectAndHydrate = async () => {
-  if (isConnecting) return;
-  isConnecting = true;
+// Ensure collection is loaded in RAM
+const ensureCollectionLoaded = async (collName: string): Promise<CollectionCache> => {
+  const c = cache[collName];
+  if (!c) throw new Error(`Collection ${collName} not found`);
+  
+  if (c.isReady) {
+    return c;
+  }
+
+  await connectDB();
+  const Model = models[collName];
+  if (!Model) throw new Error(`Model for ${collName} not found`);
+
+  const docs = await Model.find({}).lean();
+  c.map.clear();
+  docs.forEach((d: any) => {
+    const key = collName === 'system_settings' ? (d._id || d.id) : (d.id || d._id);
+    if (key) {
+      const clean = { ...d };
+      delete clean.__v;
+      if (collName !== 'system_settings') delete clean._id;
+      c.map.set(String(key), clean);
+    }
+  });
+
+  c.isReady = true;
+  c.lastUpdated = Date.now();
+  c.version += 1;
+  return c;
+};
+
+// Background pre-load on boot
+(async () => {
   try {
-    if (!MONGODB_URI) {
-      console.warn('No MONGODB_URI found; operating in standalone RAM mode.');
-      return;
+    await connectDB();
+    for (const coll of Object.keys(models)) {
+      await ensureCollectionLoaded(coll);
     }
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(MONGODB_URI, {
-        serverSelectionTimeoutMS: 8000,
-        socketTimeoutMS: 45000,
-        maxPoolSize: 10,
-      });
-      console.log('⚡ Connected to MongoDB Atlas. Hydrating RAM Store in background...');
-    }
-
-    // Hydrate all collections into RAM
-    for (const [collName, Model] of Object.entries(models)) {
-      try {
-        const store = ramStore[collName];
-        if (store) {
-          const newMap = new Map<string, any>();
-          const cursor = Model.find({}).batchSize(1000).cursor();
-          for (let doc = await cursor.next(); doc != null; doc = await cursor.next()) {
-            const d = doc.toObject ? doc.toObject() : doc;
-            const key = collName === 'system_settings' ? (d._id || d.id) : (d.id || d._id);
-            if (key) {
-              const clean = { ...d };
-              delete clean.__v;
-              if (collName !== 'system_settings') delete clean._id;
-              newMap.set(String(key), clean);
-            }
-          }
-          store.map = newMap;
-          store.isHydrated = true;
-          store.lastHydratedAt = Date.now();
-          updateStoreEtag(collName);
-          console.log(`🚀 [RAM Store Ready] Collection '${collName}' loaded with ${newMap.size} documents in RAM!`);
-        }
-      } catch (err) {
-        console.error(`Failed to hydrate ${collName}:`, err);
-      }
-    }
+    console.log(`🚀 All collections fully loaded in memory! Ready for real-time traffic.`);
   } catch (err) {
-    console.error('Initial DB connect error:', err);
-  } finally {
-    isConnecting = false;
+    console.error('Initial DB warm-up error:', err);
   }
-};
-
-// Immediate eager background hydration on startup
-connectAndHydrate();
-
-// Periodic background sync with Mongo every 45s (quiet background task)
-setInterval(() => {
-  if (mongoose.connection.readyState === 1) {
-    for (const [collName, Model] of Object.entries(models)) {
-      Model.find({}).lean().then((docs) => {
-        const store = ramStore[collName];
-        if (store && docs.length > 0) {
-          let hasDiff = docs.length !== store.map.size;
-          docs.forEach((d: any) => {
-            const key = collName === 'system_settings' ? (d._id || d.id) : (d.id || d._id);
-            if (key && !store.map.has(String(key))) {
-              hasDiff = true;
-            }
-          });
-          if (hasDiff) {
-            docs.forEach((d: any) => {
-              const key = collName === 'system_settings' ? (d._id || d.id) : (d.id || d._id);
-              if (key) {
-                const clean = { ...d };
-                delete clean.__v;
-                if (collName !== 'system_settings') delete clean._id;
-                store.map.set(String(key), clean);
-              }
-            });
-            updateStoreEtag(collName);
-          }
-        }
-      }).catch(() => {});
-    }
-  } else {
-    connectAndHydrate().catch(() => {});
-  }
-}, 45000);
+})();
 
 // --- API ROUTER ---
 const apiRouter = express.Router();
 
-apiRouter.get('/health', (req, res) => {
+apiRouter.get('/health', async (req, res) => {
   res.json({
     status: 'ok',
-    orders_in_ram: ramStore['orders']?.map?.size || 0,
-    hydrated: ramStore['orders']?.isHydrated || false,
+    orders_count: cache['orders']?.map?.size || 0,
+    orders_ready: cache['orders']?.isReady || false,
     timestamp: new Date().toISOString()
   });
 });
 
-// GET /api/:collection - ZERO-LATENCY RAM SERVE with ETag 304
+// GET /api/:collection - High speed cached retrieval
 apiRouter.get('/:collection', async (req, res) => {
-  const collName = req.params.collection;
-  const store = ramStore[collName];
-  if (!store) {
-    return res.status(404).json({ error: 'Collection not found' });
-  }
+  try {
+    const collName = req.params.collection;
+    const Model = models[collName];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
 
-  // If not yet hydrated and DB is connecting, trigger async check
-  if (!store.isHydrated && mongoose.connection.readyState !== 1) {
-    connectAndHydrate().catch(() => {});
-  }
+    const c = await ensureCollectionLoaded(collName);
+    const data = Array.from(c.map.values());
 
-  // Fast ETag check
-  const clientEtag = req.headers['if-none-match'];
-  if (clientEtag && clientEtag === store.etag) {
-    return res.status(304).end();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.json(data);
+  } catch (error: any) {
+    console.error(`Error in GET /api/${req.params.collection}:`, error);
+    res.status(500).json({ error: error.message || String(error) });
   }
-
-  // Serve directly from RAM array in sub-millisecond
-  const values = Array.from(store.map.values());
-  res.set('ETag', store.etag);
-  res.set('Cache-Control', 'private, no-cache');
-  res.json(values);
 });
 
 // GET /api/:collection/:id
 apiRouter.get('/:collection/:id', async (req, res) => {
-  const collName = req.params.collection;
-  const store = ramStore[collName];
-  if (!store) return res.status(404).json({ error: 'Collection not found' });
+  try {
+    const collName = req.params.collection;
+    const Model = models[collName];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
 
-  const doc = store.map.get(String(req.params.id));
-  res.set('Cache-Control', 'private, no-cache');
-  if (!doc) return res.status(404).json({});
+    const c = await ensureCollectionLoaded(collName);
+    const doc = c.map.get(String(req.params.id));
 
-  if (collName === 'system_settings') {
-    res.json(doc.data || doc);
-  } else {
-    res.json(doc);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    if (!doc) return res.status(404).json({});
+
+    if (collName === 'system_settings') {
+      res.json(doc.data || doc);
+    } else {
+      res.json(doc);
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error) });
   }
 });
 
-// POST /api/:collection/:id - WRITE-THROUGH (INSTANT RAM UPDATE + ASYNC DB PERSIST)
+// POST /api/:collection/:id - Write to memory and DB synchronously
 apiRouter.post('/:collection/:id', async (req, res) => {
-  const collName = req.params.collection;
-  const store = ramStore[collName];
-  const Model = models[collName];
-  if (!store || !Model) return res.status(404).json({ error: 'Collection not found' });
+  try {
+    const collName = req.params.collection;
+    const Model = models[collName];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
 
-  const id = String(req.params.id);
-  const data = req.body;
+    await connectDB();
+    const id = String(req.params.id);
+    const data = req.body;
 
-  if (collName === 'system_settings') {
-    store.map.set(id, { _id: id, data });
-  } else {
-    const clean = { ...data };
-    delete clean._id;
-    delete clean.__v;
-    clean.id = id;
-    store.map.set(id, clean);
-  }
-
-  updateStoreEtag(collName);
-  res.json({ success: true });
-
-  // Async Mongo write-through in background without blocking response
-  setImmediate(async () => {
-    try {
-      if (mongoose.connection.readyState === 1) {
-        if (collName === 'system_settings') {
-          await Model.findOneAndUpdate({ _id: id }, { data }, { upsert: true });
-        } else {
-          const updateData = { ...data };
-          delete updateData._id;
-          delete updateData.__v;
-          await Model.findOneAndUpdate({ id }, { $set: updateData }, { upsert: true });
-        }
+    const c = cache[collName];
+    if (collName === 'system_settings') {
+      await Model.findOneAndUpdate({ _id: id }, { data }, { upsert: true });
+      if (c) {
+        c.map.set(id, { _id: id, data });
+        c.version += 1;
+        c.lastUpdated = Date.now();
       }
-    } catch (err) {
-      console.error(`Background persist failed for ${collName}/${id}:`, err);
+    } else {
+      const clean = { ...data };
+      delete clean._id;
+      delete clean.__v;
+      clean.id = id;
+
+      await Model.findOneAndUpdate({ id }, { $set: clean }, { upsert: true });
+      if (c) {
+        c.map.set(id, clean);
+        c.version += 1;
+        c.lastUpdated = Date.now();
+      }
     }
-  });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error(`Error in POST /api/${req.params.collection}/${req.params.id}:`, error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
 });
 
-// PUT /api/:collection/:id - WRITE-THROUGH MERGE
+// PUT /api/:collection/:id - Merge updates to memory and DB
 apiRouter.put('/:collection/:id', async (req, res) => {
-  const collName = req.params.collection;
-  const store = ramStore[collName];
-  const Model = models[collName];
-  if (!store || !Model) return res.status(404).json({ error: 'Collection not found' });
+  try {
+    const collName = req.params.collection;
+    const Model = models[collName];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
 
-  const id = String(req.params.id);
-  const data = req.body;
-  const existing = store.map.get(id) || {};
+    await connectDB();
+    const id = String(req.params.id);
+    const data = req.body;
+    const c = cache[collName];
+    const existing = c?.map?.get(id) || {};
 
-  if (collName === 'system_settings') {
-    const mergedData = { ...(existing?.data || existing || {}), ...data };
-    store.map.set(id, { _id: id, data: mergedData });
-  } else {
-    const merged = { ...existing, ...data };
-    delete merged._id;
-    delete merged.__v;
-    merged.id = id;
-    store.map.set(id, merged);
-  }
-
-  updateStoreEtag(collName);
-  res.json({ success: true });
-
-  // Async Mongo write-through in background
-  setImmediate(async () => {
-    try {
-      if (mongoose.connection.readyState === 1) {
-        if (collName === 'system_settings') {
-          const dbDoc = await Model.findOne({ _id: id }).lean();
-          const newData = { ...((dbDoc as any)?.data || {}), ...data };
-          await Model.findOneAndUpdate({ _id: id }, { data: newData }, { upsert: true });
-        } else {
-          const updateData = { ...data };
-          delete updateData._id;
-          delete updateData.__v;
-          await Model.findOneAndUpdate({ id }, { $set: updateData }, { upsert: true });
-        }
+    if (collName === 'system_settings') {
+      const mergedData = { ...(existing?.data || existing || {}), ...data };
+      await Model.findOneAndUpdate({ _id: id }, { data: mergedData }, { upsert: true });
+      if (c) {
+        c.map.set(id, { _id: id, data: mergedData });
+        c.version += 1;
+        c.lastUpdated = Date.now();
       }
-    } catch (err) {
-      console.error(`Background persist update failed for ${collName}/${id}:`, err);
+    } else {
+      const clean = { ...data };
+      delete clean._id;
+      delete clean.__v;
+      const merged = { ...existing, ...clean, id };
+
+      await Model.findOneAndUpdate({ id }, { $set: merged }, { upsert: true });
+      if (c) {
+        c.map.set(id, merged);
+        c.version += 1;
+        c.lastUpdated = Date.now();
+      }
     }
-  });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error(`Error in PUT /api/${req.params.collection}/${req.params.id}:`, error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
 });
 
-// DELETE /api/:collection - PURGE
+// DELETE /api/:collection - Delete all documents
 apiRouter.delete('/:collection', async (req, res) => {
-  const collName = req.params.collection;
-  const store = ramStore[collName];
-  const Model = models[collName];
-  if (!store || !Model) return res.status(404).json({ error: 'Collection not found' });
+  try {
+    const collName = req.params.collection;
+    const Model = models[collName];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
 
-  store.map.clear();
-  updateStoreEtag(collName);
-  res.json({ success: true, message: 'RAM collection cleared' });
-
-  setImmediate(async () => {
-    try {
-      if (mongoose.connection.readyState === 1) {
-        await Model.deleteMany({});
-      }
-    } catch (err) {
-      console.error(`Background delete failed for ${collName}:`, err);
+    await connectDB();
+    await Model.deleteMany({});
+    const c = cache[collName];
+    if (c) {
+      c.map.clear();
+      c.version += 1;
+      c.lastUpdated = Date.now();
     }
-  });
+    res.json({ success: true, message: 'All documents deleted' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error) });
+  }
 });
 
 // DELETE /api/:collection/:id
 apiRouter.delete('/:collection/:id', async (req, res) => {
-  const collName = req.params.collection;
-  const store = ramStore[collName];
-  const Model = models[collName];
-  if (!store || !Model) return res.status(404).json({ error: 'Collection not found' });
+  try {
+    const collName = req.params.collection;
+    const Model = models[collName];
+    if (!Model) return res.status(404).json({ error: 'Collection not found' });
 
-  const id = String(req.params.id);
-  store.map.delete(id);
-  updateStoreEtag(collName);
-  res.json({ success: true });
+    await connectDB();
+    const id = String(req.params.id);
+    const query = collName === 'system_settings' ? { _id: id } : { id };
+    await Model.findOneAndDelete(query);
 
-  setImmediate(async () => {
-    try {
-      if (mongoose.connection.readyState === 1) {
-        const query = collName === 'system_settings' ? { _id: id } : { id };
-        await Model.findOneAndDelete(query);
-      }
-    } catch (err) {
-      console.error(`Background delete failed for ${collName}/${id}:`, err);
+    const c = cache[collName];
+    if (c) {
+      c.map.delete(id);
+      c.version += 1;
+      c.lastUpdated = Date.now();
     }
-  });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error) });
+  }
 });
 
 app.use('/api', apiRouter);
