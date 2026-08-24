@@ -28,7 +28,7 @@ type SnapshotListener = {
 
 const listeners = new Set<SnapshotListener>();
 
-// Cross-tab Synchronization Broadcast Channel (0ms cross-tab latency)
+// Cross-tab Synchronization Broadcast Channel (0ms cross-tab latency on same device)
 let broadcastChannel: BroadcastChannel | null = null;
 try {
   if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -124,25 +124,56 @@ function handleIncomingMutation(
   }
 }
 
-// Server-Sent Events (SSE) Real-Time Connection
+// =========================================================================
+// MULTI-DEVICE REAL-TIME SERVER-SENT EVENTS (SSE) + ACTIVE AUTO-RECOVERY
+// =========================================================================
+
 let eventSource: EventSource | null = null;
 let isConnectingSSE = false;
+let lastSSEActivityTime = Date.now();
+
+export function refreshCollectionFromServer(collName: string) {
+  if (typeof window === 'undefined') return;
+  fetch(`${API_BASE}/${collName}`)
+    .then((res) => res.json())
+    .then((data) => {
+      const items = Array.isArray(data) ? data : [];
+      if (!clientStore[collName]) {
+        clientStore[collName] = new Map();
+      }
+      const store = clientStore[collName];
+      store.clear();
+      items.forEach((item: any) => {
+        const key = String(item.id || item._id);
+        if (key) store.set(key, item);
+      });
+      notifyListenersForCollection(collName);
+    })
+    .catch(() => {});
+}
 
 function initSSE() {
   if (typeof window === 'undefined' || !('EventSource' in window)) return;
-  if (eventSource && eventSource.readyState !== EventSource.CLOSED) return;
+  if (eventSource && eventSource.readyState === EventSource.OPEN) return;
   if (isConnectingSSE) return;
 
   isConnectingSSE = true;
 
   try {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+
     eventSource = new EventSource(`${API_BASE}/events`);
 
     eventSource.addEventListener('connected', () => {
       isConnectingSSE = false;
+      lastSSEActivityTime = Date.now();
     });
 
     eventSource.addEventListener('mutation', (e) => {
+      lastSSEActivityTime = Date.now();
       try {
         const mutation = JSON.parse(e.data);
         handleIncomingMutation(mutation, true);
@@ -151,31 +182,63 @@ function initSSE() {
       }
     });
 
+    eventSource.onmessage = () => {
+      lastSSEActivityTime = Date.now();
+    };
+
     eventSource.onerror = () => {
       isConnectingSSE = false;
       if (eventSource) {
         eventSource.close();
         eventSource = null;
       }
-      // Reconnect after 3 seconds
-      setTimeout(initSSE, 3000);
+      // Immediate exponential retry
+      setTimeout(initSSE, 2000);
     };
   } catch (err) {
     isConnectingSSE = false;
-    setTimeout(initSSE, 5000);
+    setTimeout(initSSE, 3000);
   }
 }
 
-// Start SSE listener immediately
+// Lifecycle listeners for Mobile / Multi-Tab Wakeup
 if (typeof window !== 'undefined') {
   initSSE();
+
+  // Instant refresh when user switches back to tab or unlocks phone
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      initSSE();
+      // Fast resync to catch any missed updates while device was sleeping
+      Object.keys(clientStore).forEach(refreshCollectionFromServer);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    initSSE();
+    Object.keys(clientStore).forEach(refreshCollectionFromServer);
+  });
+
+  window.addEventListener('online', () => {
+    initSSE();
+    Object.keys(clientStore).forEach(refreshCollectionFromServer);
+  });
+
+  // Background health check & fallback sync every 6 seconds
+  setInterval(() => {
+    const isStale = Date.now() - lastSSEActivityTime > 25000;
+    if (isStale || !eventSource || eventSource.readyState !== EventSource.OPEN) {
+      initSSE();
+      refreshCollectionFromServer('orders');
+    }
+  }, 6000);
 }
 
 export async function setDoc(docRef: { collection: string; id: string }, data: any, options?: any) {
   const method = options?.merge ? 'PUT' : 'POST';
   const url = `${API_BASE}/${docRef.collection}/${docRef.id}`;
 
-  // Optimistic 0ms local mutation
+  // Optimistic 0ms local mutation on current device
   handleIncomingMutation({
     collection: docRef.collection,
     action: options?.merge ? 'update' : 'set',
@@ -256,8 +319,8 @@ export function writeBatch(db: any) {
     },
     commit: async () => {
       const chunks: any[][] = [];
-      for (let i = 0; i < operations.length; i += 20) {
-        chunks.push(operations.slice(i, i + 20));
+      for (let i = 0; i < operations.length; i += 25) {
+        chunks.push(operations.slice(i, i + 25));
       }
 
       for (const chunk of chunks) {
