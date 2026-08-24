@@ -267,7 +267,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Failed to parse saved orders', e);
       }
     }
-    return [];
+    return INITIAL_ORDERS;
   });
 
   // Delivery Partners State

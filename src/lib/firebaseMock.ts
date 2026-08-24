@@ -1,3 +1,5 @@
+import seedStoreData from '../data/broomies_store_seed.json';
+
 const API_BASE = '/api';
 
 export const db = {};
@@ -17,6 +19,19 @@ const clientStore: Record<string, Map<string, any>> = {
   'outlet_locations': new Map(),
   'system_settings': new Map()
 };
+
+// Seed RAM immediately
+if (seedStoreData && typeof seedStoreData === 'object') {
+  for (const coll of Object.keys(clientStore)) {
+    const collData = (seedStoreData as any)[coll];
+    if (collData && typeof collData === 'object') {
+      const map = clientStore[coll];
+      for (const [k, v] of Object.entries(collData)) {
+        map.set(String(k), v);
+      }
+    }
+  }
+}
 
 // Registered onSnapshot listeners
 type SnapshotListener = {

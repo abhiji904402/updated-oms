@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import seedStoreData from '../src/data/broomies_store_seed.json';
 
 dotenv.config();
 
@@ -67,38 +68,42 @@ function appendWAL(task: { collection: string; action: string; id: string; data?
 
 // Load initial disk snapshot or fallback seed instantly (< 1ms)
 function loadFromDisk() {
-  const seedPaths = [
-    DB_FILE,
-    path.join(process.cwd(), 'src/data/broomies_store_seed.json'),
-    path.join(process.cwd(), 'public/broomies_store_seed.json'),
-    path.join(process.cwd(), 'dist/broomies_store_seed.json')
-  ];
-
-  for (const filePath of seedPaths) {
-    if (cache['orders'].map.size > 0) break;
-    try {
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        for (const coll of Object.keys(cache)) {
-          if (parsed[coll] && typeof parsed[coll] === 'object') {
-            const c = cache[coll];
-            for (const [k, v] of Object.entries(parsed[coll])) {
-              c.map.set(String(k), v);
-            }
-            c.isReady = true;
-            c.lastUpdated = Date.now();
-          }
+  // 1. First populate from bundled static seedStoreData (Guaranteed on Vercel Serverless / Cloud Run)
+  if (seedStoreData && typeof seedStoreData === 'object') {
+    for (const coll of Object.keys(cache)) {
+      const collData = (seedStoreData as any)[coll];
+      if (collData && typeof collData === 'object') {
+        const c = cache[coll];
+        for (const [k, v] of Object.entries(collData)) {
+          c.map.set(String(k), v);
         }
-        console.log(`[Realtime DB] Loaded ${cache['orders'].map.size} orders from ${path.basename(filePath)}.`);
-        if (filePath !== DB_FILE) {
-          persistToDisk();
-        }
+        c.isReady = true;
+        c.lastUpdated = Date.now();
       }
-    } catch (err) {
-      console.warn(`[Realtime DB] Could not load from ${filePath}:`, err);
     }
   }
+
+  // 2. Overlay disk snapshot if exists
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      for (const coll of Object.keys(cache)) {
+        if (parsed[coll] && typeof parsed[coll] === 'object') {
+          const c = cache[coll];
+          for (const [k, v] of Object.entries(parsed[coll])) {
+            c.map.set(String(k), v);
+          }
+          c.isReady = true;
+          c.lastUpdated = Date.now();
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Realtime DB] Could not read DB_FILE:', err);
+  }
+
+  console.log(`[Realtime DB Engine] Ready with ${cache['orders'].map.size} total orders.`);
 }
 
 // Debounced disk snapshot persistence
