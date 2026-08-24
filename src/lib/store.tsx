@@ -39,7 +39,7 @@ export const DEFAULT_OUTLET_LOCATIONS: OutletLocation[] = [
 ];
 import { INITIAL_ORDERS, INITIAL_DELIVERY_PARTNERS, INITIAL_SHEET_CONFIG, INITIAL_ALERTS } from '../data/mockData';
 import { idbSet, idbGet } from './idb';
-import { db, collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork } from './firebase';
+import { db, collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs, disableNetwork, query, where } from './firebase';
 
 export interface AuthPasswords {
   admin: string;
@@ -520,8 +520,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 1. Real-time Database Sync for Orders (Authoritative Live Sync across all devices & tabs)
   useEffect(() => {
-    const unsub = onSnapshot(
+    // Fetch only active orders to save Firestore read limits (limit 50k/day)
+    // We use query 'in' for active statuses.
+    const activeOrdersQuery = query(
       collection(db, 'orders'),
+      where('status', 'in', ['pending', 'processing', 'out_for_delivery'])
+    );
+
+    const unsub = onSnapshot(
+      activeOrdersQuery,
       (snapshot) => {
         const firestoreOrders: Order[] = [];
         snapshot.forEach((docSnap) => {
