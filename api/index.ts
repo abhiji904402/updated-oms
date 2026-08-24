@@ -65,26 +65,39 @@ function appendWAL(task: { collection: string; action: string; id: string; data?
   } catch {}
 }
 
-// Load initial disk snapshot instantly (< 1ms)
+// Load initial disk snapshot or fallback seed instantly (< 1ms)
 function loadFromDisk() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      for (const coll of Object.keys(cache)) {
-        if (parsed[coll] && typeof parsed[coll] === 'object') {
-          const c = cache[coll];
-          for (const [k, v] of Object.entries(parsed[coll])) {
-            c.map.set(String(k), v);
+  const seedPaths = [
+    DB_FILE,
+    path.join(process.cwd(), 'src/data/broomies_store_seed.json'),
+    path.join(process.cwd(), 'public/broomies_store_seed.json'),
+    path.join(process.cwd(), 'dist/broomies_store_seed.json')
+  ];
+
+  for (const filePath of seedPaths) {
+    if (cache['orders'].map.size > 0) break;
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        for (const coll of Object.keys(cache)) {
+          if (parsed[coll] && typeof parsed[coll] === 'object') {
+            const c = cache[coll];
+            for (const [k, v] of Object.entries(parsed[coll])) {
+              c.map.set(String(k), v);
+            }
+            c.isReady = true;
+            c.lastUpdated = Date.now();
           }
-          c.isReady = true;
-          c.lastUpdated = Date.now();
+        }
+        console.log(`[Realtime DB] Loaded ${cache['orders'].map.size} orders from ${path.basename(filePath)}.`);
+        if (filePath !== DB_FILE) {
+          persistToDisk();
         }
       }
-      console.log(`[Realtime DB] Loaded ${cache['orders'].map.size} orders instantly from high-speed local engine.`);
+    } catch (err) {
+      console.warn(`[Realtime DB] Could not load from ${filePath}:`, err);
     }
-  } catch (err) {
-    console.warn('[Realtime DB] Could not load disk snapshot:', err);
   }
 }
 

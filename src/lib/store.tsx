@@ -492,22 +492,44 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Fast offline hydration from IndexedDB on startup (provides instant 0ms initial render)
   useEffect(() => {
-    
-        idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((legacyOrders) => {
-          if (legacyOrders && Array.isArray(legacyOrders) && legacyOrders.length > 0) {
-            legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
-            setOrders((current) => {
-              if (!current || current.length === 0) return legacyOrders;
-              return current;
-            });
-          } else if (INITIAL_ORDERS.length > 0) {
-            // Seed INITIAL_ORDERS if fresh browser
-            setOrders((current) => {
-              if (!current || current.length === 0) return INITIAL_ORDERS;
-              return current;
-            });
-          }
-        
+    idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((legacyOrders) => {
+      if (legacyOrders && Array.isArray(legacyOrders) && legacyOrders.length > 0) {
+        legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+        setOrders((current) => {
+          if (!current || current.length === 0) return legacyOrders;
+          return current;
+        });
+      } else {
+        // Fetch bundled seed data for fresh devices/published link
+        fetch('/broomies_store_seed.json')
+          .then((res) => (res.ok ? res.json() : null))
+          .then((seedData) => {
+            if (seedData && seedData.orders && typeof seedData.orders === 'object') {
+              const seedList = Object.values(seedData.orders) as Order[];
+              if (seedList.length > 0) {
+                seedList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+                setOrders((current) => {
+                  if (!current || current.length === 0) return seedList;
+                  return current;
+                });
+                idbSet(LOCAL_STORAGE_KEY_ORDERS, seedList).catch(() => {});
+              }
+            } else if (INITIAL_ORDERS.length > 0) {
+              setOrders((current) => {
+                if (!current || current.length === 0) return INITIAL_ORDERS;
+                return current;
+              });
+            }
+          })
+          .catch(() => {
+            if (INITIAL_ORDERS.length > 0) {
+              setOrders((current) => {
+                if (!current || current.length === 0) return INITIAL_ORDERS;
+                return current;
+              });
+            }
+          });
+      }
     }).catch(() => {});
   }, []);
 
