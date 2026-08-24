@@ -481,7 +481,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (legacyOrders && Array.isArray(legacyOrders) && legacyOrders.length > 0) {
         legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
         setOrders((current) => {
-          if (!current || current.length === 0) return legacyOrders;
+          if (!current || current.length < legacyOrders.length) {
+            ordersRef.current = legacyOrders;
+            return legacyOrders;
+          }
           return current;
         });
       } else {
@@ -548,7 +551,23 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         // Authoritative Real-time Sync with reference stability
-        setOrders(firestoreOrders);
+        setOrders((prev) => {
+          if (prev.length === firestoreOrders.length && prev.length > 0) {
+            let isIdentical = true;
+            for (let i = 0; i < Math.min(prev.length, 30); i++) {
+              const p = prev[i];
+              const f = firestoreOrders[i];
+              if (p.id !== f.id || p.updated_at !== f.updated_at || p.status !== f.status) {
+                isIdentical = false;
+                break;
+              }
+            }
+            if (isIdentical && prev[prev.length - 1]?.id === firestoreOrders[firestoreOrders.length - 1]?.id) {
+              return prev; // Prevent React re-render if data hasn't materially changed
+            }
+          }
+          return firestoreOrders;
+        });
         ordersRef.current = firestoreOrders;
         safeSaveOrdersToLocalStorage(firestoreOrders);
         idbSet(LOCAL_STORAGE_KEY_ORDERS, firestoreOrders).catch(() => {});
