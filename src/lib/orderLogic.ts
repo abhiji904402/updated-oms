@@ -40,9 +40,9 @@ export const isPaymentPending = (o: Order): boolean => {
 /**
  * Normalizes date string into YYYY-MM-DD format
  */
-export const getNormalizedDateStr = (dateStr?: string | null): string => {
+export const getNormalizedDateStr = (dateStr?: any): string => {
   if (!dateStr) return '';
-  const clean = dateStr.trim();
+  const clean = typeof dateStr === 'string' ? dateStr.trim() : (dateStr instanceof Date ? dateStr.toISOString().split('T')[0] : (dateStr && (dateStr as any).toDate ? (dateStr as any).toDate().toISOString().split('T')[0] : String(dateStr).trim()));
   if (!clean) return '';
   if (clean.includes('T')) return clean.split('T')[0];
   return clean;

@@ -1,14 +1,18 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/lib/firebase.ts', 'utf8');
+let code = fs.readFileSync('src/lib/store.tsx', 'utf-8');
+
 code = code.replace(
-`const filterData = (data: any, constraints: any[]) => {
-  if (!constraints || constraints.length === 0) return true;
-  for (const c of constraints) {
-    const val = data[c.field];`,
-`const filterData = (data: any, constraints: any[]) => {
-  if (!data) return false;
-  if (!constraints || constraints.length === 0) return true;
-  for (const c of constraints) {
-    const val = data[c.field];`
+  "showNotification(`✅ Order #${targetOrder.order_number} delivery confirmed by Outlet!`);",
+  `if (isAutoConfirm) {
+      showNotification(\`✅ Order #\${targetOrder.order_number} delivery auto-confirmed (30m timeout)\`);
+    } else {
+      showNotification(\`✅ Order #\${targetOrder.order_number} delivery confirmed by Outlet!\`);
+    }`
 );
-fs.writeFileSync('src/lib/firebase.ts', code);
+
+code = code.replace(
+  "confirmRiderDelivery(o.id);",
+  "confirmRiderDelivery(o.id, true);"
+);
+
+fs.writeFileSync('src/lib/store.tsx', code);

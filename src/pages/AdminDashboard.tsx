@@ -713,6 +713,7 @@ export const AdminDashboard = React.memo<AdminDashboardProps>(({
                   <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                     <button
                       onClick={onOpenAddModal}
+                      disabled={session?.role === 'manager'}
                       className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-purple-900/40 transition"
                     >
                       <Plus className="w-4 h-4" />

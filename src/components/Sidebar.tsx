@@ -194,16 +194,18 @@ export const Sidebar = React.memo<SidebarProps>(({
                   </button>
 
                   {/* 2. + Add Order Button */}
-                  <button
-                    onClick={() => {
-                      onOpenAddModal();
-                      setIsOpenMobile(false);
-                    }}
-                    className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/50 flex items-center justify-start gap-3 transition active:scale-[0.98]"
-                  >
-                    <Plus className="w-5 h-5" />
-                    <span>Add Order</span>
-                  </button>
+                  {session.role !== 'manager' && (
+                    <button
+                      onClick={() => {
+                        onOpenAddModal();
+                        setIsOpenMobile(false);
+                      }}
+                      className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/50 flex items-center justify-start gap-3 transition active:scale-[0.98]"
+                    >
+                      <Plus className="w-5 h-5" />
+                      <span>Add Order</span>
+                    </button>
+                  )}
 
                   {/* 3. Reports */}
                   <button
@@ -234,16 +236,18 @@ export const Sidebar = React.memo<SidebarProps>(({
                   </button>
 
                   {/* 2. + Add Order Button */}
-                  <button
-                    onClick={() => {
-                      onOpenAddModal();
-                      setIsOpenMobile(false);
-                    }}
-                    className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/50 flex items-center justify-start gap-3 transition active:scale-[0.98]"
-                  >
-                    <Plus className="w-5 h-5" />
-                    <span>Add Order</span>
-                  </button>
+                  {session.role !== 'manager' && (
+                    <button
+                      onClick={() => {
+                        onOpenAddModal();
+                        setIsOpenMobile(false);
+                      }}
+                      className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/50 flex items-center justify-start gap-3 transition active:scale-[0.98]"
+                    >
+                      <Plus className="w-5 h-5" />
+                      <span>Add Order</span>
+                    </button>
+                  )}
 
                   {/* 3. Outlet Reports */}
                   <button

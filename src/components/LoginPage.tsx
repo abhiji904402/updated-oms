@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOMS } from '../lib/store';
 import { Role, OutletName } from '../types';
-import { ShieldCheck, Store, Truck, Lock, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Store, Truck, Lock, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight, CheckCircle2, Briefcase } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { verifyPassword, login, authPasswords, partners } = useOMS();
@@ -70,7 +70,7 @@ export const LoginPage: React.FC = () => {
         {/* Login Card */}
         <div className="bg-[#0b0e1d] border border-indigo-950/80 rounded-3xl p-6 shadow-2xl space-y-6 backdrop-blur-xl relative">
           {/* Role Selector Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800/80">
+          <div className="grid grid-cols-4 gap-1.5 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800/80">
             <button
               type="button"
               onClick={() => {
@@ -86,6 +86,23 @@ export const LoginPage: React.FC = () => {
             >
               <ShieldCheck className="w-4 h-4" />
               <span>Admin</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLoginRole('manager');
+                setPasswordInput('');
+                setErrorMessage(null);
+              }}
+              className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 ${
+                loginRole === 'manager'
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-950 border border-purple-400/50'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              <span>Manager</span>
             </button>
 
             <button
@@ -142,6 +159,19 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <div className="text-[11px] text-slate-400">
                   Full control across all outlets, rider dispatches, and system settings.
+                </div>
+              </div>
+            )}
+
+                        {/* Manager Header Info */}
+            {loginRole === 'manager' && (
+              <div className="p-3.5 bg-purple-950/20 border border-purple-900/40 rounded-2xl text-xs space-y-1">
+                <div className="font-extrabold text-purple-300 flex items-center gap-1.5">
+                  <Briefcase className="w-4 h-4" />
+                  Manager Access
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Track orders, confirm deliveries, and assign riders.
                 </div>
               </div>
             )}

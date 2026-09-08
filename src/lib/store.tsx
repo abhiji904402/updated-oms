@@ -43,6 +43,7 @@ import { db, collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch, getDocs
 
 export interface AuthPasswords {
   admin: string;
+  manager: string;
   outlets: Record<string, string>;
   defaultOutletPassword: string;
   partners: Record<string, string>;
@@ -61,6 +62,7 @@ interface OMSContextType {
   // Passwords Management
   authPasswords: AuthPasswords;
   updateAdminPassword: (newPass: string) => void;
+  updateManagerPassword: (newPass: string) => void;
   updateOutletPassword: (outletName: string, newPass: string) => void;
   updatePartnerPassword: (partnerId: string, newPass: string) => void;
   verifyPassword: (
@@ -126,6 +128,8 @@ interface OMSContextType {
 
   // Cloud & Quota status
   isFirestoreQuotaExceeded: boolean;
+  isHistorySyncing: boolean;
+  historySyncCount: number;
 }
 
 const OMSContext = createContext<OMSContextType | undefined>(undefined);
@@ -175,6 +179,7 @@ export function safeSaveOrdersToLocalStorage(ordersToSave: Order[]): void {
 
 const DEFAULT_PASSWORDS: AuthPasswords = {
   admin: 'admin123',
+  manager: 'manager123',
   outlets: {
     'Sector 31': 'outlet123',
     'Sector 35': 'outlet123',
@@ -305,6 +310,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Firestore Quota & Offline Status State
   const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState(false);
+  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
+  const [historySyncCount, setHistorySyncCount] = useState(0);
   const quotaNotifiedRef = useRef(false);
   const quotaExceededRef = useRef(false);
 
@@ -476,19 +483,22 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const hasAutoSyncedLocalOrdersRef = useRef(false);
 
   // Fast offline hydration from IndexedDB on startup (provides instant 0ms initial render)
+  // Implements:
+  // 1. Initial Fast Fetch: Active orders + latest 50 orders load immediately (<500ms)
+  // 2. Silent Background Hydration: Background hydration of remaining historical orders into IndexedDB without blocking UI
   useEffect(() => {
-    idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((legacyOrders) => {
-      if (legacyOrders && Array.isArray(legacyOrders) && legacyOrders.length > 0) {
-        legacyOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+    idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((cachedOrders) => {
+      if (cachedOrders && Array.isArray(cachedOrders) && cachedOrders.length > 0) {
+        cachedOrders.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
         setOrders((current) => {
-          if (!current || current.length < legacyOrders.length) {
-            ordersRef.current = legacyOrders;
-            return legacyOrders;
+          if (!current || current.length < cachedOrders.length) {
+            ordersRef.current = cachedOrders;
+            return cachedOrders;
           }
           return current;
         });
       } else {
-        // Fetch bundled seed data for fresh devices/published link
+        // Fresh device -> Fetch bundled seed data with 2-phase non-blocking hydration
         fetch('/broomies_store_seed.json')
           .then((res) => (res.ok ? res.json() : null))
           .then((seedData) => {
@@ -496,11 +506,51 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const seedList = Object.values(seedData.orders) as Order[];
               if (seedList.length > 0) {
                 seedList.sort((a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
+
+                // Phase 1: Initial Fast Render - extract active orders and top 50 recent orders
+                const activeOrders = seedList.filter(
+                  (o) => o.status !== 'delivered' && o.status !== 'cancelled'
+                );
+                const recentOrders = seedList.slice(0, 50);
+                const fastMap = new Map<string, Order>();
+                [...activeOrders, ...recentOrders].forEach((o) => fastMap.set(o.id, o));
+                const fastInitList = Array.from(fastMap.values()).sort(
+                  (a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0)
+                );
+
                 setOrders((current) => {
-                  if (!current || current.length === 0) return seedList;
+                  if (!current || current.length === 0) {
+                    ordersRef.current = fastInitList;
+                    return fastInitList;
+                  }
                   return current;
                 });
-                idbSet(LOCAL_STORAGE_KEY_ORDERS, seedList).catch(() => {});
+
+                // Phase 2: Silent Background Hydration - async merge full history without blocking UI
+                if (seedList.length > fastInitList.length) {
+                  setIsHistorySyncing(true);
+                  setHistorySyncCount(seedList.length);
+
+                  setTimeout(() => {
+                    setOrders((current) => {
+                      const mergedMap = new Map<string, Order>();
+                      seedList.forEach((o) => mergedMap.set(o.id, o));
+                      if (current && current.length > 0) {
+                        current.forEach((o) => mergedMap.set(o.id, o));
+                      }
+                      const fullList = Array.from(mergedMap.values()).sort(
+                        (a, b) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0)
+                      );
+                      ordersRef.current = fullList;
+                      return fullList;
+                    });
+                    idbSet(LOCAL_STORAGE_KEY_ORDERS, seedList).catch(() => {});
+                    safeSaveOrdersToLocalStorage(seedList);
+                    setIsHistorySyncing(false);
+                  }, 60);
+                } else {
+                  idbSet(LOCAL_STORAGE_KEY_ORDERS, seedList).catch(() => {});
+                }
               }
             } else if (INITIAL_ORDERS.length > 0) {
               setOrders((current) => {
@@ -658,6 +708,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (data && data.admin) {
             setAuthPasswords((prev) => ({
               admin: data.admin || prev.admin,
+              manager: data.manager || prev.manager || 'manager123',
               outlets: { ...prev.outlets, ...(data.outlets || {}) },
               defaultOutletPassword: data.defaultOutletPassword || prev.defaultOutletPassword,
               partners: { ...prev.partners, ...(data.partners || {}) },
@@ -723,6 +774,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [sheetConfig.auto_sync, sheetConfig.sheet_url]);
 
+  
   useEffect(() => {
     safeLocalStorageSet(LOCAL_STORAGE_KEY_SESSION, JSON.stringify(session));
   }, [session]);
@@ -753,6 +805,14 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateAdminPassword = useCallback((newPass: string) => {
     setAuthPasswords((prev) => {
       const next = { ...prev, admin: newPass };
+      setDoc(doc(db, 'system_settings', 'passwords'), next, { merge: true }).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const updateManagerPassword = useCallback((newPass: string) => {
+    setAuthPasswords((prev) => {
+      const next = { ...prev, manager: newPass };
       setDoc(doc(db, 'system_settings', 'passwords'), next, { merge: true }).catch(() => {});
       return next;
     });
@@ -792,6 +852,17 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { success: true, userSession };
         }
         return { success: false, message: 'Incorrect Admin Password!' };
+      }
+      if (role === 'manager') {
+        if (passwordAttempt === (authPasswords.manager || 'manager123')) {
+          const userSession: UserSession = {
+            id: 'usr-manager',
+            name: 'Broomies Central Manager',
+            role: 'manager'
+          };
+          return { success: true, userSession };
+        }
+        return { success: false, message: 'Incorrect Manager Password!' };
       }
 
       if (role === 'outlet') {
@@ -1511,7 +1582,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Delivered marked! Waiting for Outlet/Admin confirmation.' };
   }, [session.name, session.role, session.deliveryPartnerId, showNotification, pushToSheet, handleFirestoreWriteError]);
 
-  const confirmRiderDelivery = useCallback((id: string) => {
+  const confirmRiderDelivery = useCallback((id: string, isAutoConfirm: boolean = false) => {
     const targetOrder = ordersRef.current.find((o) => o.id === id);
     if (!targetOrder) return;
     const isPickup = String(targetOrder?.delivery_type || '').toLowerCase().trim() === 'pickup';
@@ -1559,8 +1630,35 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: new Date().toISOString()
     }, { merge: true }).catch((err) => handleFirestoreWriteError(err, 'confirm rider delivery'));
     
-    showNotification(`✅ Order #${targetOrder.order_number} delivery confirmed by Outlet!`);
+    if (isAutoConfirm) {
+      showNotification(`✅ Order #${targetOrder.order_number} delivery auto-confirmed (30m timeout)`);
+    } else {
+      showNotification(`✅ Order #${targetOrder.order_number} delivery confirmed by Outlet!`);
+    }
   }, [session.role, showNotification, handleFirestoreWriteError]);
+
+// Auto-confirm rider deliveries after 30 minutes
+  useEffect(() => {
+    if (session.role !== 'admin' && session.role !== 'outlet') return;
+    
+    const interval = setInterval(() => {
+      const currentOrders = ordersRef.current;
+      if (!currentOrders || currentOrders.length === 0) return;
+      
+      const now = Date.now();
+      currentOrders.forEach((o) => {
+        if (o.status === 'delivered' && o.delivery_confirmation_pending && o.actual_delivery_time) {
+          const deliveryTime = new Date(o.actual_delivery_time).getTime();
+          if (now - deliveryTime > 30 * 60 * 1000) { // 30 minutes
+            confirmRiderDelivery(o.id, true);
+          }
+        }
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [session.role, confirmRiderDelivery]);
+
 
   const updatePartnerLocation = useCallback((partnerId: string, location: Omit<DeliveryPartnerLocation, 'updated_at'>) => {
     const updatedAt = new Date().toISOString();
@@ -1684,6 +1782,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       logout,
       authPasswords,
       updateAdminPassword,
+      updateManagerPassword,
       updateOutletPassword,
       updatePartnerPassword,
       verifyPassword,
@@ -1726,7 +1825,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setDateRangeFilter,
       recentNotification,
       dismissNotification: () => setRecentNotification(null),
-      isFirestoreQuotaExceeded
+      isFirestoreQuotaExceeded,
+      isHistorySyncing,
+      historySyncCount
     }),
     [
       session,
@@ -1771,7 +1872,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       selectedStatusFilter,
       dateRangeFilter,
       recentNotification,
-      isFirestoreQuotaExceeded
+      isFirestoreQuotaExceeded,
+      isHistorySyncing,
+      historySyncCount
     ]
   );
 

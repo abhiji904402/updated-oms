@@ -36,6 +36,36 @@ interface OrderCardProps {
   onViewOrder?: (order: Order) => void;
 }
 
+
+const AutoConfirmTimer: React.FC<{ actualDeliveryTime?: string }> = ({ actualDeliveryTime }) => {
+  const [timeLeft, setTimeLeft] = React.useState<string>('30:00');
+
+  React.useEffect(() => {
+    if (!actualDeliveryTime) return;
+    const deliveryTime = new Date(actualDeliveryTime).getTime();
+    
+    const update = () => {
+      const now = Date.now();
+      const diff = Math.max(0, (30 * 60 * 1000) - (now - deliveryTime));
+      
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      
+      if (diff === 0) {
+        setTimeLeft('Auto-confirming...');
+      } else {
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      }
+    };
+    
+    update();
+    const int = setInterval(update, 1000);
+    return () => clearInterval(int);
+  }, [actualDeliveryTime]);
+
+  return <span className="text-amber-100 font-mono bg-amber-900/60 px-1.5 py-0.5 rounded border border-amber-500/30 ml-2">Auto in {timeLeft}</span>;
+};
+
 export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact = false, onOpenDeliveryModal, onEditOrder, onViewOrder }) => {
   const {
     session,
@@ -353,9 +383,12 @@ Broomies Team`;
                     <CheckCircle className="w-5 h-5 text-amber-400 shrink-0" />
                     <div>
                       <p className="font-extrabold text-amber-200 uppercase tracking-wide flex items-center gap-1.5">
-                        <span className="text-base">🚚</span> Delivered Marked by Rider
+                        <span className="text-base">🚚</span> Delivered Marked by {order.delivered_by || order.delivery_partner || 'Rider'}
                       </p>
-                      <p className="text-[10px] text-amber-300/90 font-medium">Outlet / Admin Confirmation Required</p>
+                      <p className="text-[10px] text-amber-300/90 font-medium flex items-center flex-wrap">
+                        Outlet / Admin Confirmation Required
+                        <AutoConfirmTimer actualDeliveryTime={order.actual_delivery_time} />
+                      </p>
                     </div>
                   </div>
                   <button

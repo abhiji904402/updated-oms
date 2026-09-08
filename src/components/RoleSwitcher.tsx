@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOMS } from '../lib/store';
 import { Role, OutletName } from '../types';
-import { ShieldCheck, Store, Truck, ChevronDown } from 'lucide-react';
+import { ShieldCheck, Store, Truck, ChevronDown, Briefcase } from 'lucide-react';
 
 const OUTLETS: OutletName[] = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
 
@@ -23,6 +23,7 @@ export const RoleSwitcher: React.FC = () => {
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-200 transition text-sm font-medium"
       >
         {session.role === 'admin' && <ShieldCheck className="w-4 h-4 text-rose-400" />}
+        {session.role === 'manager' && <Briefcase className="w-4 h-4 text-purple-400" />}
         {session.role === 'outlet' && <Store className="w-4 h-4 text-amber-400" />}
         {session.role === 'delivery' && <Truck className="w-4 h-4 text-emerald-400" />}
         
@@ -58,6 +59,24 @@ export const RoleSwitcher: React.FC = () => {
                 </div>
               </div>
               {session.role === 'admin' && <span className="w-2 h-2 rounded-full bg-rose-500"></span>}
+            </button>
+            {/* Manager Option */}
+            <button
+              onClick={() => handleRoleSelect('manager')}
+              className={`w-full text-left p-2.5 rounded-lg flex items-center justify-between transition ${
+                session.role === 'manager'
+                  ? 'bg-purple-500/15 border border-purple-500/40 text-purple-300'
+                  : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Briefcase className="w-4 h-4 text-purple-400" />
+                <div>
+                  <div className="text-xs font-bold">Manager View</div>
+                  <div className="text-[11px] text-slate-400">Track, Assign & Confirm</div>
+                </div>
+              </div>
+              {session.role === 'manager' && <span className="w-2 h-2 rounded-full bg-purple-500"></span>}
             </button>
 
             {/* Outlet Option */}

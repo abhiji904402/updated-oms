@@ -35,6 +35,7 @@ const OUTLETS: OutletName[] = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88
 export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, onClose }) => {
   const { updateOrder, deleteOrder, partners, orders, session } = useOMS();
   const isOutletUser = session?.role === 'outlet';
+  const isManagerUser = session?.role === 'manager';
   const formRef = useRef<HTMLFormElement>(null);
 
   // Form State
@@ -497,8 +498,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                   <Lock className="w-2.5 h-2.5 text-purple-400" /> Auto-Generated
                 </span>
               </div>
-              <input
-                type="text"
+              <input type="text"
                 readOnly
                 disabled
                 value={`#${order.order_number}`}
@@ -514,7 +514,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               </label>
               <select
                 value={outlet}
-                disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setOutlet(e.target.value as OutletName)}
                 className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -532,6 +532,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               </label>
               <select
                 value={status}
+                disabled={isManagerUser}
                 onChange={(e) => setStatus(e.target.value as OrderStatus)}
                 className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500 font-bold uppercase tracking-wide cursor-pointer"
               >
@@ -554,6 +555,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               </label>
               <select
                 value={status}
+                disabled={isManagerUser}
                 onChange={(e) => setStatus(e.target.value as OrderStatus)}
                 className="w-full bg-[#0a0c18] border border-purple-500/80 rounded-lg px-2.5 py-1.5 text-xs text-purple-200 font-extrabold focus:outline-none focus:border-purple-400 cursor-pointer"
               >
@@ -570,10 +572,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Order Date
               </label>
-              <input
-                type="date"
+              <input type="date"
                 value={orderDate}
-                disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setOrderDate(e.target.value)}
                 className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
@@ -582,10 +583,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Order Time
               </label>
-              <input
-                type="text"
+              <input type="text"
                 value={orderTime}
-                disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setOrderTime(e.target.value)}
                 placeholder="10:30 AM"
                 className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -595,10 +595,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Delivery Date
               </label>
-              <input
-                type="date"
+              <input type="date"
                 value={deliveryDate}
-                disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setDeliveryDate(e.target.value)}
                 className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
@@ -607,10 +606,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Expected Delivery Time
               </label>
-              <input
-                type="text"
+              <input type="text"
                 value={expectedDeliveryTime}
-                disabled={isOutletUser}
+                  disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setExpectedDeliveryTime(e.target.value)}
                 placeholder="18:00"
                 className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -624,10 +622,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                 Mobile Number *
               </label>
-              <input
-                type="tel"
+              <input type="tel"
                 value={mobileNumber}
-                disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                 onChange={(e) => {
                   setMobileNumber(e.target.value);
                   setShowCustomerSuggestions(true);
@@ -693,10 +690,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-xs font-bold text-purple-300 uppercase tracking-wider mb-1">
                 Informed By <span className="text-[10px] font-normal text-slate-400">(Staff / Informer)</span>
               </label>
-              <input
-                type="text"
+              <input type="text"
                 value={informedBy}
-                disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setInformedBy(e.target.value)}
                 onFocus={() => {
                   setShowCustomerSuggestions(false);
@@ -718,7 +714,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
             </div>
 
             {/* Presets Chips */}
-            {!isOutletUser && (
+            {!isOutletUser && !isManagerUser && (
               <div className="flex flex-wrap gap-1.5 pb-1">
                 {ITEM_PRESETS.slice(0, 6).map((p) => (
                   <button
@@ -735,11 +731,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="sm:col-span-3 relative">
-                <input
-                  ref={itemInputRef}
+                <input ref={itemInputRef}
                   type="text"
                   value={itemType}
-                  disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                   onChange={(e) => {
                     setItemType(e.target.value);
                     setShowItemSuggestions(true);
@@ -804,11 +799,10 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               </div>
 
               <div>
-                <input
-                  ref={quantityInputRef}
+                <input ref={quantityInputRef}
                   type="text"
                   value={quantity}
-                  disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                   onChange={(e) => setQuantity(e.target.value)}
                   placeholder="Qty (e.g. 1/2 kg, 1 kg, 2 Pcs)"
                   className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2.5 text-xs text-white text-center font-bold focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -842,9 +836,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                   Delivery Type
                 </label>
-                <select
+                <select disabled={isManagerUser || isOutletUser}
                   value={deliveryType}
-                  disabled={isOutletUser}
                   onChange={(e) => setDeliveryType(e.target.value as DeliveryType)}
                   className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -859,7 +852,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 </label>
                 <select
                   value={deliveryPartner}
-                  disabled={isOutletUser}
+                  disabled={isOutletUser && !isManagerUser}
                   onChange={(e) => setDeliveryPartner(e.target.value)}
                   className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -878,10 +871,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                   Delivery Address
                 </label>
-                <input
-                  type="text"
+                <input type="text"
                   value={deliveryAddress}
-                  disabled={isOutletUser}
+                  disabled={isOutletUser || isManagerUser}
                   onChange={(e) => setDeliveryAddress(e.target.value)}
                   placeholder="House #, Sector/Street, Landmark"
                   className="w-full bg-[#0a0c18] border border-indigo-900/80 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -907,10 +899,9 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                   Total Amount (₹)
                 </label>
-                <input
-                  type="number"
+                <input type="number"
                   value={totalAmountStr}
-                  disabled={isOutletUser}
+                disabled={isOutletUser || isManagerUser}
                   onChange={(e) => setTotalAmountStr(e.target.value)}
                   placeholder="0.00"
                   className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-emerald-400 font-black focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -922,7 +913,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                   <span>Payment Status</span>
                   {isOutletUser && <span className="text-emerald-400 text-[10px] font-normal">(Editable)</span>}
                 </label>
-                <select
+                <select disabled={isManagerUser}
                   value={paymentType}
                   onChange={(e) => setPaymentType(e.target.value as PaymentType)}
                   className="w-full bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -938,8 +929,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                   <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                     Advance Amount Paid (₹)
                   </label>
-                  <input
-                    type="number"
+                  <input type="number"
+                    disabled={isManagerUser}
                     value={advanceAmountStr}
                     onChange={(e) => setAdvanceAmountStr(e.target.value)}
                     placeholder="0.00"
@@ -964,8 +955,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                       <span>Advance Bill No. (एडवांस बिल नंबर)</span>
                       <span className="text-[10px] text-slate-400 font-normal">Optional</span>
                     </label>
-                    <input
-                      type="text"
+                    <input type="text"
                       placeholder="e.g. ADV-1024"
                       value={advanceBillNumber}
                       onChange={(e) => setAdvanceBillNumber(e.target.value)}
@@ -977,8 +967,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                       <span>Final Bill No. (फाइनल बिल नंबर)</span>
                       <span className="text-[10px] text-slate-400 font-normal">Optional</span>
                     </label>
-                    <input
-                      type="text"
+                    <input type="text"
                       placeholder="e.g. BILL-9982"
                       value={finalBillNumber}
                       onChange={(e) => setFinalBillNumber(e.target.value)}
@@ -992,8 +981,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                     <span>Bill Number (बिल नंबर)</span>
                     <span className="text-[10px] text-slate-400 font-normal">Optional</span>
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     placeholder="e.g. BILL-9982"
                     value={finalBillNumber}
                     onChange={(e) => setFinalBillNumber(e.target.value)}
@@ -1010,9 +998,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                 Remarks / Cake Customization
               </label>
-              <textarea
-                value={remarks}
-                disabled={isOutletUser}
+              <textarea value={remarks}
+                  disabled={isOutletUser || isManagerUser}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="e.g. Write 'Happy Birthday Aarav' on top with blue cream"
                 rows={3}
@@ -1027,13 +1014,12 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
               
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <label className={`flex-1 ${isOutletUser ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#1a1e36]'} bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-slate-300 flex items-center justify-center gap-1.5 transition`}>
+                  <label className={`flex-1 ${(isOutletUser || isManagerUser) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[#1a1e36]'} bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-slate-300 flex items-center justify-center gap-1.5 transition`}>
                     <ImageIcon className="w-4 h-4 text-purple-400" />
                     <span>{isCompressing ? 'Compressing...' : itemImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
                     <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-800/60 hidden sm:inline">Ctrl+V</span>
-                    {!isOutletUser && (
-                      <input
-                        type="file"
+                    {!isOutletUser && !isManagerUser && (
+                      <input type="file"
                         accept="image/*"
                         onChange={handleImageChange}
                         className="hidden"
@@ -1051,8 +1037,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
                 <div className="flex items-center gap-2 bg-[#12162a] border border-indigo-950 rounded-xl px-3 py-1.5">
                   <Key className="w-4 h-4 text-amber-400 shrink-0" />
                   <span className="text-xs text-slate-400 font-semibold">Delivery OTP:</span>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={otp}
                     disabled={isOutletUser}
                     onChange={(e) => setOtp(e.target.value)}
@@ -1066,7 +1051,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
 
           {/* Form Action Buttons */}
           <div className="pt-3 border-t border-indigo-950 flex flex-col sm:flex-row items-center justify-between gap-3">
-            {!isOutletUser ? (
+            {!isOutletUser && !isManagerUser ? (
               <button
                 type="button"
                 onClick={handleDelete}

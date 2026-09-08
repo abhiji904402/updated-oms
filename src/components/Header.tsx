@@ -43,7 +43,9 @@ export const Header = React.memo<HeaderProps>(({
     recentNotification,
     dismissNotification,
     sheetConfig,
-    isFirestoreQuotaExceeded
+    isFirestoreQuotaExceeded,
+    isHistorySyncing,
+    historySyncCount
   } = useOMS();
 
   // Outlets list
@@ -215,14 +217,21 @@ export const Header = React.memo<HeaderProps>(({
 
         {/* Right Section: Export Actions & Password Settings */}
         <div className="flex items-center justify-end gap-2 w-full lg:w-auto">
-          {/* Live Cloud Real-Time Indicator */}
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shrink-0" title="Connected in real-time across all devices, outlets & riders">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span>Live Sync</span>
-          </div>
+          {/* Live Cloud Real-Time Indicator & Background Sync Badge */}
+          {isHistorySyncing ? (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-300 text-xs font-semibold shrink-0 animate-pulse" title="Hydrating historical orders in background without slowing down UI">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+              <span>Syncing history ({orders.length.toLocaleString()} of {historySyncCount.toLocaleString()})</span>
+            </div>
+          ) : (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shrink-0" title="Connected in real-time across all devices, outlets & riders">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Live Sync ({orders.length.toLocaleString()})</span>
+            </div>
+          )}
 
           {/* Export CSV (Admin & Outlet only) */}
           {session.role !== 'delivery' && (

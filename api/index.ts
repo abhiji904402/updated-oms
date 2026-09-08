@@ -5,7 +5,6 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import seedStoreData from '../src/data/broomies_store_seed.json';
 
 dotenv.config();
 
@@ -68,19 +67,28 @@ function appendWAL(task: { collection: string; action: string; id: string; data?
 
 // Load initial disk snapshot or fallback seed instantly (< 1ms)
 function loadFromDisk() {
-  // 1. First populate from bundled static seedStoreData (Guaranteed on Vercel Serverless / Cloud Run)
-  if (seedStoreData && typeof seedStoreData === 'object') {
-    for (const coll of Object.keys(cache)) {
-      const collData = (seedStoreData as any)[coll];
-      if (collData && typeof collData === 'object') {
-        const c = cache[coll];
-        for (const [k, v] of Object.entries(collData)) {
-          c.map.set(String(k), v);
+  // 1. First populate from bundled static seedStoreData if exists
+  try {
+    const seedPath = path.join(process.cwd(), 'public', 'broomies_store_seed.json');
+    if (fs.existsSync(seedPath)) {
+      const raw = fs.readFileSync(seedPath, 'utf-8');
+      const seedStoreData = JSON.parse(raw);
+      if (seedStoreData && typeof seedStoreData === 'object') {
+        for (const coll of Object.keys(cache)) {
+          const collData = (seedStoreData as any)[coll];
+          if (collData && typeof collData === 'object') {
+            const c = cache[coll];
+            for (const [k, v] of Object.entries(collData)) {
+              c.map.set(String(k), v);
+            }
+            c.isReady = true;
+            c.lastUpdated = Date.now();
+          }
         }
-        c.isReady = true;
-        c.lastUpdated = Date.now();
       }
     }
+  } catch (seedErr) {
+    console.warn('[Realtime DB] Seed data load skipped:', seedErr);
   }
 
   // 2. Overlay disk snapshot if exists

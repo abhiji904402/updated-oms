@@ -37,9 +37,9 @@ export interface CountdownInfo {
 /**
  * Parses time string like "14:30" or "2:30 PM" or "14:30:00" on a given date string "YYYY-MM-DD"
  */
-function parseDateTime(dateStr: string, timeStr: string): Date | null {
+function parseDateTime(dateStr: any, timeStr: string): Date | null {
   if (!dateStr) return null;
-  let cleanDate = dateStr.trim();
+  let cleanDate = typeof dateStr === 'string' ? dateStr.trim() : (dateStr instanceof Date ? dateStr.toISOString().split('T')[0] : (dateStr && (dateStr as any).toDate ? (dateStr as any).toDate().toISOString().split('T')[0] : String(dateStr).trim()));
   if (cleanDate.includes('T')) {
     cleanDate = cleanDate.split('T')[0];
   }
@@ -109,7 +109,12 @@ function parseDateTime(dateStr: string, timeStr: string): Date | null {
  * Gets expected timestamp for an order in milliseconds
  */
 export function getExpectedTimestamp(order: Order): number {
-  const dateStr = order.delivery_date || order.order_date || new Date().toISOString().split('T')[0];
+  let dateStr: any = order.delivery_date || order.order_date || new Date().toISOString().split('T')[0];
+  if (typeof dateStr !== 'string') {
+    if (dateStr && dateStr.toDate) dateStr = dateStr.toDate().toISOString().split('T')[0];
+    else if (dateStr instanceof Date) dateStr = dateStr.toISOString().split('T')[0];
+    else dateStr = String(dateStr);
+  }
   const expectedTimeStr = order.delivery_time_expected || order.order_time || '18:00';
   const expectedDate = parseDateTime(dateStr, expectedTimeStr);
   return expectedDate ? expectedDate.getTime() : 0;

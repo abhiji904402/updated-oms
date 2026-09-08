@@ -14,6 +14,7 @@ import { OutletDashboard } from './pages/OutletDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AlertsPage } from './pages/AlertsPage';
+import { ManagerAlarmSystem } from './components/ManagerAlarmSystem';
 import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 
 function PageFallback() {
@@ -65,7 +66,7 @@ function OMSAppContent() {
   React.useEffect(() => {
     if (session.role === 'delivery' && activeTab !== 'delivery') {
       setActiveTab('delivery');
-    } else if (session.role === 'outlet' && activeTab !== 'dashboard' && activeTab !== 'outlet' && activeTab !== 'analytics') {
+    } else if ((session.role === 'outlet' || session.role === 'manager') && activeTab !== 'dashboard' && activeTab !== 'outlet' && activeTab !== 'analytics') {
       setActiveTab('dashboard');
     }
   }, [session.role, activeTab]);
@@ -145,6 +146,7 @@ function OMSAppContent() {
         onClose={closeSheetModal}
       />
 
+      <ManagerAlarmSystem />
       <PasswordManagerModal
         isOpen={isPasswordModalOpen}
         onClose={closePasswordModal}
