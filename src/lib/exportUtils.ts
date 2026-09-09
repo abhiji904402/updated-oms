@@ -1,5 +1,5 @@
 import { Order } from '../types';
-import { formatTo12Hour, getDeliveryTimeInfo } from './timeUtils';
+import { formatTo12Hour, getDeliveryTimeInfo, getExpectedTimestamp } from './timeUtils';
 import { getDeliveredByDisplayName } from './orderLogic';
 
 export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
@@ -32,7 +32,8 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
 
   const rows = orders.map((o) => {
     const timeInfo = getDeliveryTimeInfo(o);
-    const advBill = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
+    
+        const advBill = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
     const finalBill = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
     const deliveredByDisplay = getDeliveredByDisplayName(o);
 
@@ -97,6 +98,29 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
             ? '#dc2626'
             : '#475569';
 
+        let diffHtml = '';
+        if (o.status === 'delivered' && o.actual_delivery_time) {
+          const expectedMs = getExpectedTimestamp(o);
+          const actualMs = new Date(o.actual_delivery_time).getTime();
+          if (expectedMs > 0 && !isNaN(actualMs)) {
+            const diffMins = Math.round((actualMs - expectedMs) / 60000);
+            if (diffMins > 0) {
+              diffHtml = `<div style="font-size: 10px; color: #dc2626; font-weight: bold; margin-top: 4px;">Diff: +${diffMins}m (Late)</div>`;
+            } else if (diffMins < 0) {
+              diffHtml = `<div style="font-size: 10px; color: #16a34a; font-weight: bold; margin-top: 4px;">Diff: ${Math.abs(diffMins)}m (Early)</div>`;
+            } else {
+              diffHtml = `<div style="font-size: 10px; color: #0284c7; font-weight: bold; margin-top: 4px;">Diff: On Time</div>`;
+            }
+          }
+        }
+        
+        let displayStatus = o.status.toUpperCase();
+        if (o.status === 'delivered' && String(o.delivery_type || '').toLowerCase().trim() === 'pickup') {
+          displayStatus = 'PICKED UP';
+        }
+
+
+
         const advBill = o.advance_bill_number || (o as any).adv_bill_number || (o as any).adv_bill || (o as any).advance_bill || '';
         const finalBill = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
 
@@ -136,6 +160,7 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
       <td>
         <div style="font-size: 10px;">Exp: <strong>${timeInfo.expectedFormatted}</strong></div>
         <div style="font-size: 10px; color: #16a34a; font-weight: bold;">Act: ${timeInfo.actualFormatted}</div>
+        ${diffHtml}
       </td>
       <td>
         <div>Total: <strong>₹${(o.total_amount || 0).toFixed(2)}</strong></div>
@@ -144,7 +169,7 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
       </td>
       <td>
         <span style="font-weight: 700; font-size: 9px; color: ${statusColor}; text-transform: uppercase; padding: 2px 4px; border: 1px solid ${statusColor}; border-radius: 3px;">
-          ${o.status}
+          ${displayStatus}
         </span>
         <div style="font-size: 10px; color: #475569; margin-top: 3px;">Pay: ${o.payment_type.toUpperCase()}</div>
       </td>
@@ -152,6 +177,11 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
         <div style="font-weight: 700; color: #0f172a; font-size: 11px;">
           ${getDeliveredByDisplayName(o)}
         </div>
+      </td>
+      <td>
+        ${o.remarks ? `<div style="font-size: 9px; color: #64748b; line-height: 1.2;">${o.remarks}</div>` : ''}
+        ${o.late_reason ? `<div style="font-size: 9px; color: #dc2626; font-weight: bold; line-height: 1.2; margin-top: ${o.remarks ? '4px' : '0'};">Delay: ${o.late_reason}</div>` : ''}
+        ${!o.remarks && !o.late_reason ? `<span style="color: #94a3b8; font-size: 9px;">—</span>` : ''}
       </td>
       <td>
         ${billCellHtml}
@@ -225,15 +255,16 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
           <thead>
             <tr>
               <th style="width: 5%;">Order #</th>
-              <th style="width: 9%;">Outlet</th>
-              <th style="width: 18%;">Customer & Address</th>
-              <th style="width: 13%;">Item Details</th>
-              <th style="width: 11%;">Dates</th>
-              <th style="width: 11%;">Time Tracking</th>
-              <th style="width: 10%;">Payment (₹)</th>
-              <th style="width: 9%;">Status</th>
+              <th style="width: 8%;">Outlet</th>
+              <th style="width: 16%;">Customer & Address</th>
+              <th style="width: 11%;">Item Details</th>
+              <th style="width: 9%;">Dates</th>
+              <th style="width: 12%;">Time Tracking</th>
+              <th style="width: 9%;">Payment (₹)</th>
+              <th style="width: 8%;">Status</th>
               <th style="width: 8%;">Delivered By</th>
-              <th style="width: 8%;">Bill No(s)</th>
+              <th style="width: 7%;">Remarks</th>
+              <th style="width: 7%;">Bill No(s)</th>
             </tr>
           </thead>
           <tbody>

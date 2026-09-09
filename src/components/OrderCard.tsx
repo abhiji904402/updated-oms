@@ -80,6 +80,11 @@ export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact 
 
   const [showImageModal, setShowImageModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [localLateReason, setLocalLateReason] = useState(order.late_reason || '');
+
+  useEffect(() => {
+    setLocalLateReason(order.late_reason || '');
+  }, [order.late_reason]);
 
   const isSelected = selectedOrderIds.includes(order.id);
   const timeInfo = getDeliveryTimeInfo(order);
@@ -336,7 +341,7 @@ Broomies Team`;
                   <option value="pending" className="bg-slate-900 text-rose-300">Pending</option>
                   <option value="processing" className="bg-slate-900 text-amber-300">Processing</option>
                   <option value="out_for_delivery" className="bg-slate-900 text-blue-300">Out for Delivery</option>
-                  <option value="delivered" className="bg-slate-900 text-emerald-300">Delivered</option>
+                  <option value="delivered" className="bg-slate-900 text-emerald-300">{String(order.delivery_type || '').toLowerCase().trim() === 'pickup' ? 'Picked Up' : 'Delivered'}</option>
                   <option value="on_hold" className="bg-slate-900 text-purple-300">On Hold</option>
                   <option value="cancelled" className="bg-slate-900 text-slate-400">Cancelled</option>
                   <option value="missed" className="bg-slate-900 text-red-400">Missed</option>
@@ -383,7 +388,7 @@ Broomies Team`;
                     <CheckCircle className="w-5 h-5 text-amber-400 shrink-0" />
                     <div>
                       <p className="font-extrabold text-amber-200 uppercase tracking-wide flex items-center gap-1.5">
-                        <span className="text-base">🚚</span> Delivered Marked by {order.delivered_by || order.delivery_partner || 'Rider'}
+                        <span className="text-base">🚚</span> {String(order.delivery_type || '').toLowerCase().trim() === 'pickup' ? 'Picked Up Marked by' : 'Delivered Marked by'} {order.delivered_by || order.delivery_partner || 'Rider'}
                       </p>
                       <p className="text-[10px] text-amber-300/90 font-medium flex items-center flex-wrap">
                         Outlet / Admin Confirmation Required
@@ -589,7 +594,7 @@ Broomies Team`;
                   <Truck className="w-3.5 h-3.5 text-purple-400" />
                   <span>Partner:</span>
                 </div>
-                {session.role === 'admin' || session.role === 'outlet' ? (
+                {session.role === 'admin' || session.role === 'outlet' || session.role === 'manager' ? (
                   <select
                     value={order.delivery_partner || ''}
                     onChange={(e) => updateOrderStatus(order.id, order.status, e.target.value)}
@@ -606,6 +611,23 @@ Broomies Team`;
                   <span className="font-semibold text-slate-200">{order.delivery_partner || 'Unassigned'}</span>
                 )}
               </div>
+
+              {timeInfo.isOverdue && (
+                <div className="pt-2 mt-2 border-t border-purple-900/30" onClick={(e) => e.stopPropagation()}>
+                  <label className="block text-[10px] font-black text-rose-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Delay Reason</span>
+                    {localLateReason ? <span className="text-emerald-400 text-[9px] font-bold">Saved ✓</span> : <span className="text-rose-500/70 text-[9px]">Required</span>}
+                  </label>
+                  <textarea
+                    value={localLateReason}
+                    onChange={(e) => setLocalLateReason(e.target.value)}
+                    onBlur={() => updateOrder(order.id, { late_reason: localLateReason })}
+                    className="w-full bg-slate-950 border border-rose-900/50 rounded-lg p-2 text-xs text-rose-200 placeholder:text-rose-500/50 focus:outline-none focus:border-rose-500 transition resize-none"
+                    rows={2}
+                    placeholder="Why is/was this order late? (e.g. Heavy Rain, Traffic)"
+                  />
+                </div>
+              )}
 
             </div>
 

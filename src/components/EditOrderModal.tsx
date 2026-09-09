@@ -57,6 +57,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
   const [finalBillNumber, setFinalBillNumber] = useState<string>('');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
   const [remarks, setRemarks] = useState<string>('');
+  const [lateReason, setLateReason] = useState<string>('');
   const [status, setStatus] = useState<OrderStatus>('pending');
   const [deliveryPartner, setDeliveryPartner] = useState<string>('');
   const [itemImageUrl, setItemImageUrl] = useState<string | null>(null);
@@ -161,6 +162,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       setFinalBillNumber(order.final_bill_number || (order as any).final_bill_no || (order as any).final_bill || (order as any).bill_number || (order as any).bill_no || (order as any).bill || '');
       setDeliveryAddress(order.address || '');
       setRemarks(order.remarks || '');
+      setLateReason(order.late_reason || '');
       setStatus(order.status || 'pending');
       setDeliveryPartner(order.delivery_partner || '');
       setItemImageUrl(order.item_image_url || null);
@@ -411,6 +413,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       final_bill_number: finalBillNumber || undefined,
       address: deliveryType === 'delivery' ? (deliveryAddress || 'Local Address') : 'In-Store Pickup',
       remarks: remarks || '',
+      late_reason: lateReason || undefined,
       status,
       delivery_partner: cleanPartner || undefined,
       delivered_by: deliveredByVal || undefined,

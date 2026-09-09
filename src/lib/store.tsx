@@ -230,6 +230,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (parsed && typeof parsed === 'object') {
           return {
             admin: parsed.admin || DEFAULT_PASSWORDS.admin,
+            manager: parsed.manager || DEFAULT_PASSWORDS.manager,
             outlets: { ...DEFAULT_PASSWORDS.outlets, ...(parsed.outlets || {}) },
             defaultOutletPassword: parsed.defaultOutletPassword || DEFAULT_PASSWORDS.defaultOutletPassword,
             partners: { ...DEFAULT_PASSWORDS.partners, ...(parsed.partners || {}) },

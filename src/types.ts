@@ -45,6 +45,7 @@ export interface Order {
   address: string;
   delivery_address?: string;
   remarks: string;
+  late_reason?: string;
   status: OrderStatus;
   delivery_partner?: string;
   actual_delivery_time?: string | null;
