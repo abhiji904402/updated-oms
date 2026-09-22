@@ -1,0 +1,803 @@
+import React, { useState, useEffect } from 'react';
+import { Order, OrderStatus, PaymentType } from '../types';
+import { useOMS } from '../lib/store';
+import { printThermalReceipts } from '../lib/thermalPrint';
+import { getDeliveryTimeInfo, getCountdownInfo, formatTo12Hour, getTodayDateStr } from '../lib/timeUtils';
+import { getNormalizedDateStr } from '../lib/orderLogic';
+import {
+  Clock,
+  MapPin,
+  Phone,
+  User,
+  ShoppingBag,
+  Truck,
+  CheckCircle,
+  AlertCircle,
+  Printer,
+  MessageCircle,
+  Camera,
+  Key,
+  DollarSign,
+  ChevronRight,
+  Eye,
+  Trash2,
+  Edit3,
+  AlertTriangle,
+  Sparkles,
+  PauseCircle,
+  XCircle,
+  Copy,
+  Check,
+  Cake
+} from 'lucide-react';
+
+interface OrderCardProps {
+  order: Order;
+  compact?: boolean;
+  onOpenDeliveryModal?: (order: Order) => void;
+  onEditOrder?: (order: Order) => void;
+  onViewOrder?: (order: Order) => void;
+}
+
+
+export const AutoConfirmTimer: React.FC<{ actualDeliveryTime?: string }> = ({ actualDeliveryTime }) => {
+  const [timeLeft, setTimeLeft] = React.useState<string>('30:00');
+
+  React.useEffect(() => {
+    const deliveryTime = new Date(actualDeliveryTime || Date.now()).getTime();
+    
+    const update = () => {
+      const now = Date.now();
+      const diff = Math.max(0, (30 * 60 * 1000) - (now - deliveryTime));
+      
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      
+      if (diff === 0) {
+        setTimeLeft('Auto-confirming...');
+      } else {
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      }
+    };
+    
+    update();
+    const int = setInterval(update, 1000);
+    return () => clearInterval(int);
+  }, [actualDeliveryTime]);
+
+  return <span className="text-amber-100 font-mono bg-amber-900/60 px-1.5 py-0.5 rounded border border-amber-500/30 ml-2">Auto in {timeLeft}</span>;
+};
+
+export const OrderCard: React.FC<OrderCardProps> = React.memo(({ order, compact = false, onOpenDeliveryModal, onEditOrder, onViewOrder }) => {
+  const {
+    session,
+    updateOrderStatus,
+    updateOrder,
+    deleteOrder,
+    confirmRiderDelivery,
+    partners,
+    selectedOrderIds,
+    toggleOrderSelection
+  } = useOMS();
+
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [localLateReason, setLocalLateReason] = useState(order.late_reason || '');
+  const [copiedType, setCopiedType] = useState<'phone' | 'address' | null>(null);
+
+  const handleCopyText = (text: string, type: 'phone' | 'address', e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!text) return;
+
+    const performCopy = () => {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      textArea.remove();
+      return Promise.resolve();
+    };
+
+    performCopy().then(() => {
+      setCopiedType(type);
+      setTimeout(() => {
+        setCopiedType((prev) => (prev === type ? null : prev));
+      }, 2000);
+    }).catch((err) => {
+      console.error('Failed to copy', err);
+    });
+  };
+
+  useEffect(() => {
+    setLocalLateReason(order.late_reason || '');
+  }, [order.late_reason]);
+
+  const isSelected = selectedOrderIds.includes(order.id);
+  const timeInfo = getDeliveryTimeInfo(order);
+  const countdown = getCountdownInfo(order, Date.now());
+
+  const todayStr = getTodayDateStr();
+  const normDelDate = getNormalizedDateStr(order.delivery_date);
+  const isMissedOrder = normDelDate !== '' && normDelDate < todayStr && order.status !== 'delivered' && order.status !== 'cancelled';
+
+  const getStatusColor = (status: OrderStatus) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+      case 'processing':
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+      case 'out_for_delivery':
+        return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+      case 'delivered':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+      case 'on_hold':
+        return 'bg-purple-500/15 text-purple-300 border-purple-500/30';
+      case 'cancelled':
+        return 'bg-slate-700/50 text-slate-400 border-slate-600/30';
+      default:
+        return 'bg-slate-800 text-slate-300 border-slate-700';
+    }
+  };
+
+  const renderPaymentDropdown = () => {
+    const total = order.total_amount ?? 0;
+    const pType = String(order.payment_type || '').toLowerCase().trim();
+    const isPaidFull = pType === 'full' || pType === 'full_paid' || pType === 'paid' || pType === 'cash' || pType === 'upi' || pType === 'online';
+
+    const advance = isPaidFull
+      ? total
+      : (pType === 'due' ? 0 : (order.advance_amount ?? 0));
+
+    const remaining = isPaidFull
+      ? 0
+      : (pType === 'due'
+          ? total
+          : (typeof order.remaining_balance === 'number' && order.remaining_balance >= 0
+              ? order.remaining_balance
+              : Math.max(0, total - advance)));
+
+    return (
+      <div className="space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">Payment:</span>
+            <select
+              value={order.payment_type || 'full'}
+              onChange={(e) => {
+                const newType = e.target.value as PaymentType;
+                let updates: Partial<Order> = {
+                  payment_type: newType,
+                  payment_changed_by: session.name || session.role || 'Admin',
+                  payment_changed_at: new Date().toISOString()
+                };
+                const cleanNew = String(newType).toLowerCase().trim();
+                if (cleanNew === 'full' || cleanNew === 'full_paid' || cleanNew === 'paid' || cleanNew === 'cash' || cleanNew === 'upi' || cleanNew === 'online') {
+                  updates.payment_type = newType;
+                  updates.advance_amount = total;
+                  updates.remaining_balance = 0;
+                  updates.due_amount = 0;
+                } else if (cleanNew === 'due') {
+                  updates.payment_type = 'due';
+                  updates.advance_amount = 0;
+                  updates.remaining_balance = total;
+                  updates.due_amount = total;
+                } else if (cleanNew === 'part' || cleanNew === 'partial' || cleanNew === 'part_payment') {
+                  updates.payment_type = 'part';
+                  const adv = order.advance_amount && order.advance_amount < total ? order.advance_amount : Math.round(total / 2);
+                  updates.advance_amount = adv;
+                  updates.remaining_balance = Math.max(0, total - adv);
+                  updates.due_amount = Math.max(0, total - adv);
+                }
+                updateOrder(order.id, updates);
+              }}
+              className={`text-[11px] font-black uppercase px-2 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition shadow-sm truncate min-w-0 max-w-full flex-1 ${
+                isPaidFull
+                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+                  : pType === 'part' || pType === 'partial' || pType === 'part_payment'
+                  ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
+                  : 'bg-rose-950/90 text-rose-300 border-rose-500/50'
+              }`}
+            >
+              <option value="full" className="bg-slate-900 text-emerald-300">Paid Full (₹{total.toLocaleString()})</option>
+              <option value="part" className="bg-slate-900 text-amber-300">Partial Advance (Paid ₹{advance.toLocaleString()} | Due ₹{remaining.toLocaleString()})</option>
+              <option value="due" className="bg-slate-900 text-rose-300">Pay On Delivery / Due (₹{remaining.toLocaleString()})</option>
+              <option value="cash" className="bg-slate-900 text-slate-200">Cash</option>
+              <option value="upi" className="bg-slate-900 text-slate-200">UPI</option>
+              <option value="online" className="bg-slate-900 text-slate-200">Online</option>
+            </select>
+          </div>
+
+          {remaining > 0 ? (
+            <span className="text-xs font-black text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60 font-mono shrink-0">
+              Due: ₹{remaining.toLocaleString()}
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40 font-mono shrink-0">
+              Fully Paid
+            </span>
+          )}
+        </div>
+
+        {order.payment_changed_by && (
+          <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1.5 pt-0.5 border-t border-slate-800/60 truncate min-w-0">
+            <span className="text-purple-400 font-bold shrink-0">Audit:</span>
+            <span className="truncate">By {order.payment_changed_by}</span>
+            {order.payment_changed_at && (
+              <span className="text-slate-500 shrink-0">
+                ({new Date(order.payment_changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const formattedWhatsAppUrl = (phone: string, text: string) => {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  };
+
+  const totalVal = order.total_amount ?? 0;
+  const advanceVal = order.advance_amount ?? 0;
+  const remainingVal = order.remaining_balance ?? 0;
+
+  // WhatsApp Templates
+  const itemDetails = `${order.item_type}${order.quantity ? ` (${order.quantity})` : ''}`;
+  const delDate = order.delivery_date || 'Today';
+  const rawTime = order.delivery_time_expected || order.order_time || '11:00 AM';
+  const delTime = formatTo12Hour(rawTime) || rawTime;
+
+  const confirmMsg = `Thank you so much for your recent order from Broomies! Your order number is (${order.order_number}).
+
+We're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.
+
+Order Details:
+Item: ${itemDetails}
+Total Amount: ₹${totalVal}
+Advance Paid: ₹${advanceVal}
+Remaining Balance: ₹${remainingVal}
+Delivery Date: ${delDate}
+Delivery Time: ${delTime}
+
+If you have any queries or need further assistance, please feel free to get in touch with us at:
+9266424088
+
+If still query not solved call 9971860845
+
+Best wishes,
+The Broomies Team`;
+
+  const dispatchMsg = `Hi ${order.customer_name},
+
+Your order #${order.order_number} is out for delivery with rider ${order.delivery_partner || 'Broomies Express'}.
+
+OTP for verification: ${order.otp || 'N/A'}
+
+Thank you!
+Broomies Team`;
+
+  const reminderMsg = `Hi ${order.customer_name},
+
+Friendly reminder for your Broomies Bakery order #${order.order_number}.
+
+Remaining due amount: ₹${remainingVal.toLocaleString()}
+
+Please pay via UPI/Cash on delivery.
+
+Thank you!
+Broomies Team`;
+
+  return (
+    <>
+      <div className="ticket-wrapper my-1">
+        <div
+          onClick={() => {
+            if (onViewOrder) {
+              onViewOrder(order);
+            } else if (onEditOrder) {
+              onEditOrder(order);
+            }
+          }}
+          className={`ticket cursor-pointer ${
+            isSelected ? 'ring-2 ring-purple-500' : ''
+          }`}
+        >
+          {/* Upper Ticket Main */}
+          <div className="t-main">
+            <div className="t-content space-y-3">
+              {/* Header */}
+              <div className="t-header">
+                <div className="t-logo">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5">
+                    <path
+                      d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    ></path>
+                  </svg>
+                  <span>BROOMIES</span>
+                </div>
+
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleOrderSelection(order.id)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-purple-500 cursor-pointer"
+                  />
+                  <div className="t-type text-sm sm:text-base font-black text-purple-100 tracking-wide px-2.5 py-1">#{order.order_number}</div>
+                  <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-lg bg-purple-950/90 text-purple-300 border border-purple-700/60 shadow-sm flex items-center gap-1 tracking-wider">
+                    📍 {order.outlet || 'Sector 31'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Title & Phone Number Subtitle */}
+              <div>
+                <div className="t-title flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 min-w-0 flex-wrap">
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <Phone className="w-5 h-5 text-purple-400 shrink-0" />
+                      <span className="font-bold whitespace-nowrap">{order.mobile_number || 'No Phone'}</span>
+                    </span>
+                    {order.mobile_number && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyText(order.mobile_number, 'phone', e)}
+                        title="Copy Phone Number"
+                        className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-purple-950/60 hover:bg-purple-900 text-purple-200 hover:text-white border border-purple-700/40 shadow-sm flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                      >
+                        {copiedType === 'phone' ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span className="text-emerald-400">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-purple-300" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <div className="t-subtitle flex items-center justify-between text-xs mt-0.5">
+                  <span className="flex items-center gap-1 text-slate-300 font-semibold">
+                    Order #{order.order_number}
+                  </span>
+                  <a
+                    href={formattedWhatsAppUrl(order.mobile_number, `Hi ${order.customer_name || "Customer"}, regarding your Broomies order #${order.order_number}...`)}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800/60 flex items-center gap-1"
+                  >
+                    <MessageCircle className="w-3 h-3" /> WA
+                  </a>
+                </div>
+              </div>
+
+              {/* Quick Status, Countdown & Actions Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-purple-900/30" onClick={(e) => e.stopPropagation()}>
+                {/* Status Dropdown */}
+                <select
+                  value={order.status}
+                  onChange={(e) => updateOrderStatus(order.id, e.target.value as OrderStatus)}
+                  className={`text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 transition ${getStatusColor(order.status)}`}
+                >
+                  <option value="pending" className="bg-slate-900 text-rose-300">Pending</option>
+                  <option value="processing" className="bg-slate-900 text-amber-300">Processing</option>
+                  <option value="out_for_delivery" className="bg-slate-900 text-blue-300">Out for Delivery</option>
+                  <option value="delivered" className="bg-slate-900 text-emerald-300">{String(order.delivery_type || '').toLowerCase().trim() === 'pickup' ? 'Picked Up' : 'Delivered'}</option>
+                  <option value="on_hold" className="bg-slate-900 text-purple-300">On Hold</option>
+                  <option value="cancelled" className="bg-slate-900 text-slate-400">Cancelled</option>
+                  <option value="missed" className="bg-slate-900 text-red-400">Missed</option>
+                </select>
+
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${countdown.badgeColorClass}`}>
+                  {countdown.text}
+                </span>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      if (onViewOrder) onViewOrder(order);
+                      else if (onEditOrder) onEditOrder(order);
+                    }}
+                    className="p-1 rounded bg-indigo-950 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-800/50 transition"
+                    title="View Order"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  {onEditOrder && (
+                    <button
+                      onClick={() => onEditOrder(order)}
+                      className="p-1 rounded bg-purple-950 text-purple-300 hover:bg-purple-600 hover:text-white border border-purple-800/50 transition"
+                      title="Edit Order"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => printThermalReceipts([order])}
+                    className="p-1 rounded bg-slate-800 text-emerald-400 hover:bg-slate-700 transition"
+                    title="Print Receipt"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Rider Delivery Confirmation Banner */}
+              {Boolean(order.delivery_confirmation_pending) && (
+                <div className="p-3 bg-amber-950/90 border-2 border-amber-500/90 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs shadow-lg animate-pulse" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 text-amber-200 font-bold">
+                    <CheckCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div>
+                      <p className="font-extrabold text-amber-200 uppercase tracking-wide flex items-center gap-1.5">
+                        <span className="text-base">🚚</span> {String(order.delivery_type || '').toLowerCase().trim() === 'pickup' ? 'Picked Up Marked by' : 'Delivered Marked by'} {order.delivered_by || order.delivery_partner || 'Rider'}
+                      </p>
+                      <p className="text-[10px] text-amber-300/90 font-medium flex items-center flex-wrap">
+                        Outlet / Admin Confirmation Required
+                        <AutoConfirmTimer actualDeliveryTime={order.actual_delivery_time} />
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => confirmRiderDelivery(order.id)}
+                    className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase text-xs tracking-wider shadow-lg shrink-0 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    CONFIRM DELIVERY
+                  </button>
+                </div>
+              )}
+
+              {/* Quick Actions Bar for Missed Orders */}
+              {isMissedOrder && (
+                <div className="p-2.5 bg-orange-950/80 border border-orange-500/60 rounded-xl space-y-1.5 shadow-md" onClick={(e) => e.stopPropagation()}>
+                  <div className="text-[10px] font-extrabold text-orange-300 uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
+                      Missed Order Actions
+                    </span>
+                    <span className="text-[9px] font-mono font-bold text-orange-400/80">Date: {order.delivery_date}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px] font-black">
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'delivered')}
+                      className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Mark as delivered"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Delivered</span>
+                    </button>
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'on_hold')}
+                      className="py-1.5 px-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Move to On Hold"
+                    >
+                      <PauseCircle className="w-3 h-3" />
+                      <span>On Hold</span>
+                    </button>
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                      className="py-1.5 px-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Cancel Order"
+                    >
+                      <XCircle className="w-3 h-3" />
+                      <span>Cancel</span>
+                    </button>
+                    <button
+                      onClick={() => onEditOrder && onEditOrder(order)}
+                      className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-1 transition active:scale-95 shadow"
+                      title="Reassign Delivery Partner or Edit"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Reassign</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Details Grid (Ticket Detail Grid) */}
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 space-y-2.5">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-0.5">Bakery Item</span>
+                  <div className="text-xs font-extrabold text-slate-100 break-words leading-snug">
+                    {order.item_type || (order as any).items || 'Item'} <span className="text-purple-300 font-extrabold">({order.quantity || 1})</span>
+                  </div>
+                  {order.name_on_cake && (
+                    <div className="mt-1.5 px-2 py-1 rounded-lg bg-pink-950/60 border border-pink-500/40 flex items-center gap-1.5 text-xs text-pink-200">
+                      <Cake className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                      <span className="text-[10px] uppercase font-bold text-pink-400 shrink-0">Cake Name:</span>
+                      <span className="font-extrabold truncate text-white">"{order.name_on_cake}"</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/60 min-w-0">
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Outlet</span>
+                    <span className="text-xs text-purple-300 font-black truncate block mt-0.5">{order.outlet || 'Sector 31'}</span>
+                  </div>
+
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Exp Delivery</span>
+                    <span className="text-xs text-indigo-300 font-mono font-bold truncate block mt-0.5">{timeInfo.expectedFormatted}</span>
+                  </div>
+
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Delay Status</span>
+                    <span className={`text-[11px] font-mono font-bold truncate block mt-0.5 ${timeInfo.delayMinutes > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {timeInfo.delayText}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Image & Address if present */}
+              {order.item_image_url && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowImageModal(true);
+                  }}
+                  className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800 cursor-pointer hover:border-purple-500/50"
+                >
+                  <img src={order.item_image_url} alt={order.item_type} className="w-10 h-10 rounded-lg object-cover border border-slate-700" />
+                  <span className="text-xs text-slate-300 font-medium">Click to view attached cake/item photo</span>
+                  <Eye className="w-4 h-4 text-purple-400 ml-auto" />
+                </div>
+              )}
+
+              {(order.delivery_address || order.address) && (
+                <div className="text-[11px] text-slate-300 bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 flex items-start justify-between gap-2 min-w-0">
+                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                    <MapPin className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                    <span className="break-words min-w-0 font-medium">{order.delivery_address || order.address}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyText(order.delivery_address || order.address || '', 'address', e)}
+                    title="Copy Delivery Address"
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-purple-950/90 hover:bg-purple-900 text-purple-200 hover:text-white border border-purple-700/60 shadow-sm flex items-center gap-1 transition active:scale-95 shrink-0 cursor-pointer mt-0.5"
+                  >
+                    {copiedType === 'address' ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400 font-bold">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-purple-300" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* WhatsApp Quick Message Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] pt-1">
+                <span className="text-slate-500 font-bold">WA Quick:</span>
+                <a
+                  href={formattedWhatsAppUrl(order.mobile_number, confirmMsg)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/60 whitespace-nowrap"
+                >
+                  Confirm
+                </a>
+                <a
+                  href={formattedWhatsAppUrl(order.mobile_number, dispatchMsg)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-blue-950/60 hover:bg-blue-900 text-blue-300 px-2 py-0.5 rounded border border-blue-800/60 whitespace-nowrap"
+                >
+                  Dispatch
+                </a>
+                {order.remaining_balance > 0 && (
+                  <a
+                    href={formattedWhatsAppUrl(order.mobile_number, reminderMsg)}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-amber-950/60 hover:bg-amber-900 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60 whitespace-nowrap"
+                  >
+                    Reminder
+                  </a>
+                )}
+              </div>
+
+              {/* Payment Status Dropdown */}
+              <div className="p-2 bg-slate-950/80 rounded-xl border border-purple-900/30 overflow-hidden min-w-0">
+                {renderPaymentDropdown()}
+              </div>
+
+              {/* Bill Numbers (Editable Adv Bill & Final Bill) */}
+              <div className="p-2.5 rounded-xl bg-slate-950/90 border border-purple-900/40 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1">
+                    <Edit3 className="w-3 h-3 text-purple-400" />
+                    Bill Numbers (बिल नंबर)
+                  </span>
+                  <span className="text-[9px] text-slate-500">Directly Editable</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                  <div className="flex items-center gap-1 bg-amber-950/30 border border-amber-800/40 rounded-lg p-1">
+                    <span className="text-[10px] font-bold text-amber-400 shrink-0 font-sans">Adv Bill:</span>
+                    <input
+                      type="text"
+                      placeholder="e.g. ADV-101"
+                      defaultValue={order.advance_bill_number || (order as any).adv_bill || ''}
+                      key={`adv-${order.id}-${order.advance_bill_number || (order as any).adv_bill}`}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val !== (order.advance_bill_number || (order as any).adv_bill || '')) {
+                          updateOrder(order.id, { advance_bill_number: val });
+                        }
+                      }}
+                      className="w-full bg-slate-900 text-amber-200 text-xs px-2 py-0.5 rounded border border-amber-800/60 focus:outline-none focus:border-amber-400 font-mono font-bold"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 bg-emerald-950/30 border border-emerald-800/40 rounded-lg p-1">
+                    <span className="text-[10px] font-bold text-emerald-400 shrink-0 font-sans">Final Bill:</span>
+                    <input
+                      type="text"
+                      placeholder="e.g. BILL-201"
+                      defaultValue={order.final_bill_number || (order as any).final_bill || (order as any).bill_number || ''}
+                      key={`final-${order.id}-${order.final_bill_number || (order as any).final_bill || (order as any).bill_number}`}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val !== (order.final_bill_number || (order as any).final_bill || (order as any).bill_number || '')) {
+                          updateOrder(order.id, { final_bill_number: val });
+                        }
+                      }}
+                      className="w-full bg-slate-900 text-emerald-200 text-xs px-2 py-0.5 rounded border border-emerald-800/60 focus:outline-none focus:border-emerald-400 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Partner Selection */}
+              <div className="pt-1 flex items-center justify-between text-xs" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1 text-slate-400">
+                  <Truck className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Partner:</span>
+                </div>
+                {session.role === 'admin' || session.role === 'outlet' || session.role === 'manager' ? (
+                  <select
+                    value={order.delivery_partner || ''}
+                    onChange={(e) => updateOrderStatus(order.id, order.status, e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="">-- Unassigned --</option>
+                    {partners.map((p) => (
+                      <option key={p.id} value={p.name}>
+                        {p.name} ({p.status})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="font-semibold text-slate-200">{order.delivery_partner || 'Unassigned'}</span>
+                )}
+              </div>
+
+              {timeInfo.isOverdue && (
+                <div className="pt-2 mt-2 border-t border-purple-900/30" onClick={(e) => e.stopPropagation()}>
+                  <label className="block text-[10px] font-black text-rose-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Delay Reason</span>
+                    {localLateReason ? <span className="text-emerald-400 text-[9px] font-bold">Saved ✓</span> : <span className="text-rose-500/70 text-[9px]">Required</span>}
+                  </label>
+                  <select
+                    value={localLateReason}
+                    onChange={(e) => {
+                      setLocalLateReason(e.target.value);
+                      updateOrder(order.id, { late_reason: e.target.value });
+                    }}
+                    className="w-full bg-slate-950 border border-rose-900/50 rounded-lg p-2 text-xs text-rose-200 focus:outline-none focus:border-rose-500 transition cursor-pointer"
+                  >
+                    <option value="">-- Select Delay Reason --</option>
+                    <option value="Cake is not Prepared">1. Cake is not Prepared</option>
+                    <option value="Customer Changed The time">2. Customer Changed The time</option>
+                    <option value="Delivery Person Not Available">3. Delivery Person Not Available</option>
+                    <option value="Delivery Delayed Due To Traffic">4. Delivery Delayed Due To Traffic</option>
+                    <option value="Customer Wants Some Changes on Cake">5. Customer Wants Some Changes on Cake</option>
+                    {localLateReason && !["Cake is not Prepared", "Customer Changed The time", "Delivery Person Not Available", "Delivery Delayed Due To Traffic", "Customer Wants Some Changes on Cake"].includes(localLateReason) && (
+                      <option value={localLateReason}>{localLateReason}</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
+            </div>
+
+            {/* Perforation Line */}
+            <div
+              className="t-perforation"
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                width: '100%',
+                transform: 'translateY(50%)'
+              }}
+            >
+              <div className="t-perf-line"></div>
+            </div>
+          </div>
+
+          {/* Ticket Stub */}
+          <div className="t-stub">
+            <div className="t-barcode-container">
+              <div className="t-barcode"></div>
+              <div className="t-barcode-id">ORD-#{order.order_number}</div>
+            </div>
+
+            <div className="t-admit">
+              <div className="t-admit-text">Total Amount</div>
+              <div className="t-admit-num">₹{(order.total_amount ?? 0).toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Image Preview Modal */}
+      {showImageModal && (
+        <div
+          className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div className="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-100 text-sm">
+                Image Preview - Order #{order.order_number}
+              </h3>
+              <button
+                onClick={() => setShowImageModal(false)}
+                className="text-slate-400 hover:text-white font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            {order.delivery_photo_url && (
+              <div>
+                <div className="text-xs text-emerald-400 font-semibold mb-1">Delivery Confirmation Photo:</div>
+                <img
+                  src={order.delivery_photo_url}
+                  alt="Delivery Proof"
+                  className="w-full h-64 object-cover rounded-xl border border-slate-700"
+                />
+              </div>
+            )}
+            {order.item_image_url && (
+              <div>
+                <div className="text-xs text-rose-400 font-semibold mb-1">Bakery Item Image:</div>
+                <img
+                  src={order.item_image_url}
+                  alt={order.item_type}
+                  className="w-full h-64 object-cover rounded-xl border border-slate-700"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+});

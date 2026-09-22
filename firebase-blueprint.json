@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "orders": {
+      "title": "Order",
+      "description": "Broomies Bakery Customer Orders with real-time multi-device sync",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "order_number": { "type": "number" },
+        "customer_name": { "type": "string" },
+        "mobile_number": { "type": "string" },
+        "outlet": { "type": "string" },
+        "item_type": { "type": "string" },
+        "quantity": { "type": "number" },
+        "total_amount": { "type": "number" },
+        "advance_amount": { "type": "number" },
+        "remaining_balance": { "type": "number" },
+        "due_amount": { "type": "number" },
+        "status": { "type": "string" },
+        "payment_type": { "type": "string" },
+        "delivery_type": { "type": "string" },
+        "delivery_date": { "type": "string" },
+        "delivery_time_expected": { "type": "string" },
+        "informed_by": { "type": "string" },
+        "address": { "type": "string" },
+        "remarks": { "type": "string" },
+        "advance_bill_number": { "type": "string" },
+        "final_bill_number": { "type": "string" },
+        "item_image_url": { "type": "string" },
+        "order_date": { "type": "string" },
+        "order_time": { "type": "string" },
+        "otp": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "order_number", "customer_name", "total_amount"]
+    },
+    "sheet_config": {
+      "title": "Google Sheet Config",
+      "description": "Configuration for Google Sheets synchronization",
+      "type": "object",
+      "properties": {
+        "sheet_url": { "type": "string" },
+        "last_synced_at": { "type": "string" },
+        "auto_sync_enabled": { "type": "boolean" }
+      }
+    },
+    "delivery_partners": {
+      "title": "Delivery Partner",
+      "description": "Delivery riders with live location and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "current_lat": { "type": "number" },
+        "current_lng": { "type": "number" },
+        "last_updated": { "type": "string" },
+        "assigned_orders_count": { "type": "number" }
+      }
+    },
+    "alerts": {
+      "title": "Alert",
+      "description": "Notifications and system alerts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "time": { "type": "string" },
+        "read": { "type": "boolean" },
+        "order_id": { "type": "string" }
+      }
+    }
+  }
+}
