@@ -15,6 +15,7 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
     'Mobile',
     'Address',
     'Item Type',
+    'Name on Cake / Icing',
     'Qty',
     'Type',
     'Total (₹)',
@@ -49,6 +50,7 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
       `"${o.mobile_number}"`,
       `"${(o.address || 'N/A').replace(/"/g, '""')}"`,
       `"${o.item_type.replace(/"/g, '""')}"`,
+      `"${(o.name_on_cake || '').replace(/"/g, '""')}"`,
       o.quantity,
       o.delivery_type,
       (o.total_amount || 0).toFixed(2),
@@ -154,6 +156,13 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
         </span>
       </td>
       <td>
+        ${o.name_on_cake ? `
+          <div style="font-weight: 700; color: #be185d; font-size: 10px; line-height: 1.3; background: #fdf2f8; border: 1px solid #fbcfe8; padding: 4px 6px; border-radius: 4px;">
+            🎂 <strong>"${o.name_on_cake}"</strong>
+          </div>
+        ` : `<span style="color: #94a3b8; font-size: 10px;">—</span>`}
+      </td>
+      <td>
         <span style="font-size: 10px; color: #475569;">Ord: ${o.order_date || ''} ${formatTo12Hour(o.order_time) || ''}</span><br/>
         <span style="font-size: 10px; color: #0284c7; font-weight: 600;">Del: ${o.delivery_date || ''}</span>
       </td>
@@ -255,16 +264,17 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
           <thead>
             <tr>
               <th style="width: 5%;">Order #</th>
-              <th style="width: 8%;">Outlet</th>
-              <th style="width: 16%;">Customer & Address</th>
-              <th style="width: 11%;">Item Details</th>
-              <th style="width: 9%;">Dates</th>
-              <th style="width: 12%;">Time Tracking</th>
-              <th style="width: 9%;">Payment (₹)</th>
-              <th style="width: 8%;">Status</th>
-              <th style="width: 8%;">Delivered By</th>
+              <th style="width: 7%;">Outlet</th>
+              <th style="width: 13%;">Customer & Address</th>
+              <th style="width: 10%;">Item Details</th>
+              <th style="width: 12%;">Name / Icing on Cake</th>
+              <th style="width: 8%;">Dates</th>
+              <th style="width: 10%;">Time Tracking</th>
+              <th style="width: 8%;">Payment (₹)</th>
+              <th style="width: 7%;">Status</th>
+              <th style="width: 7%;">Delivered By</th>
               <th style="width: 7%;">Remarks</th>
-              <th style="width: 7%;">Bill No(s)</th>
+              <th style="width: 6%;">Bill No(s)</th>
             </tr>
           </thead>
           <tbody>

@@ -343,12 +343,18 @@ Broomies Team`;
                 </div>
               </div>
 
-              {/* Title & Phone Number Subtitle */}
+              {/* Title & Customer Name / Phone Number Subtitle */}
               <div>
                 <div className="t-title flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 min-w-0 flex-wrap">
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <Phone className="w-5 h-5 text-purple-400 shrink-0" />
+                    {order.customer_name && (
+                      <span className="font-black text-white flex items-center gap-1.5 text-sm sm:text-base tracking-wide">
+                        <User className="w-4 h-4 text-purple-400 shrink-0" />
+                        <span className="truncate">{order.customer_name}</span>
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1.5 shrink-0 text-slate-300 text-xs">
+                      <Phone className="w-4 h-4 text-purple-400 shrink-0" />
                       <span className="font-bold whitespace-nowrap">{order.mobile_number || 'No Phone'}</span>
                     </span>
                     {order.mobile_number && (

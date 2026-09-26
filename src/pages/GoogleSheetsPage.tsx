@@ -36,7 +36,8 @@ import {
   Eye,
   EyeOff,
   Key,
-  X
+  X,
+  Cake
 } from 'lucide-react';
 
 const APPS_SCRIPT_CODE = `// =============================================
@@ -1109,6 +1110,7 @@ export const GoogleSheetsPage = React.memo(() => {
                 <th className="py-3 px-4">Order #</th>
                 <th className="py-3 px-4">Outlet</th>
                 <th className="py-3 px-4">Item</th>
+                <th className="py-3 px-4 text-pink-300">Cake Name / Icing</th>
                 <th className="py-3 px-4 text-center">Qty</th>
                 <th className="py-3 px-4">Amount</th>
                 <th className="py-3 px-4">Status</th>
@@ -1120,7 +1122,7 @@ export const GoogleSheetsPage = React.memo(() => {
             <tbody className="divide-y divide-indigo-950/60 text-xs">
               {sortedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500">
+                  <td colSpan={10} className="py-8 text-center text-slate-500">
                     No orders synced yet.
                   </td>
                 </tr>
@@ -1135,6 +1137,19 @@ export const GoogleSheetsPage = React.memo(() => {
                     </td>
                     <td className="py-3 px-4 text-slate-200">
                       {ord.item_type}
+                    </td>
+                    <td className="py-3 px-4">
+                      {ord.name_on_cake ? (
+                        <div
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-pink-950/60 border border-pink-500/40 text-pink-200 text-xs font-semibold max-w-[180px]"
+                          title={ord.name_on_cake}
+                        >
+                          <Cake className="w-3 h-3 text-pink-400 shrink-0" />
+                          <span className="truncate">{ord.name_on_cake}</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-500 italic">—</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center font-semibold text-slate-200">
                       {ord.quantity}

@@ -24,7 +24,7 @@ import {
 import { WhatsAppConfig, WhatsAppLog } from '../types';
 
 export const WhatsAppAutomationPage = React.memo(() => {
-  const { orders = [], showNotification } = useOMS();
+  const { orders = [], showNotification, checkWhatsAppStatus } = useOMS();
 
   // State
   const [config, setConfig] = useState<WhatsAppConfig | null>(null);
@@ -40,6 +40,9 @@ export const WhatsAppAutomationPage = React.memo(() => {
   // Official QR Code State
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [qrGenerating, setQrGenerating] = useState(false);
+  const [pairingPhone, setPairingPhone] = useState('');
+  const [pairingCodeResult, setPairingCodeResult] = useState<string | null>(null);
+  const [pairingLoading, setPairingLoading] = useState(false);
   const [testDirectPhone, setTestDirectPhone] = useState('');
   const [testDirectMessage, setTestDirectMessage] = useState('👋 Hello from Broomies Bakery! Your Official WhatsApp Multi-Device connection is active.');
   const [sendingTest, setSendingTest] = useState(false);
@@ -71,6 +74,18 @@ export const WhatsAppAutomationPage = React.memo(() => {
           setQrCodeData(null);
         } else if (data.qrCode) {
           setQrCodeData(data.qrCode);
+        } else if (!data.connected) {
+          // Auto-fetch/generate QR code so every device instantly sees it without clicking
+          fetch('/api/whatsapp/generate-qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ forceRelink: false })
+          })
+            .then(r => r.json())
+            .then(resData => {
+              if (resData.qrCode) setQrCodeData(resData.qrCode);
+            })
+            .catch(() => {});
         }
       }
       if (resLogs.ok) {
@@ -93,9 +108,9 @@ export const WhatsAppAutomationPage = React.memo(() => {
     fetchStatusAndLogs();
   }, [fetchStatusAndLogs]);
 
-  // Smart polling: ONLY poll if user is on QR tab and has generated a QR code that is awaiting scan
+  // Smart polling: Polling for QR and connection status across all devices
   useEffect(() => {
-    if (activeTab !== 'qr_login' || config?.connected || !qrCodeData) return;
+    if (activeTab !== 'qr_login' || config?.connected) return;
     
     const interval = setInterval(async () => {
       try {
@@ -106,14 +121,15 @@ export const WhatsAppAutomationPage = React.memo(() => {
           setConfig(data);
           setQrCodeData(null);
           showNotification('🎉 WhatsApp Linked Successfully!');
+          checkWhatsAppStatus();
         } else if (data.qrCode && data.qrCode !== qrCodeData) {
           setQrCodeData(data.qrCode);
         }
       } catch {}
-    }, 3000);
+    }, 2500);
 
     return () => clearInterval(interval);
-  }, [activeTab, config?.connected, qrCodeData, showNotification]);
+  }, [activeTab, config?.connected, qrCodeData, showNotification, checkWhatsAppStatus]);
 
   // Generate Real Official WhatsApp QR Code
   const handleGenerateQR = useCallback(async (forceRelink = false) => {
@@ -145,6 +161,35 @@ export const WhatsAppAutomationPage = React.memo(() => {
       setQrGenerating(false);
     }
   }, [fetchStatusAndLogs, showNotification]);
+
+  // Request pairing code for phone number login
+  const handlePairPhone = async () => {
+    if (!pairingPhone || pairingPhone.length < 10) {
+      showNotification('Please enter a valid 10-digit mobile number with country code (e.g. 919876543210)');
+      return;
+    }
+    setPairingLoading(true);
+    setPairingCodeResult(null);
+    try {
+      showNotification('🔄 Requesting WhatsApp Pairing Code...');
+      const res = await fetch('/api/whatsapp/pair-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: pairingPhone })
+      });
+      const data = await res.json();
+      if (data.success && data.pairingCode) {
+        setPairingCodeResult(data.pairingCode);
+        showNotification('✅ Pairing code generated successfully!');
+      } else {
+        showNotification(`❌ ${data.error || 'Failed to generate pairing code'}`);
+      }
+    } catch (err: any) {
+      showNotification(`Error: ${err.message}`);
+    } finally {
+      setPairingLoading(false);
+    }
+  };
 
   // Test Direct Message via Linked Device
   const handleSendTestDirect = async () => {
@@ -187,6 +232,7 @@ export const WhatsAppAutomationPage = React.memo(() => {
         setConfig(data.config);
         setQrCodeData(null);
         showNotification('WhatsApp session unlinked');
+        checkWhatsAppStatus();
       }
     } catch {
       showNotification('Failed to disconnect');
@@ -711,8 +757,9 @@ export const WhatsAppAutomationPage = React.memo(() => {
               </div>
             </div>
           ) : (
-            /* NOT CONNECTED: OFFICIAL QR SCANNER & INSTRUCTIONS */
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <>
+              {/* NOT CONNECTED: OFFICIAL QR SCANNER & INSTRUCTIONS */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left Column: The QR Code Card */}
               <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center text-center space-y-5 shadow-xl">
                 <div className="flex items-center gap-2">
@@ -879,6 +926,61 @@ export const WhatsAppAutomationPage = React.memo(() => {
                 </div>
               </div>
             </div>
+
+            {/* Phone Number Pairing Card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <PhoneCall className="w-5 h-5 text-purple-400" />
+                    <h2 className="text-lg font-black text-white">
+                      Or Link with Phone Number (Pairing Code)
+                    </h2>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      Alternative Login
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    If scanning the QR code doesn't work, enter your 10-digit mobile number with country code (e.g. 919876543210) to generate an 8-character pairing code.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div className="md:col-span-8 flex gap-3">
+                  <input
+                    type="text"
+                    placeholder="Enter mobile number (e.g. 919876543210)"
+                    value={pairingPhone}
+                    onChange={(e) => setPairingPhone(e.target.value)}
+                    className="w-full bg-[#0a0c18] border border-slate-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-purple-500 transition"
+                  />
+                  <button
+                    onClick={handlePairPhone}
+                    disabled={pairingLoading}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl shadow-lg shadow-purple-900/40 transition flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                  >
+                    {pairingLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    <span>Get Pairing Code</span>
+                  </button>
+                </div>
+
+                {pairingCodeResult && (
+                  <div className="md:col-span-4 bg-purple-950/60 border border-purple-800/60 rounded-2xl p-4 text-center space-y-1">
+                    <div className="text-[10px] uppercase font-bold text-purple-300 tracking-wider">
+                      Your 8-Character Pairing Code
+                    </div>
+                    <div className="text-2xl font-mono font-black text-white tracking-widest bg-purple-900/40 py-2 rounded-xl border border-purple-700/40 select-all">
+                      {pairingCodeResult}
+                    </div>
+                    <div className="text-[11px] text-purple-300/80">
+                      Open WhatsApp &rarr; Linked Devices &rarr; Link with phone number instead
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            </>
           )}
         </div>
       )}

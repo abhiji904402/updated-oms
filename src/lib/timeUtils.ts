@@ -1,20 +1,30 @@
 
 /**
- * Returns local YYYY-MM-DD string according to device/client timezone (e.g. IST)
+ * Returns YYYY-MM-DD string strictly according to Indian Standard Time (IST - Asia/Kolkata).
+ * Ensures consistency across cloud preview containers, mobile phones, and laptops.
  */
 export function getTodayDateStr(date: Date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(date);
+  } catch {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
 }
 
 /**
- * Returns tomorrow's local YYYY-MM-DD string
+ * Returns tomorrow's YYYY-MM-DD string strictly in Indian Standard Time (IST)
  */
 export function getTomorrowDateStr(date: Date = new Date()): string {
-  const next = new Date(date);
-  next.setDate(next.getDate() + 1);
+  const next = new Date(date.getTime() + 24 * 60 * 60 * 1000);
   return getTodayDateStr(next);
 }
 import { Order } from '../types';

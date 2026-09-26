@@ -47,20 +47,45 @@ class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErrorBound
   override render() {
     if (this.state.hasError) {
       return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#070913', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#f43f5e', marginBottom: 12 }}>Broomies OMS - Load Recovery</div>
-          <p style={{ color: '#94a3b8', maxWidth: 400, fontSize: 13, marginBottom: 20 }}>
-            An unexpected error occurred while loading. Tap below to clear local cache and reload:
+        <div style={{ minHeight: '100vh', backgroundColor: '#070913', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, marginBottom: 16 }}>
+            🛡️
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc', marginBottom: 8 }}>Broomies OMS - Emergency Shield</div>
+          <p style={{ color: '#cbd5e1', maxWidth: 460, fontSize: 14, lineHeight: 1.5, marginBottom: 8 }}>
+            Dashboard me ek unexpected error pakda gaya hai. Aapki data safe hai.
           </p>
-          <button
-            onClick={() => {
-              try { localStorage.clear(); sessionStorage.clear(); } catch {}
-              window.location.reload();
-            }}
-            style={{ backgroundColor: '#a855f7', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}
-          >
-            Clear Cache & Reload Dashboard
-          </button>
+          <p style={{ color: '#94a3b8', maxWidth: 460, fontSize: 12, lineHeight: 1.4, marginBottom: 24 }}>
+            (An unexpected error was caught safely. Choose an action below to restore operations immediately.)
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', maxWidth: 440 }}>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              style={{ backgroundColor: '#a855f7', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              🔄 Refresh & Retry (Try Again)
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem('broomies_oms_orders_v7');
+                  sessionStorage.clear();
+                } catch {}
+                window.location.reload();
+              }}
+              style={{ backgroundColor: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', padding: '12px 20px', borderRadius: 12, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+            >
+              🧹 Clear Storage Cache
+            </button>
+          </div>
+          {this.state.error && (
+            <div style={{ marginTop: 24, maxWidth: 500, padding: 12, borderRadius: 8, backgroundColor: '#0f172a', border: '1px solid #1e293b', color: '#ef4444', fontSize: 11, textAlign: 'left', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              Error: {String(this.state.error?.message || this.state.error)}
+            </div>
+          )}
         </div>
       );
     }

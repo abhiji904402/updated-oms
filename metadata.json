@@ -1,11 +1,8 @@
 {
-  "name": "updates Broomies OMS",
-  "description": "Order Management System for Broomies Bakery featuring Admin, Outlet, and Delivery dashboards, thermal printing, real-time sync, image compression, and analytics.",
-  "requestFramePermissions": [
-    "camera",
-    "geolocation"
-  ],
-  "majorCapabilities": [
+  "name": "Broomies Bakery OMS",
+  "description": "Order Management System for Broomies Bakery with WhatsApp Automation and Multi-Outlet Support",
+  "capabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  ],
+  "permissions": []
 }

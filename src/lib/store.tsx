@@ -652,7 +652,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       safeLocalStorageSet('broomies_wa_connected_v1', connected ? 'true' : 'false');
       if (data.phoneNumber) {
         safeLocalStorageSet('broomies_wa_phone_v1', data.phoneNumber);
-      } else {
+      } else if (!data.hasExistingSession && data.sessionState === 'disconnected') {
         localStorage.removeItem('broomies_wa_phone_v1');
       }
       return connected;
@@ -679,8 +679,20 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     checkWhatsAppStatus();
-    const interval = setInterval(checkWhatsAppStatus, 60000);
-    return () => clearInterval(interval);
+    const interval = setInterval(checkWhatsAppStatus, 5000);
+    const onFocus = () => checkWhatsAppStatus();
+    window.addEventListener('focus', onFocus);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'broomies_wa_connected_v1') {
+        setIsWhatsAppConnected(e.newValue === 'true');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+    };
   }, [checkWhatsAppStatus]);
 
   const FALLBACK_WA_TEMPLATES: Record<string, string> = {

@@ -601,34 +601,6 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
               </select>
             </div>
 
-            {/* Order Date * */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1.5">
-                Order Date <span className="text-purple-400">*</span>
-              </label>
-              <input
-                type="date"
-                value={orderDate}
-                onChange={(e) => setOrderDate(e.target.value)}
-                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
-                required
-              />
-            </div>
-
-            {/* Order Time */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1.5">
-                Order Time
-              </label>
-              <input
-                type="time"
-                placeholder="04:50 pm"
-                value={convertTo24Hour(orderTime)}
-                onChange={(e) => setOrderTime(formatTo12Hour(e.target.value))}
-                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
-              />
-            </div>
-
             {/* Mobile / Phone Number * */}
             <div ref={customerMobileContainerRef} className="relative">
               <label className="block text-slate-300 font-semibold mb-1.5 flex items-center justify-between">

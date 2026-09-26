@@ -1,5 +1,9 @@
 # BROOMIES OMS - APPLICATION BLUEPRINT & ARCHITECTURE DIRECTORY
 
+> 🚨 **CRITICAL INSTRUCTION FOR ALL AI SESSIONS**:
+> Before making ANY changes to this codebase, ALWAYS review `/SYSTEM_BLUEPRINT_FOR_AI.md` and `/src/lib/safetyGuards.ts`.
+> This guarantees zero compilation errors, zero runtime exceptions, zero white-screen crashes, and safe state mutations.
+
 This document provides a comprehensive blueprint and function index for the **Broomies Order Management System (OMS)**. Refer to this document whenever modifying features, adding components, or optimizing performance.
 
 ---

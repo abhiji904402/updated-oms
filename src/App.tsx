@@ -19,6 +19,7 @@ import { ConfirmDeliveryModal } from './components/ConfirmDeliveryModal';
 import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 import { KOTPrintPage } from './pages/KOTPrintPage';
 import { WhatsAppAutomationPage } from './pages/WhatsAppAutomationPage';
+import { SafeErrorBoundary } from './components/SafeErrorBoundary';
 
 function PageFallback() {
   return (
@@ -108,29 +109,31 @@ function OMSAppContent() {
 
           {/* Instant Active Page Rendering */}
           <main className="flex-1 pb-12 relative">
-            <Suspense fallback={<PageFallback />}>
-              {(activeTab === 'dashboard' || activeTab === 'admin') && (
-                <AdminDashboard
-                  onOpenAddModal={openAddModal}
-                  onOpenThermalModal={openThermalModal}
-                  onOpenDeliveryModal={handleOpenDeliveryModal}
-                  onOpenPasswordModal={openPasswordModal}
-                  onOpenSheetModal={openSheetModal}
-                />
-              )}
+            <SafeErrorBoundary fallbackTitle="Page View Shield">
+              <Suspense fallback={<PageFallback />}>
+                {(activeTab === 'dashboard' || activeTab === 'admin') && (
+                  <AdminDashboard
+                    onOpenAddModal={openAddModal}
+                    onOpenThermalModal={openThermalModal}
+                    onOpenDeliveryModal={handleOpenDeliveryModal}
+                    onOpenPasswordModal={openPasswordModal}
+                    onOpenSheetModal={openSheetModal}
+                  />
+                )}
 
-              {activeTab === 'outlet' && session.role !== 'outlet' && <OutletDashboard />}
+                {activeTab === 'outlet' && session.role !== 'outlet' && <OutletDashboard />}
 
-              {activeTab === 'delivery' && session.role !== 'outlet' && <DeliveryDashboard />}
+                {activeTab === 'delivery' && session.role !== 'outlet' && <DeliveryDashboard />}
 
-              {activeTab === 'analytics' && <AnalyticsPage />}
+                {activeTab === 'analytics' && <AnalyticsPage />}
 
-              {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
-              {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
-              {activeTab === 'kot_print' && <KOTPrintPage />}
-              {activeTab === 'whatsapp' && <WhatsAppAutomationPage />}
+                {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
+                {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
+                {activeTab === 'kot_print' && <KOTPrintPage />}
+                {activeTab === 'whatsapp' && <WhatsAppAutomationPage />}
 
-            </Suspense>
+              </Suspense>
+            </SafeErrorBoundary>
           </main>
         </div>
       </div>

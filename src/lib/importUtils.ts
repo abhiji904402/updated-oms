@@ -215,6 +215,7 @@ export function parseCSVToOrders(csvText: string): Partial<Order>[] {
     const paymentChangedAt = getVal('paymentchangedat', 'paymentmodifiedat', 'paymentupdatedat', 'paychangedat');
 
     // Supplementary
+    const nameOnCake = getVal('nameoncake', 'name_on_cake', 'cakename', 'cake_name', 'cakemessage', 'messageoncake', 'icing', 'icingname', 'nameicing', 'name_icing');
     const photoUrl = getVal('cakephotourl', 'photourl', 'itemimageurl', 'photo', 'image', 'cakephoto');
     const remarks = getVal('remarks', 'notes', 'comments', 'specialinstructions');
     const informedBy = getVal('informedby', 'informed', 'channel', 'source');
@@ -233,6 +234,7 @@ export function parseCSVToOrders(csvText: string): Partial<Order>[] {
       mobile_number: mobile || '9876543210',
       outlet: (outlet || 'Sector 31') as OutletName,
       item_type: itemType || 'Assorted Bakery Item',
+      name_on_cake: nameOnCake || '',
       quantity: quantity || 1,
       total_amount: totalAmount || 0,
       advance_amount: advanceAmount || 0,

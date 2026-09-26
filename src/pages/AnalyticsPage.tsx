@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   Clock,
   Ban,
-  DollarSign
+  DollarSign,
+  Cake
 } from 'lucide-react';
 import { getDeliveryTimeInfo, formatTo12Hour } from '../lib/timeUtils';
 import { matchesOutlet, formatOutletDisplayName } from '../lib/outletUtils';
@@ -98,7 +99,8 @@ export const AnalyticsPage = React.memo(() => {
         const matchesItem = (o.item_type || '').toLowerCase().includes(term);
         const matchesCust = (o.customer_name || '').toLowerCase().includes(term);
         const matchesPhone = (o.mobile_number || '').toLowerCase().includes(term);
-        if (!matchesNum && !matchesOutlet && !matchesItem && !matchesCust && !matchesPhone) {
+        const matchesCake = (o.name_on_cake || '').toLowerCase().includes(term);
+        if (!matchesNum && !matchesOutlet && !matchesItem && !matchesCust && !matchesPhone && !matchesCake) {
           return false;
         }
       }
@@ -801,6 +803,7 @@ export const AnalyticsPage = React.memo(() => {
                 <th className="py-3 px-3">OUTLET</th>
                 <th className="py-3 px-3">CUSTOMER</th>
                 <th className="py-3 px-3">ITEM & QTY</th>
+                <th className="py-3 px-3 text-pink-300">NAME / ICING ON CAKE</th>
                 <th className="py-3 px-3">AMOUNT</th>
                 <th className="py-3 px-3">PAYMENT</th>
                 <th className="py-3 px-3">STATUS</th>
@@ -816,7 +819,7 @@ export const AnalyticsPage = React.memo(() => {
             <tbody className="divide-y divide-indigo-950/60 text-xs">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-8 text-center text-slate-500">
+                  <td colSpan={15} className="py-8 text-center text-slate-500">
                     No orders found matching criteria.
                   </td>
                 </tr>
@@ -842,6 +845,20 @@ export const AnalyticsPage = React.memo(() => {
                       {/* ITEM & QTY */}
                       <td className="py-3 px-3 text-slate-200">
                         {ord.item_type} <span className="text-slate-400 font-normal">× {ord.quantity}</span>
+                      </td>
+                      {/* NAME / ICING ON CAKE */}
+                      <td className="py-3 px-3">
+                        {ord.name_on_cake ? (
+                          <div
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-950/60 border border-pink-500/40 text-pink-200 text-xs font-semibold max-w-[220px]"
+                            title={ord.name_on_cake}
+                          >
+                            <Cake className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                            <span className="truncate">{ord.name_on_cake}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-xs italic">—</span>
+                        )}
                       </td>
                       {/* AMOUNT */}
                       <td className="py-3 px-3 font-bold text-white">
