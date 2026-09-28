@@ -15,7 +15,10 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
     'Mobile',
     'Address',
     'Item Type',
-    'Name on Cake / Icing',
+    'Name on Cake',
+    'Icing & Color',
+    'Design Type',
+    'Tiers',
     'Qty',
     'Type',
     'Total (₹)',
@@ -51,6 +54,9 @@ export function exportToCSV(orders: Order[], filename = 'broomies_orders.csv') {
       `"${(o.address || 'N/A').replace(/"/g, '""')}"`,
       `"${o.item_type.replace(/"/g, '""')}"`,
       `"${(o.name_on_cake || '').replace(/"/g, '""')}"`,
+      `"${(o.icing_color || '').replace(/"/g, '""')}"`,
+      `"${(o.design_type || 'normal').replace(/"/g, '""')}"`,
+      `"${(o.tier || '1')}"`,
       o.quantity,
       o.delivery_type,
       (o.total_amount || 0).toFixed(2),
@@ -106,8 +112,11 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
           const actualMs = new Date(o.actual_delivery_time).getTime();
           if (expectedMs > 0 && !isNaN(actualMs)) {
             const diffMins = Math.round((actualMs - expectedMs) / 60000);
-            if (diffMins > 0) {
-              diffHtml = `<div style="font-size: 10px; color: #dc2626; font-weight: bold; margin-top: 4px;">Diff: +${diffMins}m (Late)</div>`;
+            if (diffMins > 60) {
+              const effectiveLate = diffMins - 60;
+              diffHtml = `<div style="font-size: 10px; color: #dc2626; font-weight: bold; margin-top: 4px;">Diff: +${effectiveLate}m Late</div>`;
+            } else if (diffMins > 0) {
+              diffHtml = `<div style="font-size: 10px; color: #16a34a; font-weight: bold; margin-top: 4px;">Diff: On Time (60m Buffer)</div>`;
             } else if (diffMins < 0) {
               diffHtml = `<div style="font-size: 10px; color: #16a34a; font-weight: bold; margin-top: 4px;">Diff: ${Math.abs(diffMins)}m (Early)</div>`;
             } else {
@@ -161,6 +170,21 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
             🎂 <strong>"${o.name_on_cake}"</strong>
           </div>
         ` : `<span style="color: #94a3b8; font-size: 10px;">—</span>`}
+      </td>
+      <td>
+        ${o.icing_color ? `
+          <div style="font-weight: 600; color: #7e22ce; font-size: 10px; line-height: 1.3; background: #f3e8ff; border: 1px solid #e9d5ff; padding: 4px 6px; border-radius: 4px;">
+            🎨 <strong>${o.icing_color}</strong>
+          </div>
+        ` : `<span style="color: #94a3b8; font-size: 10px;">—</span>`}
+      </td>
+      <td>
+        <div style="font-size: 10px; font-weight: 700; color: #1e293b; text-transform: uppercase;">
+          ${o.design_type || 'normal'}
+        </div>
+        <div style="font-size: 9px; color: #0284c7; font-weight: 600; margin-top: 2px;">
+          ${o.tier || '1'} Tier${Number(o.tier) > 1 ? 's' : ''}
+        </div>
       </td>
       <td>
         <span style="font-size: 10px; color: #475569;">Ord: ${o.order_date || ''} ${formatTo12Hour(o.order_time) || ''}</span><br/>
@@ -267,7 +291,9 @@ export function printPDFReport(orders: Order[], title = 'Broomies Bakery - Maste
               <th style="width: 7%;">Outlet</th>
               <th style="width: 13%;">Customer & Address</th>
               <th style="width: 10%;">Item Details</th>
-              <th style="width: 12%;">Name / Icing on Cake</th>
+              <th style="width: 10%;">Name on Cake</th>
+              <th style="width: 9%;">Icing & Color</th>
+              <th style="width: 8%;">Design / Tier</th>
               <th style="width: 8%;">Dates</th>
               <th style="width: 10%;">Time Tracking</th>
               <th style="width: 8%;">Payment (₹)</th>

@@ -1,175 +1,189 @@
-import React, { useState } from 'react';
-import { useStore } from '../lib/store';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Download, 
-  MoreVertical,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  Users,
-  ShoppingBag
-} from 'lucide-react';
-import { format } from 'date-fns';
+import React, { useState, useMemo } from 'react';
+import { useOMS } from '../lib/store';
+import { Order, OrderStatus } from '../types';
+import { OrderCard } from '../components/OrderCard';
+import { Search, Filter, RefreshCw, Calendar, Sparkles } from 'lucide-react';
 
 interface AdminDashboardProps {
-  onOpenAddModal?: () => void;
-  onOpenThermalModal?: () => void;
-  onOpenDeliveryModal?: (order: any) => void;
-  onOpenPasswordModal?: () => void;
-  onOpenSheetModal?: () => void;
+  onViewOrder: (order: Order) => void;
+  onEditOrder: (order: Order) => void;
+  onOpenAddModal: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onOpenAddModal, onOpenThermalModal, onOpenDeliveryModal, onOpenPasswordModal, onOpenSheetModal }) => {
-  const { orders, getStats, isLoading, addOrder } = useStore();
-  const stats = getStats();
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  onViewOrder,
+  onEditOrder,
+  onOpenAddModal
+}) => {
+  const { orders, isLoading, refreshOrders } = useOMS();
 
-  const quickStats = [
-    { label: 'Today Orders', value: stats.todayCount, icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Today Revenue', value: `₹${stats.todayAmount}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Total Pending', value: stats.pending, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Active Riders', value: 8, icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
-  ];
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [outletFilter, setOutletFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('');
+
+  const filteredOrders = useMemo(() => {
+    return (orders || []).filter((o) => {
+      // Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchNumber = String(o.order_number).includes(q);
+        const matchCustomer = (o.customer_name || '').toLowerCase().includes(q);
+        const matchPhone = (o.mobile_number || '').includes(q);
+        const matchItem = (o.item_type || '').toLowerCase().includes(q);
+        const matchNameOnCake = (o.name_on_cake || '').toLowerCase().includes(q);
+        const matchIcing = (o.icing_color || '').toLowerCase().includes(q);
+        const matchStyle = (o.cake_style || '').toLowerCase().includes(q);
+        if (!matchNumber && !matchCustomer && !matchPhone && !matchItem && !matchNameOnCake && !matchIcing && !matchStyle) {
+          return false;
+        }
+      }
+
+      // Status
+      if (statusFilter !== 'all' && o.status !== statusFilter) {
+        return false;
+      }
+
+      // Outlet
+      if (outletFilter !== 'all' && o.outlet !== outletFilter) {
+        return false;
+      }
+
+      // Date
+      if (dateFilter && o.delivery_date !== dateFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [orders, searchQuery, statusFilter, outletFilter, dateFilter]);
+
+  // Summary Metrics
+  const metrics = useMemo(() => {
+    const list = orders || [];
+    const totalOrders = list.length;
+    const pendingOrders = list.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length;
+    const deliveredOrders = list.filter((o) => o.status === 'delivered').length;
+    const totalRevenue = list.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+    return { totalOrders, pendingOrders, deliveredOrders, totalRevenue };
+  }, [orders]);
 
   return (
-    <div className="space-y-8 animate-slide-in">
-      {/* Welcome Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Central Dashboard</h1>
-          <p className="text-slate-500 font-medium">Monitoring all Broomies Bakery outlets in real-time</p>
+    <div className="space-y-5">
+      {/* Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className="bg-[#0f1224] border border-indigo-950 p-3.5 rounded-2xl">
+          <span className="text-[11px] text-slate-400 font-semibold block">Total Orders</span>
+          <span className="text-xl sm:text-2xl font-black text-white font-mono">{metrics.totalOrders}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-all shadow-sm">
-            <Download className="w-4 h-4" /> Export Report
-          </button>
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-            <Plus className="w-5 h-5" /> New Order
-          </button>
+        <div className="bg-[#0f1224] border border-indigo-950 p-3.5 rounded-2xl">
+          <span className="text-[11px] text-amber-400 font-semibold block">Active / Pending</span>
+          <span className="text-xl sm:text-2xl font-black text-amber-300 font-mono">{metrics.pendingOrders}</span>
+        </div>
+        <div className="bg-[#0f1224] border border-indigo-950 p-3.5 rounded-2xl">
+          <span className="text-[11px] text-emerald-400 font-semibold block">Delivered</span>
+          <span className="text-xl sm:text-2xl font-black text-emerald-300 font-mono">{metrics.deliveredOrders}</span>
+        </div>
+        <div className="bg-[#0f1224] border border-indigo-950 p-3.5 rounded-2xl">
+          <span className="text-[11px] text-purple-400 font-semibold block">Total Sales</span>
+          <span className="text-xl sm:text-2xl font-black text-purple-300 font-mono">₹{metrics.totalRevenue.toLocaleString()}</span>
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {quickStats.map((stat, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-3 rounded-xl ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform`}>
-                <stat.icon className="w-6 h-6" />
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md">Real-time</span>
-            </div>
-            <p className="text-sm font-bold text-slate-500 mb-1">{stat.label}</p>
-            <p className="text-2xl font-black text-slate-900">{stat.value}</p>
-          </div>
-        ))}
-      </div>
+      {/* Filter & Search Bar */}
+      <div className="p-3.5 bg-[#0f1224] border border-indigo-950 rounded-2xl flex flex-wrap items-center gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search Order #, Customer, Cake name, Icing..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-[#13162b] border border-indigo-950 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-500"
+          />
+        </div>
 
-      {/* Orders Table Section */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h3 className="font-bold text-slate-900 flex items-center gap-2 text-lg">
-            Recent Orders
-            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded-full">{orders.length} Total</span>
-          </h3>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search..."
-                className="bg-slate-50 border-none rounded-xl py-2 pl-10 pr-4 text-xs w-full md:w-64 focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <button className="p-2 bg-slate-50 rounded-xl text-slate-600 hover:bg-slate-100 transition-all">
-              <Filter className="w-4 h-4" />
+        {/* Status Select */}
+        <div className="flex items-center gap-1.5">
+          <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-[#13162b] border border-indigo-950 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+          >
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="preparing">Preparing</option>
+            <option value="ready">Ready</option>
+            <option value="out_for_delivery">Out for Delivery</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+
+        {/* Outlet Select */}
+        <select
+          value={outletFilter}
+          onChange={(e) => setOutletFilter(e.target.value)}
+          className="bg-[#13162b] border border-indigo-950 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+        >
+          <option value="all">All Outlets</option>
+          <option value="Sector 31">Sector 31</option>
+          <option value="Sector 35">Sector 35</option>
+          <option value="Sector 42">Sector 42</option>
+          <option value="Sector 88">Sector 88</option>
+        </select>
+
+        {/* Date Filter */}
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="bg-[#13162b] border border-indigo-950 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+          />
+          {dateFilter && (
+            <button
+              onClick={() => setDateFilter('')}
+              className="text-[11px] text-slate-400 hover:text-white"
+            >
+              Clear
             </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50">
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Order ID</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Items</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Outlet</th>
-                <th className="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orders.slice(0, 10).map((order) => (
-                <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-slate-900">#{order.order_number}</span>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {format(new Date(order.created_at), 'MMM dd, HH:mm')}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase">
-                        {order.customer_name[0]}
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{order.customer_name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">{order.customer_phone}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm text-slate-600 truncate max-w-[200px]">{order.items}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="font-black text-slate-900 text-sm">₹{order.total_amount}</p>
-                    <p className="text-[10px] text-green-600 font-bold uppercase">Paid: ₹{order.advance_amount}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className={`
-                      inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider
-                      ${order.status === 'delivered' ? 'bg-green-100 text-green-700' : 
-                        order.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}
-                    `}>
-                      {order.status === 'delivered' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                      {order.status}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold">{order.outlet_name}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors opacity-0 group-hover:opacity-100">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {orders.length === 0 && !isLoading && (
-            <div className="p-20 text-center">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-8 h-8 text-slate-300" />
-              </div>
-              <p className="text-slate-500 font-medium">No orders found. Start by adding one!</p>
-            </div>
           )}
         </div>
-        
-        <div className="p-4 border-t border-slate-100 flex items-center justify-between">
-          <p className="text-xs text-slate-500">Showing top 10 recent orders</p>
-          <button className="text-xs font-bold text-blue-600 hover:underline">View All Orders</button>
-        </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={refreshOrders}
+          className="p-2 text-slate-400 hover:text-white bg-[#13162b] border border-indigo-950 rounded-xl transition"
+          title="Refresh Data"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
+
+      {/* Orders Grid */}
+      {filteredOrders.length === 0 ? (
+        <div className="text-center py-16 bg-[#0f1224] border border-indigo-950 rounded-2xl">
+          <Sparkles className="w-8 h-8 text-purple-400 mx-auto mb-2 opacity-50" />
+          <h3 className="text-sm font-bold text-white">No Orders Found</h3>
+          <p className="text-xs text-slate-400 mt-1">Try changing filters or search terms.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredOrders.map((o) => (
+            <OrderCard
+              key={o.id}
+              order={o}
+              onView={onViewOrder}
+              onEdit={onEditOrder}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
-
-export { AdminDashboard };
-export default AdminDashboard;

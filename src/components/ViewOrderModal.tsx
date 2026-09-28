@@ -259,6 +259,32 @@ The Broomies Team`;
                   </div>
                 )}
 
+                {order.icing_color && (
+                  <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/40">
+                    <span className="text-purple-300 font-bold text-[10px] uppercase flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> Icing & Color:
+                    </span>
+                    <p className="text-sm font-bold text-purple-100 mt-0.5">
+                      {order.icing_color}
+                    </p>
+                  </div>
+                )}
+
+                {(order.design_type || order.tier) && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-800/60">
+                    {order.design_type && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-semibold uppercase">
+                        Design: {order.design_type}
+                      </span>
+                    )}
+                    {order.tier && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-semibold">
+                        {order.tier} Tier{Number(order.tier) > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex justify-between py-1 border-t border-slate-800/60">
                   <span className="text-slate-400">Quantity / Weight:</span>
                   <strong className="text-white font-mono">{order.quantity}</strong>

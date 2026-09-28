@@ -141,6 +141,11 @@ interface OMSContextType {
   isFirestoreQuotaExceeded: boolean;
   isHistorySyncing: boolean;
   historySyncCount: number;
+
+  // Initial Loading Progress State
+  isInitialLoading: boolean;
+  loadingProgress: number;
+  loadingMessage: string;
 }
 
 const OMSContext = createContext<OMSContextType | undefined>(undefined);
@@ -367,6 +372,9 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState(false);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [historySyncCount, setHistorySyncCount] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [loadingProgress, setLoadingProgress] = useState<number>(25);
+  const [loadingMessage, setLoadingMessage] = useState<string>('Connecting to database & loading orders...');
   const quotaNotifiedRef = useRef(false);
   const quotaExceededRef = useRef(false);
 
@@ -652,7 +660,7 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       safeLocalStorageSet('broomies_wa_connected_v1', connected ? 'true' : 'false');
       if (data.phoneNumber) {
         safeLocalStorageSet('broomies_wa_phone_v1', data.phoneNumber);
-      } else if (!data.hasExistingSession && data.sessionState === 'disconnected') {
+      } else {
         localStorage.removeItem('broomies_wa_phone_v1');
       }
       return connected;
@@ -679,20 +687,8 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     checkWhatsAppStatus();
-    const interval = setInterval(checkWhatsAppStatus, 5000);
-    const onFocus = () => checkWhatsAppStatus();
-    window.addEventListener('focus', onFocus);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'broomies_wa_connected_v1') {
-        setIsWhatsAppConnected(e.newValue === 'true');
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('storage', onStorage);
-    };
+    const interval = setInterval(checkWhatsAppStatus, 60000);
+    return () => clearInterval(interval);
   }, [checkWhatsAppStatus]);
 
   const FALLBACK_WA_TEMPLATES: Record<string, string> = {
@@ -795,11 +791,15 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // =========================================================================
   useEffect(() => {
     let isMounted = true;
+    setLoadingProgress(30);
+    setLoadingMessage('Reading local IndexedDB cache...');
 
     // Step 1: Instant load from IndexedDB (0ms)
     idbGet<Order[]>(LOCAL_STORAGE_KEY_ORDERS).then((cachedOrders) => {
       if (!isMounted) return;
       if (cachedOrders && Array.isArray(cachedOrders) && cachedOrders.length > 0) {
+        setLoadingProgress(60);
+        setLoadingMessage(`Loaded ${cachedOrders.length} orders from cache...`);
         setOrders((current) => {
           if (!current || current.length < cachedOrders.length) {
             ordersRef.current = cachedOrders;
@@ -811,27 +811,40 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
 
     // Step 2: High-speed fetch from /api/orders (30-80ms!)
+    setLoadingProgress(80);
+    setLoadingMessage('Fetching latest live orders from server...');
     fetch('/api/orders')
       .then((res) => (res.ok ? res.json() : null))
       .then((apiOrders: Order[]) => {
-        if (!isMounted || !apiOrders || !Array.isArray(apiOrders) || apiOrders.length === 0) return;
-        setOrders((current) => {
-          const merged = mergeAndDeduplicateOrders(current || [], apiOrders, true);
-          ordersRef.current = merged;
-          idbSet(LOCAL_STORAGE_KEY_ORDERS, merged).catch(() => {});
-          safeSaveOrdersToLocalStorage(merged);
-          return merged;
-        });
+        if (!isMounted) return;
+        setLoadingProgress(95);
+        if (apiOrders && Array.isArray(apiOrders) && apiOrders.length > 0) {
+          setLoadingMessage(`Synced ${apiOrders.length} live orders successfully!`);
+          setOrders((current) => {
+            const merged = mergeAndDeduplicateOrders(current || [], apiOrders, true);
+            ordersRef.current = merged;
+            idbSet(LOCAL_STORAGE_KEY_ORDERS, merged).catch(() => {});
+            safeSaveOrdersToLocalStorage(merged);
+            return merged;
+          });
+        }
         setIsHistorySyncing(false);
+        setLoadingProgress(100);
+        setLoadingMessage('System ready!');
+        setTimeout(() => {
+          if (isMounted) setIsInitialLoading(false);
+        }, 300);
       })
       .catch((err) => {
         console.warn('[Fast Load] /api/orders fallback:', err);
+        setLoadingProgress(90);
+        setLoadingMessage('Loading fallback seed data...');
         // Fallback to static seed if server API is momentarily unavailable
         fetch('/broomies_store_seed.json')
           .then((res) => (res.ok ? res.json() : null))
           .then((seedData) => {
-            if (!isMounted || !seedData?.orders) return;
-            const seedList = Object.values(seedData.orders) as Order[];
+            if (!isMounted) return;
+            const seedList = seedData?.orders ? (Object.values(seedData.orders) as Order[]) : [];
             if (seedList.length > 0) {
               setOrders((current) => {
                 const merged = mergeAndDeduplicateOrders(current || [], seedList);
@@ -840,8 +853,16 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
               idbSet(LOCAL_STORAGE_KEY_ORDERS, seedList).catch(() => {});
             }
+            setLoadingProgress(100);
+            setLoadingMessage('System ready (Offline mode)');
+            setTimeout(() => {
+              if (isMounted) setIsInitialLoading(false);
+            }, 300);
           })
-          .catch(() => {});
+          .catch(() => {
+            setLoadingProgress(100);
+            setIsInitialLoading(false);
+          });
       });
 
     return () => {
@@ -2257,7 +2278,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       triggerWhatsAppBackgroundMessage,
       isFirestoreQuotaExceeded,
       isHistorySyncing,
-      historySyncCount
+      historySyncCount,
+      isInitialLoading,
+      loadingProgress,
+      loadingMessage
     }),
     [
       session,
@@ -2310,7 +2334,10 @@ export const OMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       triggerWhatsAppBackgroundMessage,
       isFirestoreQuotaExceeded,
       isHistorySyncing,
-      historySyncCount
+      historySyncCount,
+      isInitialLoading,
+      loadingProgress,
+      loadingMessage
     ]
   );
 

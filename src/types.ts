@@ -1,67 +1,199 @@
-export type OrderStatus = 'pending' | 'confirmed' | 'ready' | 'dispatched' | 'delivered' | 'cancelled';
-export type DeliveryType = 'pickup' | 'delivery' | 'dine-in';
-export type UserRole = 'admin' | 'outlet' | 'delivery' | 'customer';
+export type Role = 'admin' | 'manager' | 'outlet' | 'delivery';
+
+export type OrderStatus =
+  | 'pending'
+  | 'processing'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'on_hold'
+  | 'cancelled'
+  | 'missed';
+
+export type OutletName =
+  | 'Sector 31'
+  | 'Sector 35'
+  | 'Sector 42'
+  | 'Sector 88'
+  | 'Downtown Flagship'
+  | 'Westside Bakery'
+  | 'East Bay Hub'
+  | 'Northside Café'
+  | string;
+
+export type DeliveryType = 'delivery' | 'pickup';
+
+export type PaymentType = 'cash' | 'online' | 'upi' | 'part' | 'full' | 'due';
 
 export interface Order {
   id: string;
-  order_id: number;
   order_number: number;
+  order_id?: number | string;
+  outlet: OutletName;
+  order_date: string; // YYYY-MM-DD
+  order_time: string; // HH:MM
+  mobile_number: string;
   customer_name: string;
-  customer_phone: string;
-  delivery_date: string;
-  delivery_time: string;
-  items: string;
+  informed_by?: string;
+  item_type: string;
+  name_on_cake?: string;
+  icing_color?: string;
+  design_type?: string;
+  tier?: string | number;
+  quantity: string | number;
+  delivery_type: DeliveryType;
   total_amount: number;
+  payment_type: PaymentType;
   advance_amount: number;
   remaining_balance: number;
+  due_amount: number;
+  address: string;
+  delivery_address?: string;
+  remarks: string;
+  late_reason?: string;
   status: OrderStatus;
-  delivery_type: DeliveryType;
-  outlet_name: string;
-  delivered_by?: string;
-  remarks?: string;
+  delivery_partner?: string;
+  actual_delivery_time?: string | null;
+  delivered_by?: string | null;
+  payment_changed_by?: string | null;
+  payment_changed_at?: string | null;
+  delivery_date: string;
+  delivery_time_expected: string;
+  item_image_url?: string | null;
+  delivery_photo_url?: string | null;
+  advance_bill_number?: string;
+  final_bill_number?: string;
+  rider_delivered?: boolean;
+  delivery_confirmation_pending?: boolean;
+  otp?: string;
   created_at: string;
   updated_at: string;
-  otp?: string;
-  image?: string;
-  otp_verified?: boolean;
-  payment_type?: string;
-  payment_status?: 'paid' | 'unpaid' | 'partial';
-  due_amount?: number;
-  delivery_partner?: string;
+}
+
+export interface DeliveryPartnerLocation {
+  lat: number;
+  lng: number;
+  address?: string;
+  speed?: number;
+  updated_at: string;
+}
+
+export interface OutletLocation {
+  id: string; // 'Sector 31', 'Sector 35', etc.
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  color?: string;
+}
+
+export interface DeliveryPartner {
+  id: string;
+  name: string;
+  phone: string;
+  login_id?: string;
+  password?: string;
+  status: 'available' | 'on_delivery' | 'offline' | 'busy';
+  total_deliveries: number;
+  vehicle?: string;
+  vehicle_type?: string;
+  rating?: number;
+  avatar?: string;
+  location?: DeliveryPartnerLocation;
+  is_tracking_active?: boolean;
+}
+
+export interface Alert {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'urgent' | 'success';
+  is_read: boolean;
+  outlet: OutletName;
+  created_at: string;
+}
+
+export interface SheetConfig {
+  sheet_url: string;
+  is_active: boolean;
+  last_sync: string | null;
+  last_synced_at?: string | null;
+  auto_sync: boolean;
+  webhook_status: 'connected' | 'error' | 'idle';
+  sync_count: number;
+}
+
+export interface SyncLog {
+  id: string;
+  timestamp: string;
+  event: 'create' | 'update' | 'delete' | 'manual_sync' | 'google_sheet_pull';
+  order_number: number;
+  status: 'success' | 'failed';
+  details: string;
+}
+
+export interface UserSession {
+  id: string;
+  name: string;
+  role: Role;
+  outlet?: OutletName;
+  deliveryPartnerId?: string;
+}
+
+export type WhatsAppGatewayType = 'none' | 'in_house_qr' | 'ultramsg' | 'greenapi' | 'meta' | 'custom_webhook';
+
+export interface WhatsAppGatewayConfig {
+  ultraMsgInstanceId?: string;
+  ultraMsgToken?: string;
+  greenApiInstanceId?: string;
+  greenApiToken?: string;
+  metaPhoneNumberId?: string;
+  metaAccessToken?: string;
+  customWebhookUrl?: string;
+  customWebhookKey?: string;
 }
 
 export interface WhatsAppConfig {
-  id: string;
   connected: boolean;
+  alreadyLinkedOnOtherDevice?: boolean;
+  hasExistingSession?: boolean;
   phoneNumber?: string;
-  sessionState?: string;
+  businessName?: string;
+  sessionState: 'disconnected' | 'pairing' | 'connected';
+  gatewayType: WhatsAppGatewayType;
+  gatewayConfig?: WhatsAppGatewayConfig;
   qrCode?: string | null;
   qrExpiresAt?: number;
-  businessName?: string;
   userName?: string;
+  battery?: number;
+  lastSync?: string;
+  autoConfirmOnCreate: boolean;
+  autoDispatchOnRider: boolean;
+  autoDeliveryComplete: boolean;
+  autoPaymentReminder: boolean;
+  throttleDelaySeconds: number;
+  antiBanProtection: boolean;
+  workingHoursOnly: boolean;
   templates: {
     confirm: string;
     dispatch: string;
     delivered: string;
     reminder: string;
   };
-  autoConfirmOnCreate: boolean;
-  autoDispatchOnRider: boolean;
-  autoDeliveryComplete: boolean;
-  autoPaymentReminder: boolean;
-  workingHoursOnly: boolean;
-  throttleDelaySeconds: number;
-  antiBanProtection: boolean;
 }
 
-export interface Outlet {
+export interface WhatsAppLog {
   id: string;
-  name: string;
-  location?: {
-    lat: number;
-    lng: number;
-  };
-  address?: string;
-  manager?: string;
-  phone?: string;
+  timestamp: string;
+  recipient_phone: string;
+  customer_name?: string;
+  order_number?: number;
+  order_id?: string;
+  type: 'confirm' | 'dispatch' | 'delivered' | 'reminder' | 'test' | 'custom';
+  status: 'sent' | 'delivered' | 'read' | 'failed' | 'queued';
+  message: string;
+  error?: string;
+  sent_via?: string;
+  device_number?: string;
+  direct_url?: string;
 }
+

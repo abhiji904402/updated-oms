@@ -14,8 +14,7 @@ import {
   getEngineState,
   hasExistingSession,
   restoreSessionFromCloud,
-  registerOnConnectedListener,
-  requestPairingCodeForPhone
+  registerOnConnectedListener
 } from './whatsapp-service.ts';
 
 dotenv.config();
@@ -33,8 +32,7 @@ dotenv.config();
       console.log('🚀 Found WhatsApp session (disk or cloud backup), auto-reconnecting in-house engine...');
       await startWhatsAppEngine(false);
     } else {
-      console.log('ℹ️ Pre-initializing WhatsApp QR engine ready for instant scan on any device...');
-      await startWhatsAppEngine(false);
+      console.log('ℹ️ No prior WhatsApp session found in cloud or disk. Ready for QR scan.');
     }
   } catch (err) {
     console.error('Failed auto-reconnecting WA session on boot:', err);
@@ -53,7 +51,7 @@ console.error = (...args) => {
 const app = express();
 
 app.use(cors());
-app.use(compression({ level: 6, threshold: 512 }));
+app.use(compression({ level: 6, threshold: 512 }) as any);
 app.use(express.json({ limit: '50mb' }));
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -929,11 +927,6 @@ async function processPendingWhatsAppQueue(): Promise<{
         item.lastError = sendRes.error;
         console.warn(`⚠️ [WhatsApp Outbox] Attempt ${item.attempts} failed for Order #${item.orderNumber}: ${sendRes.error}`);
 
-        if (sendRes.error?.includes('Connection Closed') || sendRes.error?.includes('not connected') || sendRes.error?.includes('conflict')) {
-          console.warn('⚠️ [WhatsApp Outbox] Connection closed/conflict during flush. Halting outbox until reconnected.');
-          break;
-        }
-
         if (item.attempts >= 4) {
           failedCount++;
           queueMap.delete(item.id);
@@ -1011,7 +1004,7 @@ apiRouter.get('/whatsapp/status', async (req, res) => {
     cfg.sessionState = engine.sessionState === 'connecting' ? 'connecting' : 'disconnected';
     cfg.qrCode = engine.qrCode || null;
     cfg.alreadyLinkedOnOtherDevice = false;
-    cfg.phoneNumber = engine.phoneNumber || '';
+    cfg.phoneNumber = '';
   }
 
   res.json({
@@ -1019,14 +1012,14 @@ apiRouter.get('/whatsapp/status', async (req, res) => {
     ...cfg,
     connected: isTrulyConnected,
     alreadyLinkedOnOtherDevice: false,
-    hasExistingSession: hasExistingSession(),
+    hasExistingSession: false,
     pendingQueueCount,
     isFlushingQueue: isFlushingWhatsAppQueue,
     inHouseEngine: {
       connected: isTrulyConnected,
       sessionState: isTrulyConnected ? 'connected' : engine.sessionState,
-      phoneNumber: isTrulyConnected ? (engine.phoneNumber || '') : (engine.phoneNumber || ''),
-      userName: isTrulyConnected ? (engine.userName || '') : (engine.userName || ''),
+      phoneNumber: isTrulyConnected ? (engine.phoneNumber || '') : '',
+      userName: isTrulyConnected ? (engine.userName || '') : '',
       qrCode: engine.qrCode,
       qrExpiresAt: engine.qrExpiresAt,
       lastError: engine.lastError
@@ -1088,18 +1081,8 @@ apiRouter.post('/whatsapp/generate-qr', async (req, res) => {
       });
     }
 
-    // If an active QR code already exists and has not expired, return it immediately
-    if (!forceRelink && existing.sessionState === 'pairing' && existing.qrCode && existing.qrExpiresAt && existing.qrExpiresAt > Date.now()) {
-      return res.json({
-        success: true,
-        qrCode: existing.qrCode,
-        expiresAt: existing.qrExpiresAt,
-        sessionState: existing.sessionState
-      });
-    }
-
-    // Start engine (fresh if forceRelink, else continue or start)
-    startWhatsAppEngine(forceRelink);
+    // Always start fresh engine when generating QR
+    startWhatsAppEngine(true);
 
     // Wait up to 6 seconds for QR code to generate
     let attempts = 0;
@@ -1135,21 +1118,6 @@ apiRouter.post('/whatsapp/generate-qr', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || String(err) });
-  }
-});
-
-// 1C. POST /api/whatsapp/pair-phone - Generate 8-character pairing code for phone number login
-apiRouter.post('/whatsapp/pair-phone', async (req, res) => {
-  try {
-    const { phoneNumber } = req.body || {};
-    if (!phoneNumber) {
-      return res.status(400).json({ success: false, error: 'Phone number is required' });
-    }
-    const pairingCode = await requestPairingCodeForPhone(phoneNumber);
-    return res.json({ success: true, pairingCode });
-  } catch (err: any) {
-    console.error('Pairing code error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed to generate pairing code' });
   }
 });
 

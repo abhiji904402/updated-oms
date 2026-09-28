@@ -1,63 +1,84 @@
-import React from 'react';
-import { useStore } from '../lib/store';
-import { Clock, CheckCircle2, ShoppingBag, Plus } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { useOMS } from '../lib/store';
+import { Order, OutletName } from '../types';
+import { OrderCard } from '../components/OrderCard';
+import { Store, Plus } from 'lucide-react';
 
-const OutletDashboard = () => {
-  const { orders, currentOutlet } = useStore();
-  const outletOrders = orders.filter(o => currentOutlet === 'all' || o.outlet_name.toLowerCase().includes(currentOutlet.toLowerCase()));
+interface OutletDashboardProps {
+  onViewOrder: (order: Order) => void;
+  onEditOrder: (order: Order) => void;
+  onOpenAddModal: () => void;
+}
+
+const OUTLETS: OutletName[] = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];
+
+export const OutletDashboard: React.FC<OutletDashboardProps> = ({
+  onViewOrder,
+  onEditOrder,
+  onOpenAddModal
+}) => {
+  const { orders } = useOMS();
+  const [selectedOutlet, setSelectedOutlet] = useState<OutletName>('Sector 31');
+
+  const outletOrders = useMemo(() => {
+    return (orders || []).filter((o) => o.outlet === selectedOutlet);
+  }, [orders, selectedOutlet]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Outlet Panel</h1>
-          <p className="text-slate-500">Manage daily orders and production</p>
+    <div className="space-y-5">
+      {/* Outlet Selector Tabs */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {OUTLETS.map((name) => {
+            const count = (orders || []).filter((o) => o.outlet === name).length;
+            return (
+              <button
+                key={name}
+                onClick={() => setSelectedOutlet(name)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                  selectedOutlet === name
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40'
+                    : 'bg-[#0f1224] text-slate-400 hover:text-white border border-indigo-950'
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span>{name}</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-white/90">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <button className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all shadow-lg shadow-amber-200">
-          <Plus className="w-5 h-5" /> New Counter Order
+
+        <button
+          onClick={onOpenAddModal}
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-xl shadow"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>New Order for {selectedOutlet}</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {outletOrders.map(order => (
-          <div key={order.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">#{order.order_number}</span>
-                <h3 className="font-bold text-slate-900">{order.customer_name}</h3>
-              </div>
-              <div className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                order.status === 'ready' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-              }`}>
-                {order.status}
-              </div>
-            </div>
-            
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <ShoppingBag className="w-4 h-4 text-slate-400" />
-                <span className="truncate">{order.items}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <Clock className="w-4 h-4 text-slate-400" />
-                <span>{order.delivery_time}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button className="flex-1 bg-green-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-green-700 transition-all">
-                Mark Ready
-              </button>
-              <button className="px-3 py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">
-                Details
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Orders Grid */}
+      {outletOrders.length === 0 ? (
+        <div className="text-center py-16 bg-[#0f1224] border border-indigo-950 rounded-2xl">
+          <Store className="w-8 h-8 text-purple-400 mx-auto mb-2 opacity-50" />
+          <h3 className="text-sm font-bold text-white">No Orders for {selectedOutlet}</h3>
+          <p className="text-xs text-slate-400 mt-1">Tap "+ New Order" to create one.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {outletOrders.map((o) => (
+            <OrderCard
+              key={o.id}
+              order={o}
+              onView={onViewOrder}
+              onEdit={onEditOrder}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
-
-export { OutletDashboard };
-export default OutletDashboard;

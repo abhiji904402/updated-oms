@@ -1,4 +1,4 @@
-export async function compressImage(file: File, maxDimension = 800, quality = 0.8): Promise<string> {
+export async function compressImage(file: File, maxWidth = 1000, quality = 0.7): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -6,32 +6,27 @@ export async function compressImage(file: File, maxDimension = 800, quality = 0.
       const img = new Image();
       img.src = event.target?.result as string;
       img.onload = () => {
+        const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
 
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
         }
 
-        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(event.target?.result as string);
+          resolve(img.src);
           return;
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressedDataUrl);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
       };
       img.onerror = (err) => reject(err);
     };
