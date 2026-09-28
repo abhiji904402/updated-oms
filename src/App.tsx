@@ -32,42 +32,7 @@ function PageFallback() {
 }
 
 function OMSAppContent() {
-  const { session, isAuthenticated, isInitialLoading, loadingProgress, loadingMessage } = useOMS();
-
-  if (isInitialLoading) {
-    return (
-      <div className="fixed inset-0 bg-[#0b0f19] text-white flex flex-col items-center justify-center p-6 z-50 font-sans">
-        <div className="bg-[#121524] border border-indigo-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl backdrop-blur-xl text-center space-y-6">
-          <div className="w-16 h-16 bg-purple-600/20 border-2 border-purple-500 rounded-2xl flex items-center justify-center mx-auto animate-pulse">
-            <div className="w-8 h-8 border-3 border-purple-400 border-t-transparent rounded-full animate-spin" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold tracking-tight text-white">Loading Broomies OMS</h2>
-            <p className="text-xs text-slate-400 font-medium">{loadingMessage || 'Fetching live order data from server...'}</p>
-          </div>
-
-          {/* Progress Bar & Percentage */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center text-xs font-mono font-bold">
-              <span className="text-purple-400">Loading Process</span>
-              <span className="text-emerald-400 text-sm">{loadingProgress}%</span>
-            </div>
-            <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden p-0.5 border border-slate-800">
-              <div
-                className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${Math.max(5, Math.min(100, loadingProgress))}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="text-[11px] text-slate-500 italic">
-            Connecting securely to live database & syncing records...
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const { session, isAuthenticated } = useOMS();
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState<boolean>(false);
@@ -92,7 +57,6 @@ function OMSAppContent() {
 
   const openPasswordModal = useCallback(() => setIsPasswordModalOpen(true), []);
   const closePasswordModal = useCallback(() => setIsPasswordModalOpen(false), []);
-
 
   const toggleMobileMenu = useCallback(() => setIsOpenMobile((prev) => !prev), []);
 
