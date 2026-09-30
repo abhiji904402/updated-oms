@@ -51,7 +51,7 @@ console.error = (...args) => {
 const app = express();
 
 app.use(cors());
-app.use(compression({ level: 6, threshold: 512 }) as any);
+app.use(compression({ level: 6, threshold: 512 }));
 app.use(express.json({ limit: '50mb' }));
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -1082,11 +1082,11 @@ apiRouter.post('/whatsapp/generate-qr', async (req, res) => {
     }
 
     // Always start fresh engine when generating QR
-    startWhatsAppEngine(true);
+    await startWhatsAppEngine(true);
 
-    // Wait up to 6 seconds for QR code to generate
+    // Wait up to 12 seconds for QR code to generate
     let attempts = 0;
-    while (attempts < 30) {
+    while (attempts < 50) {
       const state = getEngineState();
       if (state.qrCode) {
         return res.json({
@@ -1105,7 +1105,7 @@ apiRouter.post('/whatsapp/generate-qr', async (req, res) => {
           sessionState: 'connected'
         });
       }
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 250));
       attempts++;
     }
 

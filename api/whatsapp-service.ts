@@ -78,6 +78,43 @@ export function scheduleCloudBackup(): void {
   }, 1000);
 }
 
+// Auto-patch whatsapp-rust-bridge exports if missing require/default
+export function ensureWhatsappRustBridgePatch(): void {
+  try {
+    const pkgPath = path.join(process.cwd(), 'node_modules', 'whatsapp-rust-bridge', 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const raw = fs.readFileSync(pkgPath, 'utf-8');
+      const json = JSON.parse(raw);
+      let changed = false;
+      if (!json.main) {
+        json.main = './dist/index.js';
+        changed = true;
+      }
+      if (!json.module) {
+        json.module = './dist/index.js';
+        changed = true;
+      }
+      if (json.exports && json.exports['.']) {
+        if (!json.exports['.'].require) {
+          json.exports['.'].require = './dist/index.js';
+          changed = true;
+        }
+        if (!json.exports['.'].default) {
+          json.exports['.'].default = './dist/index.js';
+          changed = true;
+        }
+      }
+      if (changed) {
+        fs.writeFileSync(pkgPath, JSON.stringify(json, null, 2), 'utf-8');
+        console.log('✅ Auto-patched whatsapp-rust-bridge package.json exports');
+      }
+    }
+  } catch (err) {
+    console.error('Error auto-patching whatsapp-rust-bridge:', err);
+  }
+}
+ensureWhatsappRustBridgePatch();
+
 // Restore session from Firebase Realtime Database
 export async function restoreSessionFromCloud(): Promise<boolean> {
   try {
@@ -201,6 +238,11 @@ export async function startWhatsAppEngine(forceNewSession = false): Promise<WAEn
 
   try {
     if (forceNewSession) {
+      shouldReconnect = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       if (socketInstance) {
         try {
           socketInstance.end(new Error('Starting new session'));
@@ -214,6 +256,17 @@ export async function startWhatsAppEngine(forceNewSession = false): Promise<WAEn
       } catch (e) {
         console.error('Error clearing session dir:', e);
       }
+      try {
+        if (fs.existsSync(backupCredsPath)) {
+          fs.unlinkSync(backupCredsPath);
+        }
+      } catch {}
+      state.connected = false;
+      state.phoneNumber = undefined;
+      state.userName = undefined;
+      state.qrCode = null;
+      state.qrRaw = null;
+      state.sessionState = 'connecting';
     }
 
     // Ensure session directory exists
@@ -221,8 +274,8 @@ export async function startWhatsAppEngine(forceNewSession = false): Promise<WAEn
       fs.mkdirSync(sessionDir, { recursive: true });
     }
 
-    // Auto-restore from Firebase Cloud if missing locally on disk
-    if (!fs.existsSync(path.join(sessionDir, 'creds.json'))) {
+    // Auto-restore from Firebase Cloud ONLY IF NOT forceNewSession
+    if (!forceNewSession && !fs.existsSync(path.join(sessionDir, 'creds.json'))) {
       const restoredLocal = restoreBackupCreds();
       if (!restoredLocal) {
         console.log('Checking Firebase Cloud for saved WhatsApp session...');
@@ -236,11 +289,17 @@ export async function startWhatsAppEngine(forceNewSession = false): Promise<WAEn
 
     const { state: authState, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-    let version: [number, number, number] = [2, 3000, 1015901307];
+    let version: [number, number, number] = [2, 3004, 1500000000];
     try {
-      const vData = await fetchLatestBaileysVersion();
+      const vPromise = fetchLatestBaileysVersion();
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+      const vData: any = await Promise.race([vPromise, timeoutPromise]);
       if (vData?.version) version = vData.version as [number, number, number];
-    } catch {}
+    } catch {
+      console.log('ℹ️ Using stable fallback Baileys WhatsApp version');
+    }
+
+    shouldReconnect = true;
 
     const sock = makeWASocket({
       version,
@@ -285,6 +344,7 @@ export async function startWhatsAppEngine(forceNewSession = false): Promise<WAEn
               light: '#ffffff'
             }
           });
+          console.log('✅ Fresh WhatsApp QR Code generated successfully!');
         } catch (err: any) {
           console.error('Error generating QR data URL:', err);
         }
@@ -327,19 +387,30 @@ export async function startWhatsAppEngine(forceNewSession = false): Promise<WAEn
 
         console.log(`WhatsApp connection closed. Status Code: ${statusCode}, will restart: ${shouldRestart}`);
 
-        if (statusCode === DisconnectReason.loggedOut) {
-          // Do NOT aggressively wipe session files on first 401 code!
-          // WhatsApp servers can temporarily reject reconnection during token rotation.
-          console.warn('⚠️ WhatsApp received loggedOut code, keeping session backup safe in case of reconnect.');
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+          console.warn('⚠️ WhatsApp session logged out / expired (401). Clearing invalid credentials.');
+          state.connected = false;
           state.sessionState = 'disconnected';
-          state.lastError = 'Session disconnected. Reconnecting with saved session...';
+          state.phoneNumber = undefined;
+          state.userName = undefined;
+          state.qrCode = null;
+          state.qrRaw = null;
+          state.lastError = 'Session logged out. Please generate a new QR code to link.';
+          shouldReconnect = false;
 
-          if (shouldRestart) {
-            if (reconnectTimer) clearTimeout(reconnectTimer);
-            reconnectTimer = setTimeout(() => {
-              startWhatsAppEngine(false);
-            }, 5000);
-          }
+          try {
+            if (fs.existsSync(sessionDir)) {
+              fs.rmSync(sessionDir, { recursive: true, force: true });
+            }
+          } catch {}
+          try {
+            if (fs.existsSync(backupCredsPath)) {
+              fs.unlinkSync(backupCredsPath);
+            }
+          } catch {}
+          try {
+            fetch(CLOUD_SESSION_URL, { method: 'DELETE' }).catch(() => {});
+          } catch {}
         } else {
           // Keep state as 'connecting' with existing phoneNumber so clients know session is intact
           state.sessionState = 'connecting';
