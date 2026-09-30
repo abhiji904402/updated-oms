@@ -36,9 +36,10 @@ export interface Order {
   informed_by?: string;
   item_type: string;
   name_on_cake?: string;
-  icing_color?: string;
-  design_type?: string;
-  tier?: string | number;
+  cake_color?: string;
+  icing_type?: string;
+  cake_type?: 'Normal' | 'Cutouts' | '3D Characters' | 'Both';
+  cake_tier?: '1' | '2' | '3' | '4' | string;
   quantity: string | number;
   delivery_type: DeliveryType;
   total_amount: number;

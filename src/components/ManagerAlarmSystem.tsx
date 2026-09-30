@@ -31,7 +31,7 @@ export const ManagerAlarmSystem: React.FC = () => {
       if (activeAlarmOrder) return;
 
       const now = new Date();
-      const todayStr = getTodayDateStr(now);
+      const todayStr = getTodayDateStr();
       
       const upcomingOrder = orders.find(o => {
         if (o.status === 'delivered' || o.status === 'cancelled' || o.status === 'missed') return false;
@@ -50,7 +50,8 @@ export const ManagerAlarmSystem: React.FC = () => {
         // Has it already been acked?
         if (ackedAlarms.has(o.id)) return false;
 
-        const cInfo = getCountdownInfo(o, now.getTime());
+        const cInfo = getCountdownInfo(o.delivery_date || todayStr, timeStr);
+
         // If it's 30 mins or less away, and not super old (e.g., past 2 hours)
         if (cInfo.minutesRemaining <= 30 && cInfo.minutesRemaining >= -120) {
           return true;

@@ -53,9 +53,10 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
   const [customerName, setCustomerName] = useState<string>('');
   const [itemType, setItemType] = useState<string>('');
   const [nameOnCake, setNameOnCake] = useState<string>('');
-  const [icingColor, setIcingColor] = useState<string>('');
-  const [designType, setDesignType] = useState<string>('normal');
-  const [tier, setTier] = useState<string | number>('1');
+  const [cakeColor, setCakeColor] = useState<string>('');
+  const [icingType, setIcingType] = useState<string>('');
+  const [cakeType, setCakeType] = useState<'Normal' | 'Cutouts' | '3D Characters' | 'Both'>('Normal');
+  const [cakeTier, setCakeTier] = useState<string>('1');
   const [quantity, setQuantity] = useState<string>('1 kg');
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('pickup');
   const [informedBy, setInformedBy] = useState<string>('');
@@ -416,9 +417,6 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
     setCustomerName('');
     setItemType('');
     setNameOnCake('');
-    setIcingColor('');
-    setDesignType('normal');
-    setTier('1');
     setQuantity('1 kg');
     setDeliveryType('pickup');
     setInformedBy('');
@@ -479,9 +477,10 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
       informed_by: informedBy || undefined,
       item_type: itemType,
       name_on_cake: nameOnCake.trim(),
-      icing_color: icingColor.trim() || undefined,
-      design_type: designType || 'normal',
-      tier: tier || '1',
+      cake_color: cakeColor || undefined,
+      icing_type: icingType || undefined,
+      cake_type: cakeType,
+      cake_tier: cakeTier,
       quantity: quantity || '1 kg',
       delivery_type: deliveryType,
       total_amount: totalAmountNum,
@@ -608,6 +607,34 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Order Date * */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1.5">
+                Order Date <span className="text-purple-400">*</span>
+              </label>
+              <input
+                type="date"
+                value={orderDate}
+                onChange={(e) => setOrderDate(e.target.value)}
+                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
+                required
+              />
+            </div>
+
+            {/* Order Time */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1.5">
+                Order Time
+              </label>
+              <input
+                type="time"
+                placeholder="04:50 pm"
+                value={convertTo24Hour(orderTime)}
+                onChange={(e) => setOrderTime(formatTo12Hour(e.target.value))}
+                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
+              />
             </div>
 
             {/* Mobile / Phone Number * */}
@@ -850,55 +877,56 @@ export const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose })
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Icing and Color */}
-            <div className="sm:col-span-2 bg-[#0e1120] border border-indigo-900/50 rounded-xl p-3.5 space-y-2">
-              <label className="block text-slate-200 font-bold text-xs flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <span>Icing and Color (आइसिंग और कलर)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. White Chocolate Truffle, Pink Fresh Cream, Dark Chocolate..."
-                value={icingColor}
-                onChange={(e) => setIcingColor(e.target.value)}
-                className="w-full bg-[#14182b] border border-indigo-950 focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 rounded-xl px-3.5 py-2.5 text-white text-sm font-semibold placeholder:text-slate-500 transition outline-none"
-              />
-            </div>
-
-            {/* Design Type Dropdown */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1.5">
-                Design Type
-              </label>
-              <select
-                value={designType}
-                onChange={(e) => setDesignType(e.target.value)}
-                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
-              >
-                <option value="normal">Normal</option>
-                <option value="cutouts">Cutouts</option>
-                <option value="3d character">3D Character</option>
-              </select>
-            </div>
-
-            {/* Tier Select Field */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1.5">
-                Cake Tiers
-              </label>
-              <select
-                value={tier}
-                onChange={(e) => setTier(e.target.value)}
-                className="w-full bg-[#121524] border border-indigo-950 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition"
-              >
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
+              {/* Cake Color & Icing Type & Cake Type & Cake Tier */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-pink-950/60">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1 text-xs">Cake Color</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pink, Gold, Red..."
+                    value={cakeColor}
+                    onChange={(e) => setCakeColor(e.target.value)}
+                    className="w-full bg-[#14182b] border border-indigo-900 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1 text-xs">Icing Type</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Truffle, Fondant..."
+                    value={icingType}
+                    onChange={(e) => setIcingType(e.target.value)}
+                    className="w-full bg-[#14182b] border border-indigo-900 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1 text-xs">Cake Type</label>
+                  <select
+                    value={cakeType}
+                    onChange={(e) => setCakeType(e.target.value as any)}
+                    className="w-full bg-[#14182b] border border-indigo-900 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:outline-none focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="Cutouts">Cutouts</option>
+                    <option value="3D Characters">3D Characters</option>
+                    <option value="Both">Both</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1 text-xs">Cake Tier</label>
+                  <select
+                    value={cakeTier}
+                    onChange={(e) => setCakeTier(e.target.value)}
+                    className="w-full bg-[#14182b] border border-indigo-900 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:outline-none focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="1">1 Tier</option>
+                    <option value="2">2 Tiers</option>
+                    <option value="3">3 Tiers</option>
+                    <option value="4">4 Tiers</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {/* Delivery Type * */}

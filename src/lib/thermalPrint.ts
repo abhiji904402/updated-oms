@@ -6,7 +6,7 @@ export function printThermalReceipts(orders: Order[]) {
 
   const receiptHtml = orders
     .map(
-      (o) => {
+      (o, index) => {
         const orderDateStr = new Date(o.order_date).toLocaleDateString('en-GB');
         const orderTimeStr = formatTo12Hour(o.order_time || o.order_date);
         const delivDateStr = o.delivery_date
@@ -17,8 +17,10 @@ export function printThermalReceipts(orders: Order[]) {
         const imageUrl = (o.item_image_url || o.delivery_photo_url || '').trim();
         const hasValidImage = imageUrl.length > 5 && imageUrl !== '[image]' && !imageUrl.includes('photo-1578985545062-69928b1d9587');
 
+        const isLast = index === orders.length - 1;
+
         return `
-    <div class="receipt">
+    <div class="receipt" style="${!isLast ? 'page-break-after: always;' : 'page-break-after: avoid;'}">
       <div class="center header-title">BROOMIES BAKERY</div>
       <div class="center sub-title">Fresh Baked Handcrafted Delights</div>
       <div class="divider">================================</div>
@@ -66,11 +68,18 @@ export function printThermalReceipts(orders: Order[]) {
         <span class="bold font-large">Qty: ${o.quantity}</span>
       </div>
 
-      ${o.name_on_cake ? `
-      <!-- NAME ON CAKE PRINT FOR DECORATORS -->
-      <div style="margin: 6px 0; padding: 4px; border: 2px solid #000; text-align: center; background-color: #f2f2f2;">
-        <div class="bold" style="font-size: 11px; text-transform: uppercase;">*** NAME ON CAKE / केक पर नाम ***</div>
-        <div class="bold font-extra-large" style="margin-top: 2px;">"${o.name_on_cake}"</div>
+      ${(o.name_on_cake || o.cake_color || o.icing_type || o.cake_type || o.cake_tier) ? `
+      <!-- CAKE SPECS FOR KITCHEN & DECORATORS -->
+      <div style="margin: 4px 0; padding: 5px; border: 2px solid #000; text-align: center; background-color: #f2f2f2;">
+        ${o.name_on_cake ? `<div class="bold" style="font-size: 10px; text-transform: uppercase;">*** NAME ON CAKE ***</div><div class="bold font-extra-large" style="margin-top: 1px; font-size: 15px;">"${o.name_on_cake}"</div>` : ''}
+        <div style="font-size: 10.5px; margin-top: 2px; font-weight: 900;">
+          ${o.cake_color ? `Color: ${o.cake_color}` : ''}
+          ${o.cake_color && o.icing_type ? ' | ' : ''}
+          ${o.icing_type ? `Icing: ${o.icing_type}` : ''}
+        </div>
+        <div style="font-size: 10.5px; margin-top: 1px; font-weight: 900; text-transform: uppercase;">
+          Type: ${o.cake_type || 'Normal'} | Tier: ${o.cake_tier || '1'}
+        </div>
       </div>
       ` : ''}
 
@@ -86,7 +95,7 @@ export function printThermalReceipts(orders: Order[]) {
 
       ${o.remarks ? `
         <div class="notes-box">
-          <strong style="font-size:12px;">Remarks:</strong> <span style="font-weight:bold;">${o.remarks}</span>
+          <strong style="font-size:11px;">Remarks:</strong> <span style="font-weight:bold;">${o.remarks}</span>
         </div>
       ` : ''}
 
@@ -114,7 +123,7 @@ export function printThermalReceipts(orders: Order[]) {
         const fin = o.final_bill_number || (o as any).final_bill_no || (o as any).final_bill || (o as any).bill_number || (o as any).bill_no || (o as any).bill || '';
         const billStr = [adv, fin].filter(Boolean).join(' / ');
         return billStr ? `
-          <div class="flex-between font-medium" style="margin-top: 3px;">
+          <div class="flex-between font-medium" style="margin-top: 2px;">
             <span class="bold">Bill No(s):</span>
             <span class="bold">${billStr}</span>
           </div>
@@ -151,39 +160,39 @@ export function printThermalReceipts(orders: Order[]) {
             font-family: Arial, Helvetica, sans-serif, 'Courier New';
             width: 80mm;
             margin: 0 auto;
-            padding: 4mm;
+            padding: 2mm;
             color: #000;
             background: #fff;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
-            line-height: 1.3;
+            line-height: 1.2;
             -webkit-print-color-adjust: exact;
           }
           .receipt {
-            margin-bottom: 20px;
-            page-break-after: always;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
           }
           .center { text-align: center; }
           .bold { font-weight: 900 !important; color: #000 !important; }
           .uppercase { text-transform: uppercase; }
-          .header-title { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
-          .sub-title { font-size: 11px; font-weight: 800; margin-bottom: 4px; }
-          .divider { text-align: center; font-weight: 900; margin: 4px 0; overflow: hidden; white-space: nowrap; font-size: 14px; }
-          .flex-between { display: flex; justify-content: space-between; margin: 3px 0; }
-          .top-details-box { border: 2px solid #000; padding: 6px; margin: 4px 0; border-radius: 4px; background: #fff; }
+          .header-title { font-size: 17px; font-weight: 900; letter-spacing: 0.5px; }
+          .sub-title { font-size: 10px; font-weight: 800; margin-bottom: 3px; }
+          .divider { text-align: center; font-weight: 900; margin: 3px 0; overflow: hidden; white-space: nowrap; font-size: 13px; }
+          .flex-between { display: flex; justify-content: space-between; margin: 2px 0; }
+          .top-details-box { border: 2px solid #000; padding: 5px; margin: 3px 0; border-radius: 4px; background: #fff; }
           .highlight-row { background: #eee; padding: 2px 4px; border-radius: 2px; }
-          .font-medium { font-size: 12px; }
-          .font-large { font-size: 14px; }
-          .font-extra-large { font-size: 16px; font-weight: 900; }
-          .item-row { margin: 6px 0; }
-          .photo-container { margin: 8px 0; text-align: center; }
-          .photo-title { font-size: 12px; font-weight: 900; margin-bottom: 4px; }
+          .font-medium { font-size: 11px; }
+          .font-large { font-size: 13px; }
+          .font-extra-large { font-size: 15px; font-weight: 900; }
+          .item-row { margin: 4px 0; }
+          .photo-container { margin: 4px 0; text-align: center; }
+          .photo-title { font-size: 11px; font-weight: 900; margin-bottom: 2px; }
           .photo-wrapper { text-align: center; }
-          .cake-photo { max-width: 100%; width: 220px; max-height: 200px; object-fit: cover; border: 2px solid #000; border-radius: 4px; display: block; margin: 0 auto; }
-          .notes-box { font-style: italic; border: 1.5px dashed #000; padding: 6px; margin: 4px 0; font-size: 12px; }
-          .otp-box { margin: 8px 0; padding: 6px; background: #eee; font-size: 14px; border: 2px solid #000; font-weight: 900; }
-          .footer-text { font-size: 11px; margin-top: 2px; font-weight: 800; }
-          .cut-line { font-size: 10px; text-align: center; margin-top: 15px; margin-bottom: 15px; color: #000; font-weight: 900; }
+          .cake-photo { max-width: 100%; width: 170px; max-height: 110px; object-fit: cover; border: 2px solid #000; border-radius: 4px; display: block; margin: 0 auto; }
+          .notes-box { font-style: italic; border: 1.5px dashed #000; padding: 4px; margin: 3px 0; font-size: 11px; }
+          .otp-box { margin: 4px 0; padding: 4px; background: #eee; font-size: 13px; border: 2px solid #000; font-weight: 900; }
+          .footer-text { font-size: 10px; margin-top: 1px; font-weight: 800; }
+          .cut-line { font-size: 9px; text-align: center; margin-top: 8px; margin-bottom: 8px; color: #000; font-weight: 900; }
           @media print {
             .no-print { display: none; }
           }

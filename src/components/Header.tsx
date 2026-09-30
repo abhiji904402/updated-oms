@@ -3,13 +3,15 @@ import { useOMS } from '../lib/store';
 import { Plus, Cake, FileText, Smartphone, Truck, Store, LayoutDashboard } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: string;
-  setActiveTab: (t: string) => void;
+  activeTab?: string;
+  setActiveTab?: (t: string) => void;
   onOpenAddModal: () => void;
+  onToggleMobileMenu?: () => void;
+  onOpenPasswordModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenAddModal }) => {
-  const { session, notification } = useOMS();
+  const { session, recentNotification } = useOMS();
 
   return (
     <header className="sticky top-0 z-40 bg-[#0c0f1e]/90 backdrop-blur-md border-b border-indigo-950/80 px-4 sm:px-6 py-3">
@@ -78,9 +80,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenA
       </div>
 
       {/* Global Notification Banner */}
-      {notification && (
+      {recentNotification && (
         <div className="mt-2 p-2 bg-purple-950/80 border border-purple-500/60 rounded-xl text-center text-xs font-semibold text-purple-200 animate-fadeIn">
-          {notification}
+          {recentNotification}
         </div>
       )}
     </header>

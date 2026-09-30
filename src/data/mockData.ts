@@ -19,3 +19,23 @@ export const ITEM_PRESETS: ItemPreset[] = [
   { name: 'Barbie / Doll 3D Cake', price: 1400, category: 'Custom' },
   { name: 'Multi-Tier Wedding Cake', price: 2500, category: 'Custom' }
 ];
+
+export const INITIAL_ORDERS: any[] = [];
+
+export const INITIAL_DELIVERY_PARTNERS: any[] = [
+  { id: 'p1', name: 'Ramesh Kumar', phone: '9876543210', active: true, outlet: 'Sector 31' },
+  { id: 'p2', name: 'Suresh Sharma', phone: '9876543211', active: true, outlet: 'Sector 35' },
+  { id: 'p3', name: 'Amit Singh', phone: '9876543212', active: true, outlet: 'Sector 42' },
+  { id: 'p4', name: 'Rahul Verma', phone: '9876543213', active: true, outlet: 'Sector 88' }
+];
+
+export const INITIAL_SHEET_CONFIG = {
+  sheetId: '',
+  apiKey: '',
+  webhookUrl: '',
+  autoSync: false,
+  lastSynced: null
+};
+
+export const INITIAL_ALERTS: any[] = [];
+

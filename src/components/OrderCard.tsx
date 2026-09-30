@@ -9,6 +9,10 @@ interface OrderCardProps {
   onEdit: (order: Order) => void;
 }
 
+export const AutoConfirmTimer: React.FC<{ actualDeliveryTime?: string | null }> = ({ actualDeliveryTime }) => {
+  return <span className="text-xs text-slate-500">{actualDeliveryTime ? 'Delivered' : 'Pending'}</span>;
+};
+
 export const OrderCard: React.FC<OrderCardProps> = ({ order, onView, onEdit }) => {
   const { updateOrder, showNotification } = useOMS();
 

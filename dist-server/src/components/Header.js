@@ -1,0 +1,8 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useStore } from '../lib/store';
+import { Bell, Search } from 'lucide-react';
+const Header = () => {
+    const { currentRole } = useStore();
+    return (_jsxs("header", { className: "h-20 bg-white border-b border-slate-200 px-6 flex items-center justify-between z-10", children: [_jsx("div", { className: "flex items-center gap-4 flex-1", children: _jsxs("div", { className: "relative w-full max-w-md hidden md:block", children: [_jsx(Search, { className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" }), _jsx("input", { type: "text", placeholder: "Search orders, customers, riders...", className: "w-full bg-slate-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all" })] }) }), _jsxs("div", { className: "flex items-center gap-4", children: [_jsxs("button", { className: "p-2.5 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all relative", children: [_jsx(Bell, { className: "w-5 h-5" }), _jsx("span", { className: "absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" })] }), _jsx("div", { className: "h-10 w-px bg-slate-200 mx-2" }), _jsxs("div", { className: "flex items-center gap-3", children: [_jsxs("div", { className: "text-right hidden sm:block", children: [_jsx("p", { className: "text-sm font-bold text-slate-900 capitalize", children: currentRole }), _jsx("p", { className: "text-xs text-slate-500", children: "Administrator" })] }), _jsx("div", { className: "w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-100", children: currentRole[0].toUpperCase() })] })] })] }));
+};
+export default Header;

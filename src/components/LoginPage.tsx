@@ -77,7 +77,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         outletName: selectedRole === 'outlet' ? selectedOutlet : 'Sector 31',
       };
 
-      login(session);
+      login(session as any);
       switchRole(selectedRole as any, selectedRole === 'outlet' ? (selectedOutlet as any) : undefined);
 
       if (onLogin) {

@@ -5,9 +5,9 @@ import { OrderCard } from '../components/OrderCard';
 import { Store, Plus } from 'lucide-react';
 
 interface OutletDashboardProps {
-  onViewOrder: (order: Order) => void;
-  onEditOrder: (order: Order) => void;
-  onOpenAddModal: () => void;
+  onViewOrder?: (order: Order) => void;
+  onEditOrder?: (order: Order) => void;
+  onOpenAddModal?: () => void;
 }
 
 const OUTLETS: OutletName[] = ['Sector 31', 'Sector 35', 'Sector 42', 'Sector 88'];

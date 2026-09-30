@@ -1,173 +1,86 @@
-import React, { useState, useCallback, Suspense, lazy } from 'react';
-import { OMSProvider, useOMS } from './lib/store';
-import { Sidebar } from './components/Sidebar';
+import React, { useState } from 'react';
+import { OMSProvider } from './lib/store';
 import { Header } from './components/Header';
-import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './pages/AdminDashboard';
-import { AddOrderModal } from './components/AddOrderModal';
-import { SheetSyncModal } from './components/SheetSyncModal';
-import { PasswordManagerModal } from './components/PasswordManagerModal';
-import { ThermalPrintModal } from './components/ThermalPrintModal';
-import { Order } from './types';
-
 import { OutletDashboard } from './pages/OutletDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
-import { AnalyticsPage } from './pages/AnalyticsPage';
-import { AlertsPage } from './pages/AlertsPage';
-import { ManagerAlarmSystem } from './components/ManagerAlarmSystem';
-import { ConfirmDeliveryModal } from './components/ConfirmDeliveryModal';
-import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
-import { KOTPrintPage } from './pages/KOTPrintPage';
+import { ReportsPage } from './pages/ReportsPage';
 import { WhatsAppAutomationPage } from './pages/WhatsAppAutomationPage';
+import { AddOrderModal } from './components/AddOrderModal';
+import { ViewOrderModal } from './components/ViewOrderModal';
+import { EditOrderModal } from './components/EditOrderModal';
+import { Order } from './types';
 
-function PageFallback() {
-  return (
-    <div className="flex items-center justify-center min-h-[400px] text-purple-400">
-      <div className="flex items-center gap-3 bg-slate-900/80 border border-purple-500/30 px-5 py-3 rounded-xl shadow-lg backdrop-blur">
-        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm font-medium">Loading page...</span>
-      </div>
-    </div>
-  );
-}
+export const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<string>('admin');
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
-function OMSAppContent() {
-  const { session, isAuthenticated } = useOMS();
-
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [isOpenMobile, setIsOpenMobile] = useState<boolean>(false);
-  const handleSelectTab = useCallback((tab: string) => {
-    setActiveTab(tab);
-  }, []);
-
-  // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isThermalModalOpen, setIsThermalModalOpen] = useState(false);
-  const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-
-  const openAddModal = useCallback(() => setIsAddModalOpen(true), []);
-  const closeAddModal = useCallback(() => setIsAddModalOpen(false), []);
-
-  const openThermalModal = useCallback(() => setIsThermalModalOpen(true), []);
-  const closeThermalModal = useCallback(() => setIsThermalModalOpen(false), []);
-
-  const openSheetModal = useCallback(() => setIsSheetModalOpen(true), []);
-  const closeSheetModal = useCallback(() => setIsSheetModalOpen(false), []);
-
-  const openPasswordModal = useCallback(() => setIsPasswordModalOpen(true), []);
-  const closePasswordModal = useCallback(() => setIsPasswordModalOpen(false), []);
-
-  const toggleMobileMenu = useCallback(() => setIsOpenMobile((prev) => !prev), []);
-
-  const handleOpenDeliveryModal = useCallback((_order: Order) => {
-    setActiveTab('delivery');
-  }, []);
-
-  // Automatically enforce delivery page for rider role and restricted tabs for outlet role
-  React.useEffect(() => {
-    if (session.role === 'delivery' && activeTab !== 'delivery') {
-      setActiveTab('delivery');
-    } else if ((session.role === 'outlet' || session.role === 'manager') && activeTab !== 'dashboard' && activeTab !== 'outlet' && activeTab !== 'analytics' && activeTab !== 'kot_print') {
-      setActiveTab('dashboard');
-    }
-  }, [session.role, activeTab]);
-
-  // If user is not authenticated, show Login Screen
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
-
-  return (
-    <div className="min-h-screen text-slate-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white relative z-10">
-      {/* Cyber Laser Animated Background */}
-      <div className="bg-laser-container" aria-hidden="true" />
-
-      <div className="flex-1 flex overflow-hidden relative z-10">
-        {/* Sidebar Navigation */}
-        <Sidebar
-          activeTab={activeTab}
-          setActiveTab={handleSelectTab}
-          isOpenMobile={isOpenMobile}
-          setIsOpenMobile={setIsOpenMobile}
-          onOpenAddModal={openAddModal}
-          onOpenThermalModal={openThermalModal}
-          onOpenSheetModal={openSheetModal}
-          onOpenPasswordModal={openPasswordModal}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto -webkit-overflow-scrolling-touch">
-          {/* Header */}
-          <Header
-            onToggleMobileMenu={toggleMobileMenu}
-            onOpenAddModal={openAddModal}
-            onOpenPasswordModal={openPasswordModal}
-          />
-
-          {/* Instant Active Page Rendering */}
-          <main className="flex-1 pb-12 relative">
-            <Suspense fallback={<PageFallback />}>
-              {(activeTab === 'dashboard' || activeTab === 'admin') && (
-                <AdminDashboard
-                  onOpenAddModal={openAddModal}
-                  onOpenThermalModal={openThermalModal}
-                  onOpenDeliveryModal={handleOpenDeliveryModal}
-                  onOpenPasswordModal={openPasswordModal}
-                  onOpenSheetModal={openSheetModal}
-                />
-              )}
-
-              {activeTab === 'outlet' && session.role !== 'outlet' && <OutletDashboard />}
-
-              {activeTab === 'delivery' && session.role !== 'outlet' && <DeliveryDashboard />}
-
-              {activeTab === 'analytics' && <AnalyticsPage />}
-
-              {activeTab === 'alerts' && session.role !== 'outlet' && <AlertsPage />}
-              {activeTab === 'sheets' && session.role !== 'outlet' && <GoogleSheetsPage />}
-              {activeTab === 'kot_print' && <KOTPrintPage />}
-              {activeTab === 'whatsapp' && <WhatsAppAutomationPage />}
-
-            </Suspense>
-          </main>
-        </div>
-      </div>
-
-      {/* Global Modals */}
-      <AddOrderModal
-        isOpen={isAddModalOpen}
-        onClose={closeAddModal}
-      />
-
-      <ThermalPrintModal
-        isOpen={isThermalModalOpen}
-        onClose={closeThermalModal}
-      />
-
-      <SheetSyncModal
-        isOpen={isSheetModalOpen}
-        onClose={closeSheetModal}
-      />
-
-      <ManagerAlarmSystem />
-      <ConfirmDeliveryModal />
-      <PasswordManagerModal
-        isOpen={isPasswordModalOpen}
-        onClose={closePasswordModal}
-      />
-
-    </div>
-  );
-}
-
-import { VersionUpdatePopup } from './lib/versionManager';
-
-export default function App() {
   return (
     <OMSProvider>
-      <OMSAppContent />
-      <VersionUpdatePopup />
+      <div className="min-h-screen bg-[#0b0e1b] text-slate-100 flex flex-col">
+        {/* Navigation Header */}
+        <Header
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onOpenAddModal={() => setIsAddModalOpen(true)}
+        />
+
+        {/* Main Workspace Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
+          {activeTab === 'admin' && (
+            <AdminDashboard
+              onViewOrder={(order) => setViewingOrder(order)}
+              onEditOrder={(order) => setEditingOrder(order)}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'outlet' && (
+            <OutletDashboard
+              onViewOrder={(order) => setViewingOrder(order)}
+              onEditOrder={(order) => setEditingOrder(order)}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'delivery' && (
+            <DeliveryDashboard
+              onViewOrder={(order) => setViewingOrder(order)}
+              onEditOrder={(order) => setEditingOrder(order)}
+            />
+          )}
+
+          {activeTab === 'reports' && <ReportsPage />}
+
+          {activeTab === 'whatsapp' && <WhatsAppAutomationPage />}
+        </main>
+
+        {/* Modals */}
+        <AddOrderModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+        />
+
+        <ViewOrderModal
+          order={viewingOrder}
+          isOpen={Boolean(viewingOrder)}
+          onClose={() => setViewingOrder(null)}
+          onEdit={(ord) => {
+            setViewingOrder(null);
+            setEditingOrder(ord);
+          }}
+        />
+
+        <EditOrderModal
+          order={editingOrder}
+          isOpen={Boolean(editingOrder)}
+          onClose={() => setEditingOrder(null)}
+        />
+      </div>
     </OMSProvider>
   );
-}
+};
+
+export default App;

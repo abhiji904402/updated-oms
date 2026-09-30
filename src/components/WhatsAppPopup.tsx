@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import {
   MessageSquare,
   X,
@@ -141,15 +140,8 @@ export const WhatsAppPopup: React.FC<WhatsAppPopupProps> = ({ order, onClose, on
   };
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[80] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.15 }}
-          className="bg-[#0b0d14] border border-emerald-500/40 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl text-slate-200 my-auto"
-        >
+    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[80] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#0b0d14] border border-emerald-500/40 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl text-slate-200 my-auto">
           {/* Header (green themed) */}
           <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950/90 to-[#0e121e] border-b border-emerald-900/40 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -328,8 +320,7 @@ export const WhatsAppPopup: React.FC<WhatsAppPopupProps> = ({ order, onClose, on
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
-    </AnimatePresence>
-  );
+    );
 };

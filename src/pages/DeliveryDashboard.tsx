@@ -5,8 +5,8 @@ import { OrderCard } from '../components/OrderCard';
 import { Truck, PackageCheck, Clock } from 'lucide-react';
 
 interface DeliveryDashboardProps {
-  onViewOrder: (order: Order) => void;
-  onEditOrder: (order: Order) => void;
+  onViewOrder?: (order: Order) => void;
+  onEditOrder?: (order: Order) => void;
 }
 
 export const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({

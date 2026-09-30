@@ -1,3 +1,5 @@
+import { Order } from '../types';
+
 export function getTodayDateStr(): string {
   const d = new Date();
   const year = d.getFullYear();
@@ -47,3 +49,27 @@ export function convertTo24Hour(time12h: string): string {
   if (ampm === 'AM' && hours === 12) hours = 0;
   return `${hours.toString().padStart(2, '0')}:${minutes}`;
 }
+
+export function getExpectedTimestamp(order: Order): number {
+  if (!order.delivery_date) return 0;
+  const timeStr = order.delivery_time_expected || '11:00 AM';
+  const time24 = convertTo24Hour(timeStr);
+  const dtStr = `${order.delivery_date}T${time24.length === 5 ? time24 : '11:00'}:00`;
+  const ms = new Date(dtStr).getTime();
+  return isNaN(ms) ? 0 : ms;
+}
+
+export function getDeliveryTimeInfo(order: Order): { expectedFormatted: string; actualFormatted: string } {
+  const expectedFormatted = `${order.delivery_date || ''} ${order.delivery_time_expected || ''}`.trim();
+  let actualFormatted = '—';
+  if (order.actual_delivery_time) {
+    const d = new Date(order.actual_delivery_time);
+    if (!isNaN(d.getTime())) {
+      actualFormatted = d.toLocaleString();
+    }
+  } else if (order.status === 'delivered') {
+    actualFormatted = 'Delivered';
+  }
+  return { expectedFormatted, actualFormatted };
+}
+

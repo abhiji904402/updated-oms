@@ -1,0 +1,8 @@
+{
+  "name": "Broomies Bakery OMS",
+  "description": "Order Management System for Broomies Bakery with WhatsApp Automation and Multi-Outlet Support",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "permissions": []
+}
