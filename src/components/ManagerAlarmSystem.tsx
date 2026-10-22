@@ -20,6 +20,11 @@ export const ManagerAlarmSystem: React.FC = () => {
     }
   }, []);
 
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
   useEffect(() => {
     if (session.role !== 'manager' && session.role !== 'admin' && session.role !== 'outlet') {
       setActiveAlarmOrder(null);
@@ -30,10 +35,10 @@ export const ManagerAlarmSystem: React.FC = () => {
       // Don't trigger a new one if one is currently ringing
       if (activeAlarmOrder) return;
 
-      const now = new Date();
       const todayStr = getTodayDateStr();
+      const currentOrders = ordersRef.current || [];
       
-      const upcomingOrder = orders.find(o => {
+      const upcomingOrder = currentOrders.find(o => {
         if (o.status === 'delivered' || o.status === 'cancelled' || o.status === 'missed') return false;
         
         // Outlet specific filter
@@ -64,11 +69,14 @@ export const ManagerAlarmSystem: React.FC = () => {
       }
     };
 
-    const interval = setInterval(checkAlarms, 10000); // check every 10 secs
-    checkAlarms(); // initial check
+    const interval = setInterval(checkAlarms, 15000); // check every 15 secs
+    const initialTimer = setTimeout(checkAlarms, 1500);
 
-    return () => clearInterval(interval);
-  }, [orders, session.role, session.outlet, activeAlarmOrder, ackedAlarms]);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initialTimer);
+    };
+  }, [session.role, session.outlet, activeAlarmOrder, ackedAlarms]);
 
   return (
     <>

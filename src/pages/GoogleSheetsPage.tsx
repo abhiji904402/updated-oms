@@ -629,7 +629,7 @@ const DataUploadSection: React.FC<DataUploadSectionProps> = ({ onImport, onClear
                       {ord.delivery_partner || '—'}
                     </td>
                     <td className="py-2 px-3 text-slate-300">
-                      {ord.status === 'delivered' ? getDeliveredByDisplayName(ord) : (ord.delivered_by ? getDeliveredByDisplayName(ord) : '—')}
+                      {ord.status === 'delivered' ? getDeliveredByDisplayName(ord as Order) : (ord.delivered_by ? getDeliveredByDisplayName(ord as Order) : '—')}
                     </td>
                     <td className="py-2 px-3 text-slate-400 text-[10px]">
                       {ord.payment_changed_by ? `${ord.payment_changed_by} (${ord.payment_changed_at || ''})` : '—'}

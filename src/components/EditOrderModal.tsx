@@ -381,9 +381,19 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
         advance_amount: calculatedAdvance,
         remaining_balance: calculatedRemaining,
         due_amount: calculatedRemaining,
-        advance_bill_number: advanceBillNumber || undefined,
-        final_bill_number: finalBillNumber || undefined,
-        ...(status === 'delivered' ? { delivered_by: delBy, rider_delivered: true } : {})
+        advance_bill_number: advanceBillNumber.trim(),
+        final_bill_number: finalBillNumber.trim(),
+        ...(status === 'delivered'
+          ? {
+              delivered_by: delBy,
+              rider_delivered: true,
+              delivery_confirmation_pending: isPickup ? false : (order.status === 'delivered' ? Boolean(order.delivery_confirmation_pending) : true),
+              actual_delivery_time: order.actual_delivery_time || new Date().toISOString()
+            }
+          : {
+              delivery_confirmation_pending: false,
+              rider_delivered: false
+            })
       });
       onClose();
       return;
@@ -407,7 +417,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
     const calculatedRemaining = isFullPay ? 0 : (paymentType === 'due' ? totalAmountNum : Math.max(0, totalAmountNum - calculatedAdvance));
 
     const isPickupOrder = deliveryType === 'pickup';
-    const cleanPartner = deliveryPartner ? deliveryPartner.replace(/^Rider:\s*/i, '').trim() : undefined;
+    const cleanPartner = deliveryPartner ? deliveryPartner.replace(/^Rider:\s*/i, '').trim() : '';
     const deliveredByVal = status === 'delivered'
       ? (isPickupOrder ? (order.delivered_by || `${outlet || 'Store'} Pickup`) : (cleanPartner || order.delivery_partner || order.delivered_by || `${outlet} Staff`))
       : '';
@@ -418,11 +428,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       order_time: formatTo12Hour(orderTime) || orderTime,
       mobile_number: mobileNumber,
       customer_name: customerName.trim() || `Customer #${order.order_number}`,
-      informed_by: informedBy || undefined,
+      informed_by: informedBy.trim(),
       item_type: itemType,
       name_on_cake: nameOnCake.trim(),
-      cake_color: cakeColor || undefined,
-      icing_type: icingType || undefined,
+      cake_color: cakeColor.trim(),
+      icing_type: icingType.trim(),
       cake_type: cakeType,
       cake_tier: cakeTier,
       quantity: quantity || '1 kg',
@@ -432,18 +442,23 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
       advance_amount: calculatedAdvance,
       remaining_balance: calculatedRemaining,
       due_amount: calculatedRemaining,
-      advance_bill_number: advanceBillNumber || undefined,
-      final_bill_number: finalBillNumber || undefined,
+      advance_bill_number: advanceBillNumber.trim(),
+      final_bill_number: finalBillNumber.trim(),
       address: deliveryType === 'delivery' ? (deliveryAddress || 'Local Address') : 'In-Store Pickup',
       remarks: remarks || '',
-      late_reason: lateReason || undefined,
+      late_reason: lateReason || '',
       status,
-      delivery_partner: cleanPartner || undefined,
-      delivered_by: deliveredByVal || undefined,
+      delivery_partner: cleanPartner || 'Unassigned',
+      delivered_by: deliveredByVal || '',
+      rider_delivered: status === 'delivered',
+      delivery_confirmation_pending: status === 'delivered'
+        ? (isPickupOrder ? false : (order.status === 'delivered' ? Boolean(order.delivery_confirmation_pending) : true))
+        : false,
+      actual_delivery_time: status === 'delivered' ? (order.actual_delivery_time || new Date().toISOString()) : '',
       delivery_date: deliveryDate,
       delivery_time_expected: formatTo12Hour(expectedDeliveryTime) || expectedDeliveryTime,
-      item_image_url: itemImageUrl || undefined,
-      otp: otp || undefined
+      item_image_url: itemImageUrl || '',
+      otp: otp || order.otp || '1234'
     });
 
     onClose();

@@ -1,8 +1,11 @@
 export type Role = 'admin' | 'manager' | 'outlet' | 'delivery';
+export type UserRole = Role;
 
 export type OrderStatus =
   | 'pending'
   | 'processing'
+  | 'preparing'
+  | 'ready'
   | 'out_for_delivery'
   | 'delivered'
   | 'on_hold'
@@ -37,9 +40,14 @@ export interface Order {
   item_type: string;
   name_on_cake?: string;
   cake_color?: string;
+  icing_color?: string;
   icing_type?: string;
   cake_type?: 'Normal' | 'Cutouts' | '3D Characters' | 'Both';
+  cake_style?: string;
+  design_type?: string;
   cake_tier?: '1' | '2' | '3' | '4' | string;
+  tiers?: string | number;
+  tier?: string | number;
   quantity: string | number;
   delivery_type: DeliveryType;
   total_amount: number;
@@ -55,6 +63,7 @@ export interface Order {
   delivery_partner?: string;
   actual_delivery_time?: string | null;
   delivered_by?: string | null;
+  delivered_by_name?: string | null;
   payment_changed_by?: string | null;
   payment_changed_at?: string | null;
   delivery_date: string;

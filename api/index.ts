@@ -14,6 +14,8 @@ import {
   getEngineState,
   hasExistingSession,
   restoreSessionFromCloud,
+  backupSessionToCloud,
+  requestWhatsAppPairingCode,
   registerOnConnectedListener
 } from './whatsapp-service.ts';
 
@@ -51,7 +53,7 @@ console.error = (...args) => {
 const app = express();
 
 app.use(cors());
-app.use(compression({ level: 6, threshold: 512 }));
+(app as any).use(compression({ level: 6, threshold: 512 }));
 app.use(express.json({ limit: '50mb' }));
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -329,7 +331,7 @@ const Partner = mongoose.models.DeliveryPartner || mongoose.model('DeliveryPartn
 const OutletLocation = mongoose.models.OutletLocation || mongoose.model('OutletLocation', OutletLocationSchema);
 const SystemSettings = mongoose.models.SystemSettings || mongoose.model('SystemSettings', SystemSettingsSchema);
 
-const models: Record<string, mongoose.Model<any>> = {
+const models: Record<string, any> = {
   'orders': Order,
   'delivery_partners': Partner,
   'outlet_locations': OutletLocation,
@@ -634,9 +636,21 @@ setTimeout(() => {
             for (const [id, ord] of Object.entries(data as Record<string, any>)) {
               if (!ord || !id) continue;
               const existing = c.map.get(id);
-              if (existing) {
-                if (ord.status === 'delivered' && existing.status !== 'delivered') {
-                  c.map.set(id, { ...existing, ...ord, id });
+              if (!existing) {
+                const added = { ...ord, id };
+                c.map.set(id, added);
+                broadcastMutation({ collection: 'orders', action: 'set', id, data: added });
+                changes++;
+              } else {
+                const existingTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+                const incomingTime = new Date(ord.updated_at || ord.created_at || 0).getTime();
+                if (
+                  incomingTime > existingTime ||
+                  (ord.status === 'delivered' && existing.status !== 'delivered')
+                ) {
+                  const merged = { ...existing, ...ord, id };
+                  c.map.set(id, merged);
+                  broadcastMutation({ collection: 'orders', action: 'update', id, data: merged });
                   changes++;
                 }
               }
@@ -652,7 +666,7 @@ setTimeout(() => {
     } catch (err: any) {
       console.warn('[RTDB Poller] Notice:', err.message);
     }
-    setTimeout(periodicSyncRTDB, 60000);
+    setTimeout(periodicSyncRTDB, 30000);
   }
   periodicSyncRTDB();
 }, 10000);
@@ -726,45 +740,65 @@ const DEFAULT_WA_CONFIG = {
     customWebhookUrl: '',
     customWebhookKey: ''
   },
-  autoConfirmOnCreate: false,
-  autoDispatchOnRider: false,
-  autoDeliveryComplete: false,
-  autoPaymentReminder: false,
+  autoConfirmOnCreate: true,
+  autoDispatchOnRider: true,
+  autoDeliveryComplete: true,
+  autoPaymentReminder: true,
   throttleDelaySeconds: 5,
   antiBanProtection: true,
   workingHoursOnly: false,
+  userCustomizedRules: false,
   templates: {
     confirm: `Thank you so much for your recent order from Broomies! Your order number is ({order_number}).\n\nWe're thrilled to have the opportunity to serve you and hope you enjoy every delicious bite.\n\nOrder Details:\nItem: {items}\nTotal Amount: ₹{total_amount}\nAdvance Paid: ₹{advance_amount}\nRemaining Balance: ₹{remaining_balance}\nDelivery Date: {delivery_date}\nDelivery Time: {delivery_time}\n\nIf you have any queries or need further assistance, please feel free to get in touch with us at:\n9266424088\n\nIf still query not solved call 9971860845\n\nBest wishes,\nThe Broomies Team`,
     dispatch: `Hi {customer_name},\n\nYour order #{order_number} is out for delivery with rider {rider_name}.\n\nOTP for verification: {otp}\n\nThank you!\nBroomies Team`,
     delivered: `Hi {customer_name},\n\nYour Broomies Bakery order #{order_number} has been delivered successfully! Thank you for choosing Broomies Bakery. Have a sweet day!\n\nBest wishes,\nThe Broomies Team`,
-    reminder: `Hi {customer_name},\n\nFriendly reminder for your Broomies Bakery order #{order_number}.\n\nRemaining due amount: ₹{remaining_balance}\n\nPlease pay via UPI/Cash on delivery.\n\nThank you!\nBroomies Team`
+    reminder: `Hi {customer_name},\n\nFriendly reminder for your Broomies Bakery order #{order_number}.\n\nRemaining due amount: ₹{remaining_balance}\n\nPlease pay via UPI/Cash on delivery.\n\nThank you!\nBroomies Team`,
+    pickup: `Hi {customer_name},\n\nGreat news! Your Broomies Bakery Pickup order #{order_number} ({items}) is ready for pickup at our {outlet} outlet.\n\nRemaining Balance Due: ₹{remaining_balance}\n\nWe look forward to seeing you!\nThe Broomies Team`
   }
 };
 
 function getWhatsAppConfig() {
   let existing = cache['system_settings']?.map.get('whatsapp_config');
-  if (existing) {
-    if (existing.data && typeof existing.data === 'object') {
-      existing = { ...existing.data, ...existing, ...existing.data };
-    }
-    const engine = getEngineState();
-    if (engine.connected && engine.phoneNumber) {
-      existing.connected = true;
-      existing.sessionState = 'connected';
-      existing.gatewayType = 'in_house_qr';
-      existing.phoneNumber = engine.phoneNumber;
-      if (engine.userName) existing.userName = engine.userName;
-      existing.alreadyLinkedOnOtherDevice = false;
-    } else {
-      existing.connected = false;
-      existing.sessionState = (engine.sessionState === 'connecting' || engine.sessionState === 'pairing') ? engine.sessionState : 'disconnected';
-      existing.alreadyLinkedOnOtherDevice = false;
-      existing.phoneNumber = '';
-    }
-    return existing;
+  if (!existing) {
+    existing = { ...DEFAULT_WA_CONFIG };
+  } else if (existing.data && typeof existing.data === 'object') {
+    existing = { ...DEFAULT_WA_CONFIG, ...existing.data, ...existing, ...existing.data, templates: { ...DEFAULT_WA_CONFIG.templates, ...(existing.data?.templates || existing.templates || {}) } };
+  } else {
+    existing = { ...DEFAULT_WA_CONFIG, ...existing, templates: { ...DEFAULT_WA_CONFIG.templates, ...(existing.templates || {}) } };
   }
-  cache['system_settings']?.map.set('whatsapp_config', DEFAULT_WA_CONFIG);
-  return DEFAULT_WA_CONFIG;
+
+  // Ensure automation rules stay ON by default unless explicitly toggled off by user (userCustomizedRules === true)
+  if (!existing.userCustomizedRules) {
+    existing.autoConfirmOnCreate = true;
+    existing.autoDispatchOnRider = true;
+    existing.autoDeliveryComplete = true;
+    existing.autoPaymentReminder = true;
+    existing.antiBanProtection = true;
+  }
+
+  const engine = getEngineState();
+  const hasLinkedIdentity = Boolean((engine.connected || engine.alreadyLinkedOnOtherDevice) && engine.phoneNumber);
+
+  if (hasLinkedIdentity) {
+    existing.connected = true;
+    existing.sessionState = 'connected';
+    existing.gatewayType = 'in_house_qr';
+    existing.phoneNumber = engine.phoneNumber;
+    if (engine.userName) existing.userName = engine.userName;
+    existing.alreadyLinkedOnOtherDevice = Boolean(engine.alreadyLinkedOnOtherDevice);
+    existing.cloudSynced = Boolean(engine.cloudSynced || engine.phoneNumber);
+  } else if (existing.gatewayType && existing.gatewayType !== 'none' && existing.gatewayType !== 'in_house_qr' && existing.connected) {
+    // External gateway active
+    existing.sessionState = 'connected';
+  } else {
+    existing.connected = false;
+    existing.sessionState = (engine.sessionState === 'connecting' || engine.sessionState === 'pairing') ? engine.sessionState : 'disconnected';
+    existing.alreadyLinkedOnOtherDevice = false;
+    existing.phoneNumber = '';
+  }
+
+  cache['system_settings']?.map.set('whatsapp_config', existing);
+  return existing;
 }
 
 // =========================================================================
@@ -974,11 +1008,12 @@ registerOnConnectedListener(async (phone) => {
 apiRouter.get('/whatsapp/status', async (req, res) => {
   const cfg = getWhatsAppConfig();
   const engine = getEngineState();
-  const isTrulyConnected = Boolean(engine.connected && engine.phoneNumber);
+  const hasSaved = hasExistingSession();
+  const isTrulyConnected = Boolean((engine.connected || engine.alreadyLinkedOnOtherDevice || hasSaved) && engine.phoneNumber);
   const pendingQueueCount = cache['whatsapp_pending_queue']?.map.size || 0;
 
-  // If connected and has pending messages in outbox, trigger background auto-flush!
-  if (isTrulyConnected && pendingQueueCount > 0 && !isFlushingWhatsAppQueue) {
+  // If live socket is connected and has pending messages in outbox, trigger background auto-flush!
+  if (engine.connected && !engine.alreadyLinkedOnOtherDevice && pendingQueueCount > 0 && !isFlushingWhatsAppQueue) {
     processPendingWhatsAppQueue().catch(() => {});
   }
 
@@ -987,14 +1022,16 @@ apiRouter.get('/whatsapp/status', async (req, res) => {
     cfg.sessionState = 'connected';
     cfg.gatewayType = 'in_house_qr';
     cfg.phoneNumber = engine.phoneNumber;
-    cfg.userName = engine.userName || 'Broomies Official';
+    cfg.userName = engine.userName || 'Broomies Bakery';
     cfg.lastSync = engine.lastConnectedAt || cfg.lastSync || new Date().toISOString();
-    cfg.qrCode = null;
-    cfg.alreadyLinkedOnOtherDevice = false;
-  } else if (engine.sessionState === 'pairing' && engine.qrCode) {
+    cfg.qrCode = engine.sessionState === 'pairing' ? engine.qrCode : null;
+    cfg.alreadyLinkedOnOtherDevice = Boolean(engine.alreadyLinkedOnOtherDevice);
+    cfg.cloudSynced = true;
+  } else if (engine.sessionState === 'pairing' && (engine.qrCode || engine.pairingCode)) {
     cfg.connected = false;
     cfg.sessionState = 'pairing';
     cfg.qrCode = engine.qrCode;
+    cfg.pairingCode = engine.pairingCode;
     cfg.qrExpiresAt = engine.qrExpiresAt;
     cfg.gatewayType = 'in_house_qr';
     cfg.alreadyLinkedOnOtherDevice = false;
@@ -1011,18 +1048,21 @@ apiRouter.get('/whatsapp/status', async (req, res) => {
     success: true,
     ...cfg,
     connected: isTrulyConnected,
-    alreadyLinkedOnOtherDevice: false,
-    hasExistingSession: false,
+    alreadyLinkedOnOtherDevice: Boolean(engine.alreadyLinkedOnOtherDevice),
+    hasExistingSession: hasSaved,
+    cloudSynced: Boolean(engine.cloudSynced || hasSaved),
     pendingQueueCount,
     isFlushingQueue: isFlushingWhatsAppQueue,
     inHouseEngine: {
       connected: isTrulyConnected,
-      sessionState: isTrulyConnected ? 'connected' : engine.sessionState,
+      sessionState: isTrulyConnected && engine.sessionState !== 'pairing' ? 'connected' : engine.sessionState,
       phoneNumber: isTrulyConnected ? (engine.phoneNumber || '') : '',
-      userName: isTrulyConnected ? (engine.userName || '') : '',
+      userName: isTrulyConnected ? (engine.userName || 'Broomies Bakery') : '',
       qrCode: engine.qrCode,
+      pairingCode: engine.pairingCode,
       qrExpiresAt: engine.qrExpiresAt,
-      lastError: engine.lastError
+      lastError: engine.lastError,
+      alreadyLinkedOnOtherDevice: Boolean(engine.alreadyLinkedOnOtherDevice)
     }
   });
 });
@@ -1116,6 +1156,58 @@ apiRouter.post('/whatsapp/generate-qr', async (req, res) => {
       sessionState: state.sessionState || 'connecting',
       message: 'Initializing WhatsApp Web session. Please wait a moment.'
     });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// 1F. POST /api/whatsapp/pairing-code - Generate 8-Digit Phone Number Pairing Code
+apiRouter.post('/whatsapp/pairing-code', async (req, res) => {
+  try {
+    const { phoneNumber } = req.body || {};
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, error: 'Phone number is required.' });
+    }
+    const result = await requestWhatsAppPairingCode(phoneNumber);
+    if (result.success) {
+      return res.json({
+        success: true,
+        pairingCode: result.pairingCode,
+        message: 'Enter this 8-digit code in WhatsApp > Linked Devices > Link with phone number instead.'
+      });
+    } else {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// 1G. POST /api/whatsapp/sync-cloud - Force backup or restore WhatsApp session with Firebase Cloud
+apiRouter.post('/whatsapp/sync-cloud', async (req, res) => {
+  try {
+    const { action = 'backup' } = req.body || {};
+    if (action === 'restore') {
+      const restored = await restoreSessionFromCloud();
+      if (restored) {
+        await startWhatsAppEngine(false);
+      }
+      return res.json({
+        success: true,
+        restored,
+        state: getEngineState(),
+        message: restored
+          ? 'WhatsApp session restored from Cloud & active across all devices!'
+          : 'No cloud session found or already up to date.'
+      });
+    } else {
+      await backupSessionToCloud();
+      return res.json({
+        success: true,
+        state: getEngineState(),
+        message: 'WhatsApp session backed up to Firebase Cloud! Will stay logged in before & after deploy.'
+      });
+    }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || String(err) });
   }
@@ -1304,6 +1396,17 @@ apiRouter.post('/whatsapp/config', (req, res) => {
     cache['system_settings']?.map.set('whatsapp_config', updated);
     persistToDisk();
 
+    // Sync to Firestore, Mongo, and RTDB so rule changes never revert
+    backgroundSyncQueue.push({
+      collection: 'system_settings',
+      action: 'set',
+      id: 'whatsapp_config',
+      data: updated,
+      timestamp: Date.now(),
+      retries: 0
+    });
+    syncMutationToRTDB('system_settings', 'set', 'whatsapp_config', updated).catch(() => {});
+
     res.json({
       success: true,
       message: 'Configuration updated',
@@ -1317,22 +1420,46 @@ apiRouter.post('/whatsapp/config', (req, res) => {
 // 7. POST /api/whatsapp/send - Real send via in-house QR engine, gateway, or 1-click WhatsApp Web
 apiRouter.post('/whatsapp/send', async (req, res) => {
   try {
-    const { phone, message, orderId, orderNumber, customerName, type = 'custom' } = req.body || {};
+    const { phone, message, orderId, orderNumber, customerName, type = 'custom', strictAuto = false } = req.body || {};
     if (!phone || !message) {
       return res.status(400).json({ success: false, error: 'Phone and message are required' });
     }
 
     const cfg = getWhatsAppConfig();
-    const engine = getEngineState();
+    let engine = getEngineState();
     const cleanPhone = String(phone).replace(/[^0-9]/g, '');
     const recipientPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     const directWebUrl = `https://wa.me/${recipientPhone}?text=${encodeURIComponent(message)}`;
 
     // Check if either in-house engine is connected OR an external gateway is configured
-    const isInHouseConnected = Boolean(engine.connected && engine.phoneNumber);
-    const isGatewayConfigured = cfg.connected && cfg.gatewayType && cfg.gatewayType !== 'none';
+    let isInHouseConnected = Boolean(engine.connected && engine.phoneNumber);
+    const isGatewayConfigured = Boolean(cfg.connected && cfg.gatewayType && cfg.gatewayType !== 'none');
+
+    // If strictAuto is requested and not currently marked connected, try restoring & reconnecting first
+    if (strictAuto && !isInHouseConnected && !isGatewayConfigured) {
+      try {
+        let hasSaved = hasExistingSession();
+        if (!hasSaved) {
+          hasSaved = await restoreSessionFromCloud();
+        }
+        if (hasSaved) {
+          await startWhatsAppEngine(false);
+          engine = getEngineState();
+          isInHouseConnected = Boolean(engine.connected && engine.phoneNumber);
+        }
+      } catch {}
+    }
 
     if (!isInHouseConnected && !isGatewayConfigured) {
+      if (strictAuto) {
+        return res.status(400).json({
+          success: false,
+          queued: false,
+          autoConnected: false,
+          error: 'Automatic WhatsApp engine is not connected. Please link your WhatsApp account via QR Code or 8-Digit Pairing Code first.'
+        });
+      }
+
       const queuedItem = enqueueWhatsAppMessage({
         phone: recipientPhone,
         message: String(message),
@@ -1366,16 +1493,18 @@ apiRouter.post('/whatsapp/send', async (req, res) => {
         realDeliverySuccess = true;
       } else {
         sendError = engineRes.error || 'Failed to dispatch via official WhatsApp socket';
-        // Enqueue to Outbox so it auto-retries as soon as connection heals
-        enqueueWhatsAppMessage({
-          phone: recipientPhone,
-          message: String(message),
-          orderNumber: Number(orderNumber) || undefined,
-          orderId: orderId || undefined,
-          customerName: customerName || 'Customer',
-          type,
-          directWebUrl
-        });
+        if (!strictAuto) {
+          // Enqueue to Outbox so it auto-retries as soon as connection heals
+          enqueueWhatsAppMessage({
+            phone: recipientPhone,
+            message: String(message),
+            orderNumber: Number(orderNumber) || undefined,
+            orderId: orderId || undefined,
+            customerName: customerName || 'Customer',
+            type,
+            directWebUrl
+          });
+        }
       }
     }
     // Priority 2: UltraMsg Real HTTP Dispatch
@@ -1493,6 +1622,16 @@ apiRouter.post('/whatsapp/send', async (req, res) => {
     persistToDisk();
 
     if (!realDeliverySuccess) {
+      if (strictAuto) {
+        return res.status(400).json({
+          success: false,
+          queued: false,
+          autoConnected: false,
+          error: sendError || 'Auto-reconnect attempted, but automatic WhatsApp delivery failed.',
+          log: logEntry
+        });
+      }
+
       return res.json({
         success: true,
         queued: true,
@@ -1504,10 +1643,13 @@ apiRouter.post('/whatsapp/send', async (req, res) => {
 
     res.json({
       success: true,
+      queued: false,
+      autoConnected: true,
+      sentVia,
       messageId: logId,
       status: 'delivered',
       log: logEntry,
-      directWebUrl
+      directWebUrl: strictAuto ? undefined : directWebUrl
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || String(err) });
@@ -1576,7 +1718,15 @@ apiRouter.get('/:collection', async (req, res) => {
       data = Array.from(orderMap.values());
 
       if (req.query.active === 'true') {
-        data = data.filter((o: any) => o.status !== 'delivered' && o.status !== 'cancelled');
+        data = data.filter((o: any) => {
+          if (o.status === 'cancelled') return false;
+          if (o.status === 'delivered') {
+            const isPickup = String(o.delivery_type || '').toLowerCase().trim() === 'pickup';
+            if (isPickup) return false;
+            return Boolean(o.delivery_confirmation_pending);
+          }
+          return true;
+        });
       }
       data.sort((a: any, b: any) => (Number(b.order_number) || 0) - (Number(a.order_number) || 0));
       if (req.query.limit) {

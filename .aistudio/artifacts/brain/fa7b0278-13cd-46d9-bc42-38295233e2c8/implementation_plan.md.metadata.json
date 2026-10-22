@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for filtering the Pending Payment tab to strictly show Admin/Outlet-confirmed Delivered orders with due balance, and updating the WhatsApp Automation Send Test button to send strictly via automatic socket/gateway with auto-reconnect retry and no manual WhatsApp Web fallback.",
+  "updatedAt":  "2026-10-22T05:13:29.603948685Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
